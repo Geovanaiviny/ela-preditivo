@@ -1,0 +1,15 @@
+amostra,cromossomo,posicao,id,ref,alt,indice_alt,n_alt,tipo,qual,filtro,dp,gq,gt,dosagem,repeticoes,motivo_repeticao,gene,aprovado,motivo_reprovacao,arquivo,clnsig,estrelas,heranca,nome_curto,hgvs_p,rs_tabela,citacao,classe,anotada,fonte_anotacao,limiar_patogenico
+MAE,1,11020000,,G,A,1,2,snv,251.5,PASS,48,71,0/2,0,,,TARDBP,True,,cenario_2_mae.vcf,,,,,,,,nao_anotada,False,,
+MAE,1,11020000,,G,T,2,2,snv,251.5,PASS,48,71,0/2,1,,,TARDBP,True,,cenario_2_mae.vcf,,,,,,,,nao_anotada,False,,
+MAE,9,27573529,,GGGGCC,<STR45>,1,1,repeticao,291.4,PASS,28,77,0/1,1,45.0,GGGGCC,C9orf72,True,,cenario_2_mae.vcf,Pathogenic,1.0,dominante,expansão GGGGCC,,,"ClinVar registra como microssatélite GGGGCC[>24] em chr9:27573529-27573534, sem alelo comparável (TCC 4.2.5); limiar de 30 repetições configurável em parametros_literatura.yaml",risco,True,tabela_curada,30.0
+MAE,16,31185000,,A,G,1,1,snv,257.0,PASS,60,74,0/1,1,,,FUS,True,,cenario_2_mae.vcf,,,,,,,,nao_anotada,False,,
+MAE,17,7675088,,C,T,1,1,snv,146.0,PASS,42,83,0/1,1,,,,False,fora_das_regioes,cenario_2_mae.vcf,,,,,,,,nao_anotada,False,,
+MAE,21,31659509,rs17883296,G,T,1,1,snv,351.8,PASS,54,60,0/1,1,,,SOD1,True,,cenario_2_mae.vcf,Likely_benign,1.0,,rs17883296,,rs17883296,"ClinVar id 1207199, AF_TGP 0,00739 (linha de exemplo do TCC, seção 4.2); dbSNP rs17883296",benigna,True,tabela_curada:posicao_alelos,
+MAE,21,31663000,,T,C,1,1,snv,8.3,LowQual,4,10,0/1,1,,,SOD1,False,filtro_nao_pass;dp_baixo;gq_baixo,cenario_2_mae.vcf,,,,,,,,nao_anotada,False,,
+PAI,1,11020000,,G,A,1,2,snv,456.2,PASS,25,72,0/2,0,,,TARDBP,True,,cenario_2_pai.vcf,,,,,,,,nao_anotada,False,,
+PAI,1,11020000,,G,T,2,2,snv,456.2,PASS,25,72,0/2,1,,,TARDBP,True,,cenario_2_pai.vcf,,,,,,,,nao_anotada,False,,
+PAI,9,27573529,,GGGGCC,<STR45>,1,1,repeticao,152.1,PASS,58,94,0/0,0,45.0,GGGGCC,C9orf72,True,,cenario_2_pai.vcf,Pathogenic,1.0,dominante,expansão GGGGCC,,,"ClinVar registra como microssatélite GGGGCC[>24] em chr9:27573529-27573534, sem alelo comparável (TCC 4.2.5); limiar de 30 repetições configurável em parametros_literatura.yaml",risco,True,tabela_curada,30.0
+PAI,16,31185000,,A,G,1,1,snv,211.8,PASS,41,97,0/1,1,,,FUS,True,,cenario_2_pai.vcf,,,,,,,,nao_anotada,False,,
+PAI,17,7675088,,C,T,1,1,snv,307.9,PASS,46,77,0/1,1,,,,False,fora_das_regioes,cenario_2_pai.vcf,,,,,,,,nao_anotada,False,,
+PAI,21,31659509,rs17883296,G,T,1,1,snv,410.9,PASS,44,84,0/1,1,,,SOD1,True,,cenario_2_pai.vcf,Likely_benign,1.0,,rs17883296,,rs17883296,"ClinVar id 1207199, AF_TGP 0,00739 (linha de exemplo do TCC, seção 4.2); dbSNP rs17883296",benigna,True,tabela_curada:posicao_alelos,
+PAI,21,31663000,,T,C,1,1,snv,8.3,LowQual,4,10,0/1,1,,,SOD1,False,filtro_nao_pass;dp_baixo;gq_baixo,cenario_2_pai.vcf,,,,,,,,nao_anotada,False,,

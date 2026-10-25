@@ -1,0 +1,11 @@
+amostra,gene,cromossomo,posicao,ref,alt,id,tipo,dosagem,repeticoes,classe,clnsig,estrelas,nome_curto,heranca,fonte_anotacao
+MAE,TARDBP,1,11020000,G,A,,snv,0,,nao_anotada,,,,,
+MAE,TARDBP,1,11020000,G,T,,snv,1,,nao_anotada,,,,,
+MAE,FUS,16,31185000,A,G,,snv,1,,nao_anotada,,,,,
+MAE,SOD1,21,31659509,G,T,rs17883296,snv,1,,benigna,Likely_benign,1.0,rs17883296,,tabela_curada:posicao_alelos
+MAE,C9orf72,9,27573529,GGGGCC,<STR45>,,repeticao,1,45.0,risco,Pathogenic,1.0,expansão GGGGCC,dominante,tabela_curada
+PAI,TARDBP,1,11020000,G,A,,snv,0,,nao_anotada,,,,,
+PAI,TARDBP,1,11020000,G,T,,snv,1,,nao_anotada,,,,,
+PAI,FUS,16,31185000,A,G,,snv,1,,nao_anotada,,,,,
+PAI,SOD1,21,31659509,G,T,rs17883296,snv,1,,benigna,Likely_benign,1.0,rs17883296,,tabela_curada:posicao_alelos
+PAI,C9orf72,9,27573529,GGGGCC,<STR45>,,repeticao,0,,risco,Pathogenic,1.0,expansão GGGGCC,dominante,tabela_curada

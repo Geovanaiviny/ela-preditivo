@@ -1,0 +1,2 @@
+variante,n_portadores,eventos,pi_entrada,lambda_entrada,rho_entrada,delta_sexo,pi_lifelines,lambda_lifelines,rho_lifelines,erro_rel_pi,erro_rel_lambda,erro_rel_rho,weibull_lambda_manifestantes,weibull_rho_manifestantes,mediana_weibull_manifestantes
+C9orf72 expansão GGGGCC,5042,1680,0.3327123135671058,61.5170563510035,6.83335719995531,-1.0,0.33319965200381035,60.342784503543655,6.569125814029325,0.001464744215444471,0.002832902902009535,0.03866787264211991,60.34278459259655,6.569245615561519,57.06831974789709

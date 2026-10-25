@@ -1,0 +1,26 @@
+##fileformat=VCFv4.2
+##fileDate=20261024
+##source=ela_preditivo v0.1.0 (DADOS SINTETICOS: cenario 4, pai: Ambos os pais heterozigotos para SOD1 p.Asp91Ala (herança recessiva))
+##reference=GRCh38
+##contig=<ID=chr1>
+##contig=<ID=chr9>
+##contig=<ID=chr16>
+##contig=<ID=chr17>
+##contig=<ID=chr21>
+##INFO=<ID=END,Number=1,Type=Integer,Description="Fim do intervalo da repeticao">
+##INFO=<ID=RU,Number=1,Type=String,Description="Unidade de repeticao">
+##INFO=<ID=REPID,Number=1,Type=String,Description="Identificador do locus de repeticao">
+##INFO=<ID=SVTYPE,Number=1,Type=String,Description="Tipo de variante estrutural">
+##INFO=<ID=SINTETICO,Number=0,Type=Flag,Description="Registro sintetico gerado por ela_preditivo">
+##FILTER=<ID=LowQual,Description="Qualidade de chamada baixa">
+##FORMAT=<ID=GT,Number=1,Type=String,Description="Genotipo">
+##FORMAT=<ID=DP,Number=1,Type=Integer,Description="Profundidade de leitura">
+##FORMAT=<ID=GQ,Number=1,Type=Integer,Description="Qualidade do genotipo">
+##FORMAT=<ID=REPCN,Number=1,Type=String,Description="Numero de repeticoes por alelo (ordem do GT)">
+#CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO	FORMAT	PAI
+chr1	11020000	.	G	A,T	274.4	PASS	SINTETICO	GT:DP:GQ	0/2:28:63
+chr16	31185000	.	A	G	70.4	PASS	SINTETICO	GT:DP:GQ	0/1:26:71
+chr17	7675088	.	C	T	183.9	PASS	SINTETICO	GT:DP:GQ	0/1:28:86
+chr21	31659509	rs17883296	G	T	130.5	PASS	SINTETICO	GT:DP:GQ	0/1:28:97
+chr21	31663000	.	T	C	8.3	LowQual	SINTETICO	GT:DP:GQ	0/1:4:10
+chr21	31667290	rs80265967	A	C	450.9	PASS	SINTETICO	GT:DP:GQ	0/1:59:84

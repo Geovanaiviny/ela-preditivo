@@ -1,0 +1,3 @@
+gene,variante,heranca,dosagem_mae,dosagem_pai,p_portador_exato,p_portador_mc,penetrancia_media,penetrancia_q025,penetrancia_q975,p_manifesta_exato,p_manifesta_mc,p_manifesta_q025,p_manifesta_q975,idade_mediana_exata,idade_mediana_mc,idade_p10_mc,idade_p90_mc
+SOD1,SOD1 D90A (p.D91A),recessiva,1,1,0.25,0.2513,0.5387262992281477,0.32667906037142225,0.7436000715846176,0.13468157480703694,0.1354,0.08166976509285556,0.1859000178961544,50.2576339311135,50.11735933759673,33.33082518229074,64.6751093999188
+—,qualquer lócus,independência,,,0.25,0.2513,,,,0.1346815748070369,0.1354,0.0816697650928555,0.1859000178961544,,50.11735933759673,,

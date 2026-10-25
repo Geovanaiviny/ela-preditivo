@@ -1,0 +1,28 @@
+##fileformat=VCFv4.2
+##fileDate=20261024
+##source=ela_preditivo v0.1.0 (DADOS SINTETICOS: cenario 3, mae: Pai heterozigoto SOD1 p.Ala5Val × mãe com expansão C9orf72 (exemplo literal do TCC, 4.5))
+##reference=GRCh38
+##contig=<ID=chr1>
+##contig=<ID=chr9>
+##contig=<ID=chr16>
+##contig=<ID=chr17>
+##contig=<ID=chr21>
+##INFO=<ID=END,Number=1,Type=Integer,Description="Fim do intervalo da repeticao">
+##INFO=<ID=RU,Number=1,Type=String,Description="Unidade de repeticao">
+##INFO=<ID=REPID,Number=1,Type=String,Description="Identificador do locus de repeticao">
+##INFO=<ID=SVTYPE,Number=1,Type=String,Description="Tipo de variante estrutural">
+##INFO=<ID=SINTETICO,Number=0,Type=Flag,Description="Registro sintetico gerado por ela_preditivo">
+##FILTER=<ID=LowQual,Description="Qualidade de chamada baixa">
+##FORMAT=<ID=GT,Number=1,Type=String,Description="Genotipo">
+##FORMAT=<ID=DP,Number=1,Type=Integer,Description="Profundidade de leitura">
+##FORMAT=<ID=GQ,Number=1,Type=Integer,Description="Qualidade do genotipo">
+##FORMAT=<ID=REPCN,Number=1,Type=String,Description="Numero de repeticoes por alelo (ordem do GT)">
+##ALT=<ID=STR45,Description="Expansao de repeticao curta em tandem com 45 copias">
+#CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO	FORMAT	MAE
+chr1	11020000	.	G	A,T	333.5	PASS	SINTETICO	GT:DP:GQ	0/2:26:74
+chr9	27573529	.	GGGGCC	<STR45>	175.1	PASS	END=27573534;RU=GGGGCC;REPID=C9ORF72;SVTYPE=STR;SINTETICO	GT:REPCN:DP:GQ	0/1:2/45:28:88
+chr16	31185000	.	A	G	315.2	PASS	SINTETICO	GT:DP:GQ	0/1:47:67
+chr17	7675088	.	C	T	381.7	PASS	SINTETICO	GT:DP:GQ	0/1:60:81
+chr21	31659509	rs17883296	G	T	160.3	PASS	SINTETICO	GT:DP:GQ	0/1:44:79
+chr21	31659783	rs121912442	C	T	366.2	PASS	SINTETICO	GT:DP:GQ	0/0:39:72
+chr21	31663000	.	T	C	8.3	LowQual	SINTETICO	GT:DP:GQ	0/1:4:10

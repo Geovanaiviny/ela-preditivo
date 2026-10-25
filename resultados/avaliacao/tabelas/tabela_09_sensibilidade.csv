@@ -1,0 +1,30 @@
+cenario,conjunto_de_parametros,variante,penetrancia_media,p_manifesta_exato,p_manifesta_mc,idade_mediana_exata,idade_mediana_mc
+cenário 1,literatura (Douglas & Baralle 2024; Murphy 2017),SOD1 A4V (p.A5V),0.5387262992281477,0.26936314961407387,0.2724,50.2576339311135,50.109506737796735
+cenário 1,literatura (Douglas & Baralle 2024; Murphy 2017),qualquer lócus,,0.2693631496140738,0.2724,,50.109506737796735
+cenário 1,exemplo do orientador (penetrance_max e Weibull fixos),SOD1 A4V (p.A5V),0.9,0.45,0.4474,46.08906359948552,46.26693603555155
+cenário 1,exemplo do orientador (penetrance_max e Weibull fixos),qualquer lócus,,0.44999999999999996,0.4474,,46.26693603555155
+cenário 2,literatura (Douglas & Baralle 2024; Murphy 2017),C9orf72 expansão GGGGCC,0.3327123135671058,0.1663561567835529,0.1749,59.304461999152245,58.80799287071545
+cenário 2,literatura (Douglas & Baralle 2024; Murphy 2017),qualquer lócus,,0.16635615678355287,0.1749,,58.80799287071545
+cenário 2,exemplo do orientador (penetrance_max e Weibull fixos),C9orf72 expansão GGGGCC,0.6,0.3,0.3002,58.617814588159526,58.68679278310859
+cenário 2,exemplo do orientador (penetrance_max e Weibull fixos),qualquer lócus,,0.30000000000000004,0.3002,,58.68679278310859
+cenário 2,C9orf72 com penetrância de coorte familiar (Murphy 2017),C9orf72 expansão GGGGCC,0.9,0.45,0.4457,59.304461999152245,59.42907198472991
+cenário 2,C9orf72 com penetrância de coorte familiar (Murphy 2017),qualquer lócus,,0.44999999999999996,0.4457,,59.42907198472991
+cenário 3,literatura (Douglas & Baralle 2024; Murphy 2017),C9orf72 expansão GGGGCC,0.3327123135671058,0.1663561567835529,0.162,59.304461999152245,59.14709511255202
+cenário 3,literatura (Douglas & Baralle 2024; Murphy 2017),SOD1 A4V (p.A5V),0.5387262992281477,0.26936314961407387,0.2688,50.2576339311135,50.05888325961829
+cenário 3,literatura (Douglas & Baralle 2024; Murphy 2017),qualquer lócus,,0.39090908804871616,0.3879,,52.770781207676265
+cenário 3,exemplo do orientador (penetrance_max e Weibull fixos),C9orf72 expansão GGGGCC,0.6,0.3,0.293,58.617814588159526,58.560290860963306
+cenário 3,exemplo do orientador (penetrance_max e Weibull fixos),SOD1 A4V (p.A5V),0.9,0.45,0.4399,46.08906359948552,45.583691436768234
+cenário 3,exemplo do orientador (penetrance_max e Weibull fixos),qualquer lócus,,0.615,0.6038,,47.764503411909786
+cenário 3,C9orf72 com penetrância de coorte familiar (Murphy 2017),C9orf72 expansão GGGGCC,0.9,0.45,0.4431,59.304461999152245,59.31810439516017
+cenário 3,C9orf72 com penetrância de coorte familiar (Murphy 2017),SOD1 A4V (p.A5V),0.5387262992281477,0.26936314961407387,0.2659,50.2576339311135,50.193127443564286
+cenário 3,C9orf72 com penetrância de coorte familiar (Murphy 2017),qualquer lócus,,0.5981497322877405,0.59,,54.965797376094315
+cenário 4,literatura (Douglas & Baralle 2024; Murphy 2017),SOD1 D90A (p.D91A),0.5387262992281477,0.13468157480703694,0.1371,50.2576339311135,49.382258692063004
+cenário 4,literatura (Douglas & Baralle 2024; Murphy 2017),qualquer lócus,,0.1346815748070369,0.1371,,49.382258692063004
+cenário 4,exemplo do orientador (penetrance_max e Weibull fixos),SOD1 D90A (p.D91A),0.9,0.225,0.2215,46.08906359948552,46.1504397740548
+cenário 4,exemplo do orientador (penetrance_max e Weibull fixos),qualquer lócus,,0.22499999999999998,0.2215,,46.1504397740548
+cenário 5,literatura (Douglas & Baralle 2024; Murphy 2017),TARDBP M337V,0.38313173817517326,0.19156586908758663,0.1997,54.177600931429765,54.18815696543226
+cenário 5,literatura (Douglas & Baralle 2024; Murphy 2017),FUS R521C,0.1919120830612622,0.0959560415306311,0.0951,42.82688144024636,43.008634166844175
+cenário 5,literatura (Douglas & Baralle 2024; Murphy 2017),qualquer lócus,,0.2691400081281978,0.2775,,50.01102344347141
+cenário 5,exemplo do orientador (penetrance_max e Weibull fixos),TARDBP M337V,0.8,0.4,0.4058,52.23675086579846,52.16167880647761
+cenário 5,exemplo do orientador (penetrance_max e Weibull fixos),FUS R521C,0.45,0.225,0.2257,39.95440245817349,39.513347233193954
+cenário 5,exemplo do orientador (penetrance_max e Weibull fixos),qualquer lócus,,0.535,0.5355,,45.50944337092113

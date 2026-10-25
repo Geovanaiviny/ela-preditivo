@@ -1,0 +1,21 @@
+{
+  "pacote": "ela_preditivo",
+  "versao": "0.1.0",
+  "aviso_legal": "AVISO: instrumento experimental de apoio à decisão no aconselhamento genético preditivo da ELA, construído com dados sintéticos e parâmetros populacionais da literatura. Não constitui diagnóstico, não substitui o julgamento clínico e não deve ser usado isoladamente em decisões sobre pacientes.",
+  "data": "2026-10-24T22:59:58",
+  "seed": 1000,
+  "ns": [
+    1000,
+    10000,
+    100000
+  ],
+  "repeticoes": 30,
+  "sexo": "F",
+  "cenarios": [
+    1,
+    2,
+    3,
+    4,
+    5
+  ]
+}

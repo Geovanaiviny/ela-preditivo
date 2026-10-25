@@ -1,0 +1,11 @@
+# Intervalos genômicos dos genes-alvo na montagem GRCh38.
+# Fonte: Ensembl REST (lookup/symbol/homo_sapiens/<gene>), consultado em 2026-10-24.
+# flanco_pb amplia cada intervalo para capturar regiões reguladoras e intrônicas adjacentes (TCC, 4.3).
+montagem: GRCh38
+fonte: "Ensembl REST lookup/symbol, 2026-10-24"
+flanco_pb: 5000
+genes:
+  SOD1:    {cromossomo: "21", inicio: 31659617, fim: 31668931, fita: 1,  ensembl: ENSG00000142168}
+  C9orf72: {cromossomo: "9",  inicio: 27535640, fim: 27573895, fita: -1, ensembl: ENSG00000147894}
+  TARDBP:  {cromossomo: "1",  inicio: 11012344, fim: 11037991, fita: 1,  ensembl: ENSG00000120948}
+  FUS:     {cromossomo: "16", inicio: 31180131, fim: 31196963, fita: 1,  ensembl: ENSG00000089280}

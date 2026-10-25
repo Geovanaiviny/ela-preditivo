@@ -1,0 +1,12 @@
+**Tabela 6 — Calibração das priors Beta de penetrância e das distribuições de idade de início a partir da literatura (docs/02, §2)**
+
+| gene | heranca | penetrancia_publicada | ic95_publicado | alpha | beta | media_beta | mediana_beta | ic95_beta | distribuicao_inicio | parametros_inicio | mediana_inicio_anos | rss_escolhida | rss_alternativa | delta_sexo | erro_ic_beta | valor_provisorio | citacao_penetrancia | citacao_inicio |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| SOD1 | dominante | 0.54 | 0.327–0.886 | 11.026 | 9.441 | 0.539 | 0.54 | 0.327–0.744 | weibull | k=4.72, lam=54.32 | 50.3 | 0.0004 | 0.001 | M +0.0 / F +0.0 | 0.142 | sim | DOUGLAS; BARALLE, 2024, p. 294 | PLACEHOLDER: substituir pelas faixas etárias de RICHARD et al., 2026; mediana ~50 anos coerente com FELDMAN et al., 2022 |
+| C9orf72 | dominante | 0.33 | 0.209–0.532 | 15.086 | 30.257 | 0.333 | 0.33 | 0.205–0.475 | weibull | k=6.83, lam=61.52 | 58.3 | 0.0011 | 0.0016 | M -1.0 / F +1.0 | 0.057 | sim | DOUGLAS; BARALLE, 2024, p. 294 | MURPHY et al., 2017: 35, 58 e 80 anos vêm do resumo (0%, 50%, quase completa); 45 e 70 anos são leituras aproximadas da curva, a digitalizar da figura |
+| TARDBP | dominante | 0.38 | 0.211–0.698 | 9.896 | 15.933 | 0.383 | 0.38 | 0.210–0.574 | weibull | k=4.63, lam=58.64 | 54.2 | 0.0001 | 0.0023 | M +0.0 / F +0.0 | 0.124 | sim | DOUGLAS; BARALLE, 2024, p. 294 | PLACEHOLDER: substituir pelas faixas etárias de RICHARD et al., 2026 |
+| FUS | dominante | 0.19 | 0.130–0.284 | 23.078 | 97.174 | 0.192 | 0.19 | 0.127–0.267 | weibull | k=3.23, lam=47.97 | 42.8 | 0.0027 | 0.0125 | M +0.0 / F +0.0 | 0.017 | sim | DOUGLAS; BARALLE, 2024, p. 294 | PLACEHOLDER: substituir pelas faixas etárias de RICHARD et al., 2026; início mais precoce (FELDMAN et al., 2022) |
+
+*Fonte: elaborado pela autora (2026), a partir do artefato ela_preditivo.*
+
+valor_provisorio = sim: parâmetro marcado com confirmar: true no YAML, a validar pela autora.

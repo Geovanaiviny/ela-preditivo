@@ -1,0 +1,22 @@
+{
+  "pacote": "ela_preditivo",
+  "versao": "0.1.0",
+  "aviso_legal": "AVISO: instrumento experimental de apoio à decisão no aconselhamento genético preditivo da ELA, construído com dados sintéticos e parâmetros populacionais da literatura. Não constitui diagnóstico, não substitui o julgamento clínico e não deve ser usado isoladamente em decisões sobre pacientes.",
+  "data": "2026-10-24T22:55:00",
+  "seed": 42,
+  "n": 10000,
+  "motor": "pymc",
+  "sexo": "F",
+  "idade_atual": 30.0,
+  "horizonte": 90.0,
+  "parametros": "/home/paulo.filho/paulo/ela_preditivo/config/parametros_literatura.yaml",
+  "versao_parametros": 1,
+  "data_parametros": "2026-10-24",
+  "tabela_variantes": "/home/paulo.filho/paulo/ela_preditivo/data/variantes_curadas.csv",
+  "vcf_mae": "resultados/sinteticos/cenario_4_mae.vcf",
+  "vcf_pai": "resultados/sinteticos/cenario_4_pai.vcf",
+  "loci": [
+    "SOD1 D90A (p.D91A)"
+  ],
+  "tempo_total_s": 2.58
+}

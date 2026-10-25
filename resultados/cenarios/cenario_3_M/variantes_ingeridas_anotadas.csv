@@ -1,0 +1,17 @@
+amostra,cromossomo,posicao,id,ref,alt,indice_alt,n_alt,tipo,qual,filtro,dp,gq,gt,dosagem,repeticoes,motivo_repeticao,gene,aprovado,motivo_reprovacao,arquivo,clnsig,estrelas,heranca,nome_curto,hgvs_p,rs_tabela,citacao,classe,anotada,fonte_anotacao,limiar_patogenico
+MAE,1,11020000,,G,A,1,2,snv,333.5,PASS,26,74,0/2,0,,,TARDBP,True,,cenario_3_mae.vcf,,,,,,,,nao_anotada,False,,
+MAE,1,11020000,,G,T,2,2,snv,333.5,PASS,26,74,0/2,1,,,TARDBP,True,,cenario_3_mae.vcf,,,,,,,,nao_anotada,False,,
+MAE,9,27573529,,GGGGCC,<STR45>,1,1,repeticao,175.1,PASS,28,88,0/1,1,45.0,GGGGCC,C9orf72,True,,cenario_3_mae.vcf,Pathogenic,1.0,dominante,expansão GGGGCC,,,"ClinVar registra como microssatélite GGGGCC[>24] em chr9:27573529-27573534, sem alelo comparável (TCC 4.2.5); limiar de 30 repetições configurável em parametros_literatura.yaml",risco,True,tabela_curada,30.0
+MAE,16,31185000,,A,G,1,1,snv,315.2,PASS,47,67,0/1,1,,,FUS,True,,cenario_3_mae.vcf,,,,,,,,nao_anotada,False,,
+MAE,17,7675088,,C,T,1,1,snv,381.7,PASS,60,81,0/1,1,,,,False,fora_das_regioes,cenario_3_mae.vcf,,,,,,,,nao_anotada,False,,
+MAE,21,31659509,rs17883296,G,T,1,1,snv,160.3,PASS,44,79,0/1,1,,,SOD1,True,,cenario_3_mae.vcf,Likely_benign,1.0,,rs17883296,,rs17883296,"ClinVar id 1207199, AF_TGP 0,00739 (linha de exemplo do TCC, seção 4.2); dbSNP rs17883296",benigna,True,tabela_curada:posicao_alelos,
+MAE,21,31659783,rs121912442,C,T,1,1,snv,366.2,PASS,39,72,0/0,0,,,SOD1,True,,cenario_3_mae.vcf,Pathogenic,2.0,dominante,A4V (p.A5V),p.Ala5Val,rs121912442,"dbSNP rs121912442; ClinVar RCV000015885 (múltiplos submissores, sem conflito); variante de alta penetrância (FELDMAN et al., 2022)",risco,True,tabela_curada:posicao_alelos,
+MAE,21,31663000,,T,C,1,1,snv,8.3,LowQual,4,10,0/1,1,,,SOD1,False,filtro_nao_pass;dp_baixo;gq_baixo,cenario_3_mae.vcf,,,,,,,,nao_anotada,False,,
+PAI,1,11020000,,G,A,1,2,snv,280.0,PASS,35,63,0/2,0,,,TARDBP,True,,cenario_3_pai.vcf,,,,,,,,nao_anotada,False,,
+PAI,1,11020000,,G,T,2,2,snv,280.0,PASS,35,63,0/2,1,,,TARDBP,True,,cenario_3_pai.vcf,,,,,,,,nao_anotada,False,,
+PAI,9,27573529,,GGGGCC,<STR45>,1,1,repeticao,266.8,PASS,26,87,0/0,0,45.0,GGGGCC,C9orf72,True,,cenario_3_pai.vcf,Pathogenic,1.0,dominante,expansão GGGGCC,,,"ClinVar registra como microssatélite GGGGCC[>24] em chr9:27573529-27573534, sem alelo comparável (TCC 4.2.5); limiar de 30 repetições configurável em parametros_literatura.yaml",risco,True,tabela_curada,30.0
+PAI,16,31185000,,A,G,1,1,snv,60.8,PASS,26,91,0/1,1,,,FUS,True,,cenario_3_pai.vcf,,,,,,,,nao_anotada,False,,
+PAI,17,7675088,,C,T,1,1,snv,288.5,PASS,52,73,0/1,1,,,,False,fora_das_regioes,cenario_3_pai.vcf,,,,,,,,nao_anotada,False,,
+PAI,21,31659509,rs17883296,G,T,1,1,snv,314.0,PASS,58,76,0/1,1,,,SOD1,True,,cenario_3_pai.vcf,Likely_benign,1.0,,rs17883296,,rs17883296,"ClinVar id 1207199, AF_TGP 0,00739 (linha de exemplo do TCC, seção 4.2); dbSNP rs17883296",benigna,True,tabela_curada:posicao_alelos,
+PAI,21,31659783,rs121912442,C,T,1,1,snv,244.9,PASS,51,79,0/1,1,,,SOD1,True,,cenario_3_pai.vcf,Pathogenic,2.0,dominante,A4V (p.A5V),p.Ala5Val,rs121912442,"dbSNP rs121912442; ClinVar RCV000015885 (múltiplos submissores, sem conflito); variante de alta penetrância (FELDMAN et al., 2022)",risco,True,tabela_curada:posicao_alelos,
+PAI,21,31663000,,T,C,1,1,snv,8.3,LowQual,4,10,0/1,1,,,SOD1,False,filtro_nao_pass;dp_baixo;gq_baixo,cenario_3_pai.vcf,,,,,,,,nao_anotada,False,,

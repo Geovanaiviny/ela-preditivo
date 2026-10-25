@@ -1,0 +1,2 @@
+variante,n_portadores,eventos,pi_entrada,lambda_entrada,rho_entrada,delta_sexo,pi_lifelines,lambda_lifelines,rho_lifelines,erro_rel_pi,erro_rel_lambda,erro_rel_rho,weibull_lambda_manifestantes,weibull_rho_manifestantes,mediana_weibull_manifestantes
+SOD1 D90A (p.D91A),2513,1354,0.5387262992281477,54.317063598996825,4.718485279643336,0.0,0.5388022922418272,54.03375612047033,4.805608485035483,0.00014106052329043668,0.005215809908614572,0.01846423168214958,54.03318858074943,4.8062150834950685,50.06591025050779
