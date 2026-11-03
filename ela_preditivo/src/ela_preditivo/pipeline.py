@@ -23,37 +23,76 @@ def _n(x) -> str:
     return f"{int(x):,}".replace(",", ".")
 
 
+def _texto_qualidade(ind: dict) -> str:
+    est = ", ".join(f"{k}★: {v}" for k, v in ind["por_estrelas"].items()) or "—"
+    return (f"montagem {ind['montagem']} ({'coerente' if ind['montagem_coerente'] else 'NÃO conferida'}); "
+            f"{ind['aprovados']}/{ind['registros']} registros aprovados ({ind['taxa_aprovacao']:.0%}); "
+            f"{ind['anotadas']} aprovados encontrados na base de anotação ({ind['taxa_anotacao']:.0%}; estado de revisão {est}); "
+            f"classes {ind['por_classe']}; significado incerto/conflitante: {ind['n_vus']} ({ind['proporcao_vus']:.0%} das anotadas); "
+            f"risco com frequência > 1%: {ind['risco_com_frequencia_acima_1pct']}")
+
+
+def _laudo_txt(laudo: dict | None) -> str:
+    if not laudo:
+        return "não informado"
+    return "; ".join(f"{lado}: {v} repetições" for lado, v in laudo.items())
+
+
 def executar(vcf_mae, vcf_pai, saida, sexo: str | None = None, idade_atual: float | None = None, n: int = 10_000, seed: int = 42,
              motor: str = "pymc", config=None, tabela_variantes=None, horizonte: float | None = None, rotulo: str = "",
-             figuras: bool = True) -> dict:
-    """Executa as três camadas para um casal e grava tabelas, figuras, relatório e metadados em `saida`."""
+             figuras: bool = True, laudo_c9orf72: dict | None = None, base_clinvar=None, amostra_mae: str | None = None,
+             amostra_pai: str | None = None) -> dict:
+    """Executa as três camadas para um casal e grava tabelas, figuras, relatório e metadados em `saida`.
+
+    - `laudo_c9orf72`: {"mae": repetições, "pai": repetições} do laudo laboratorial (TCC 4.2.1; a expansão não é lida do VCF).
+    - `base_clinvar`: caminho da base real do ClinVar (padrão: procura em `ELA_DADOS_BRUTOS`/`dados_reais/`); `False` usa só a tabela curada.
+    - `tabela_variantes`: CSV no formato da tabela curada (padrão: `data/variantes_curadas.csv`), que complementa a base real.
+    - `amostra_mae`/`amostra_pai`: nome da coluna de amostra num VCF multiamostra.
+    """
     t_ini = time.perf_counter()
     saida = Path(saida); (saida / "tabelas").mkdir(parents=True, exist_ok=True); (saida / "figuras").mkdir(exist_ok=True)
     par = carregar_parametros(config)
     horizonte = float(horizonte or par.horizonte_anos)
     regioes = ingestao.carregar_regioes()
-    tabela = anotacao.carregar_tabela_curada(tabela_variantes)
+    tabela = anotacao.tabela_anotacao(base_real=base_clinvar, curada=tabela_variantes)
+    fontes = tabela.attrs.get("fontes", {})
+    laudo = {k: v for k, v in (laudo_c9orf72 or {}).items() if v is not None}
 
     # Camada 1: ingestão e anotação
-    mae = anotacao.anotar(ingestao.ler_vcf(vcf_mae, regioes, par.filtro_qualidade), tabela, par.limiar_repeticoes)
-    pai = anotacao.anotar(ingestao.ler_vcf(vcf_pai, regioes, par.filtro_qualidade), tabela, par.limiar_repeticoes)
+    mae = anotacao.anotar(ingestao.ler_vcf(vcf_mae, regioes, par.filtro_qualidade, amostra=amostra_mae), tabela, par.limiar_repeticoes)
+    pai = anotacao.anotar(ingestao.ler_vcf(vcf_pai, regioes, par.filtro_qualidade, amostra=amostra_pai), tabela, par.limiar_repeticoes)
     perfil = genotipo.perfil_variantes(mae, pai)
     ing = {"mae": ingestao.resumo_ingestao(mae), "pai": ingestao.resumo_ingestao(pai)}
-    vetor = genotipo.vetor_dosagem(mae, pai, par)
+    ind = {"mae": anotacao.indicadores_qualidade(mae), "pai": anotacao.indicadores_qualidade(pai)}
+    vetor = genotipo.vetor_dosagem(mae, pai, par, laudo_c9orf72=laudo, tabela=tabela)
     pd.concat([mae, pai], ignore_index=True).to_csv(saida / "variantes_ingeridas_anotadas.csv", index=False)
     tabelas = [relatorio.salvar_tabela(perfil, saida / "tabelas", "tabela_01_variantes_anotadas",
                                        "Tabela 1 — Variantes aprovadas no filtro de qualidade e sua anotação, por genitor",
-                                       f"Registros lidos/aprovados: mãe {ing['mae']['registros']}/{ing['mae']['aprovados']}, pai {ing['pai']['registros']}/{ing['pai']['aprovados']}. Reprovações: mãe {ing['mae']['por_motivo']}, pai {ing['pai']['por_motivo']}.")]
+                                       f"Registros lidos/aprovados: mãe {ing['mae']['registros']}/{ing['mae']['aprovados']}, pai {ing['pai']['registros']}/{ing['pai']['aprovados']}. "
+                                       f"Reprovações: mãe {ing['mae']['por_motivo']}, pai {ing['pai']['por_motivo']}. Base de anotação: {fontes.get('base_real') or 'tabela curada'}"
+                                       f"{' (' + str(fontes.get('n_real')) + ' variantes do ClinVar + ' + str(fontes.get('n_curada_extra')) + ' da tabela curada)' if fontes.get('base_real') else ''}.")]
     figs = []
-    secoes = [("Entrada", f"VCF materno: `{Path(vcf_mae).name}`; VCF paterno: `{Path(vcf_pai).name}`; sexo do descendente: {sexo or 'não informado'}; "
-                          f"idade atual sem sintomas: {idade_atual if idade_atual is not None else 'não informada'}; motor: {motor}; N = {_n(n)}; seed = {seed}; horizonte = {horizonte:.0f} anos.")]
+    secoes = [("Entrada", f"VCF materno: `{Path(vcf_mae).name}` (amostra {ing['mae']['amostra']}); VCF paterno: `{Path(vcf_pai).name}` (amostra {ing['pai']['amostra']}); "
+                          f"laudo do C9orf72: {_laudo_txt(laudo)}; sexo do descendente: {sexo or 'não informado'}; "
+                          f"idade atual sem sintomas: {idade_atual if idade_atual is not None else 'não informada'}; motor: {motor}; N = {_n(n)}; seed = {seed}; horizonte = {horizonte:.0f} anos."),
+              ("Qualidade dos dados (TCC 4.2.3)", f"- Mãe: {_texto_qualidade(ind['mae'])}.\n- Pai: {_texto_qualidade(ind['pai'])}.\n"
+                                                  f"- Base de anotação: {fontes.get('base_real') or 'apenas a tabela curada'}; "
+                                                  f"regra de classe: só Pathogenic/Likely pathogenic sustentam risco; significado incerto e classificações conflitantes não (TCC 4.2.2).")]
+    meta_comum = dict(seed=seed, n=n, motor=motor, sexo=sexo, idade_atual=idade_atual, laudo_c9orf72=laudo or None, parametros=str(par.caminho),
+                      versao_parametros=par.versao, data_parametros=par.data, base_anotacao=fontes, vcf_mae=str(vcf_mae), vcf_pai=str(vcf_pai),
+                      montagem={"mae": ing["mae"]["montagem"], "pai": ing["pai"]["montagem"]}, indicadores_qualidade=ind)
     if vetor.empty:
+        quase = perfil[(perfil.classe.isin(["vus", "intermediaria"])) & (perfil.dosagem.fillna(0) > 0)]
+        extra = ""
+        if len(quase):
+            itens = "; ".join(f"{r.amostra}: {r.gene} {r.nome_curto or (str(r.posicao) + ' ' + r.ref + '>' + r.alt)} ({r.clnsig or r.classe})" for r in quase.itertuples())
+            extra = (f" Foram encontradas variantes que não sustentam atribuição de risco pela regra do TCC 4.2.2 (significado incerto, classificação "
+                     f"conflitante ou faixa intermediária): {itens}.")
         secoes.append(("Resultado", "Nenhum lócus de risco (classe patogênica/provavelmente patogênica) foi encontrado nos genes-alvo dos dois genitores. "
-                                    "O risco de transmissão de variantes conhecidas é nulo neste recorte; o risco populacional de base não é modelado."))
+                                    "O risco de transmissão de variantes conhecidas é nulo neste recorte; o risco populacional de base não é modelado." + extra))
         rel = relatorio.escrever_relatorio(saida, f"Relatório do artefato — {rotulo or 'caso'}", secoes, tabelas, figs)
-        relatorio.escrever_metadados(saida, data=_dt.datetime.now().isoformat(timespec="seconds"), seed=seed, n=n, motor=motor, sexo=sexo,
-                                     idade_atual=idade_atual, parametros=str(par.caminho), versao_parametros=par.versao, data_parametros=par.data, loci=0)
-        return {"saida": saida, "relatorio": rel, "vetor": vetor, "res": None, "tabelas": tabelas, "figuras": figs}
+        relatorio.escrever_metadados(saida, data=_dt.datetime.now().isoformat(timespec="seconds"), loci=0, **meta_comum)
+        return {"saida": saida, "relatorio": rel, "vetor": vetor, "res": None, "tabelas": tabelas, "figuras": figs, "indicadores": ind}
     tabelas.append(relatorio.salvar_tabela(vetor, saida / "tabelas", "tabela_01b_vetor_dosagem",
                                            "Tabela 1b — Vetor genotípico parental: dosagem alélica (0/1/2) por lócus de risco e P(portador) exata"))
 
@@ -127,29 +166,32 @@ def executar(vcf_mae, vcf_pai, saida, sexo: str | None = None, idade_atual: floa
     secoes.append(("Limitações desta execução", f"Parâmetros provisórios (confirmar: true) em: {', '.join(provis) or 'nenhum'}. Independência entre lóci; sem fatores modificadores; "
                                                 "penetrância populacional de coortes europeias/norte-americanas; dados sintéticos."))
     rel = relatorio.escrever_relatorio(saida, f"Relatório do artefato — {rotulo or 'caso'}", secoes, tabelas, figs)
-    relatorio.escrever_metadados(saida, data=_dt.datetime.now().isoformat(timespec="seconds"), seed=seed, n=n, motor=motor, sexo=sexo, idade_atual=idade_atual,
-                                 horizonte=horizonte, parametros=str(par.caminho), versao_parametros=par.versao, data_parametros=par.data,
-                                 tabela_variantes=str(tabela_variantes or anotacao.CAMINHO_TABELA), vcf_mae=str(vcf_mae), vcf_pai=str(vcf_pai),
-                                 loci=[l.rotulo for l in loci], tempo_total_s=round(time.perf_counter() - t_ini, 2))
+    relatorio.escrever_metadados(saida, data=_dt.datetime.now().isoformat(timespec="seconds"), horizonte=horizonte,
+                                 tabela_variantes=str(tabela_variantes or anotacao.CAMINHO_TABELA),
+                                 loci=[l.rotulo for l in loci], tempo_total_s=round(time.perf_counter() - t_ini, 2), **meta_comum)
     return {"saida": saida, "relatorio": rel, "vetor": vetor, "loci": loci, "res": res, "res_cruzado": res_x, "resumo": resumo, "combinado": comb,
-            "aderencia": ader, "curvas": curvas, "tabelas": tabelas, "figuras": figs}
+            "aderencia": ader, "curvas": curvas, "tabelas": tabelas, "figuras": figs, "indicadores": ind}
 
 
 def avaliar(dir_cenarios, saida, numeros=None, ns=(1_000, 10_000, 100_000), repeticoes: int = 30, seed: int = 1000, sexo: str = "F",
-            n_coerencia: int = 10_000, config=None) -> dict:
-    """Avaliação transversal dos cenários: estabilidade, tempo, coerência, calibração e sensibilidade (Tabelas 5 a 9)."""
+            n_coerencia: int = 10_000, config=None, base_clinvar=None) -> dict:
+    """Avaliação transversal dos cenários: estabilidade, tempo, coerência, calibração e sensibilidade (Tabelas 5 a 9).
+    Cenários sem lócus de risco na base de anotação usada (ex.: variante com classificação conflitante no ClinVar) são pulados e listados."""
     saida = Path(saida); (saida / "tabelas").mkdir(parents=True, exist_ok=True); (saida / "figuras").mkdir(exist_ok=True)
     par = carregar_parametros(config)
     dir_cenarios = Path(dir_cenarios)
     numeros = numeros or [c.numero for c in cenarios.CENARIOS]
-    tabela = anotacao.carregar_tabela_curada()
+    tabela = anotacao.tabela_anotacao(base_real=base_clinvar)
     regioes = ingestao.carregar_regioes()
-    brutos, resumos, tempos, coer, sens, recs = [], [], [], [], [], []
+    brutos, resumos, tempos, coer, sens, recs, pulados = [], [], [], [], [], [], []
     for num in numeros:
         c = cenarios.cenario_por_numero(num)
         mae = anotacao.anotar(ingestao.ler_vcf(dir_cenarios / f"cenario_{num}_mae.vcf", regioes, par.filtro_qualidade), tabela, par.limiar_repeticoes)
         pai = anotacao.anotar(ingestao.ler_vcf(dir_cenarios / f"cenario_{num}_pai.vcf", regioes, par.filtro_qualidade), tabela, par.limiar_repeticoes)
-        vetor = genotipo.vetor_dosagem(mae, pai, par)
+        vetor = genotipo.vetor_dosagem(mae, pai, par, laudo_c9orf72=c.laudo_c9orf72, tabela=tabela)
+        if vetor.empty:
+            pulados.append(num)
+            continue
         loci = loci_de_vetor(vetor, par, sexo=sexo)
         rot = f"cenário {num}"
         bruto, resumo = avaliacao.estabilidade(loci, ns=ns, repeticoes=repeticoes, seed_inicial=seed)
@@ -179,26 +221,36 @@ def avaliar(dir_cenarios, saida, numeros=None, ns=(1_000, 10_000, 100_000), repe
             relatorio.figura_curvas_inicio(par, saida / "figuras" / "figura_03_curvas_inicio.png"),
             relatorio.figura_estabilidade(resumo, saida / "figuras" / "figura_07_estabilidade.png")]
     tt = pd.concat(tempos)
-    secoes = [("Configuração", f"Cenários {numeros}; N ∈ {list(ns)}; {repeticoes} repetições por N; seed inicial {seed}; sexo do descendente {sexo}; coerência e sensibilidade com N = {_n(n_coerencia)}."),
+    fontes = tabela.attrs.get("fontes", {})
+    secoes = [("Configuração", f"Cenários {[n for n in numeros if n not in pulados]}; N ∈ {list(ns)}; {repeticoes} repetições por N; seed inicial {seed}; sexo do descendente {sexo}; "
+                               f"coerência e sensibilidade com N = {_n(n_coerencia)}. Base de anotação: {fontes.get('base_real') or 'tabela curada'}."
+                               + (f" Cenários sem lócus de risco nesta base (pulados): {pulados}." if pulados else "")),
               ("Leitura", f"Razão DP/EP média = {resumo.razao_dp_ep.mean():.2f}. Picos de risco entre 60 e 75 anos: {int(pd.concat(coer).pico_em_60_75.sum())} de {len(pd.concat(coer))} lóci. "
                           f"Tempo médio PyMC para N = {_n(max(ns))}: {tt[(tt.motor == 'pymc') & (tt.n == max(ns))].tempo_medio_s.mean():.2f} s; NumPy: {tt[(tt.motor == 'numpy') & (tt.n == max(ns))].tempo_medio_s.mean():.3f} s.")]
     rel = relatorio.escrever_relatorio(saida, "Avaliação do artefato (TCC 4.5)", secoes, tabelas, figs)
-    relatorio.escrever_metadados(saida, data=_dt.datetime.now().isoformat(timespec="seconds"), seed=seed, ns=list(ns), repeticoes=repeticoes, sexo=sexo, cenarios=numeros)
-    return {"saida": saida, "relatorio": rel, "estabilidade": resumo, "tempos": pd.concat(tempos), "coerencia": pd.concat(coer), "sensibilidade": pd.concat(sens), "tabelas": tabelas, "figuras": figs}
+    relatorio.escrever_metadados(saida, data=_dt.datetime.now().isoformat(timespec="seconds"), seed=seed, ns=list(ns), repeticoes=repeticoes, sexo=sexo,
+                                 cenarios=numeros, cenarios_pulados=pulados, base_anotacao=fontes)
+    return {"saida": saida, "relatorio": rel, "estabilidade": resumo, "tempos": pd.concat(tempos), "coerencia": pd.concat(coer), "sensibilidade": pd.concat(sens),
+            "tabelas": tabelas, "figuras": figs, "pulados": pulados}
 
 
-def tudo(saida, seed: int = 42, n: int = 10_000, ns=(1_000, 10_000, 100_000), repeticoes: int = 30, motor: str = "pymc", config=None, idade_atual: float | None = 30.0) -> dict:
-    """Gera os cenários, executa cada um para os dois sexos, avalia e escreve o índice `README.md` em `saida`."""
+def tudo(saida, seed: int = 42, n: int = 10_000, ns=(1_000, 10_000, 100_000), repeticoes: int = 30, motor: str = "pymc", config=None, idade_atual: float | None = 30.0,
+         base_clinvar=None) -> dict:
+    """Gera os cenários, executa cada um para os dois sexos (com o laudo do C9orf72 de cada cenário), avalia e escreve o índice `README.md` em `saida`."""
     saida = Path(saida); saida.mkdir(parents=True, exist_ok=True)
     t0 = time.perf_counter()
     tab = cenarios.gerar_cenarios(saida / "sinteticos", seed=2026)
-    consolidado, indice = [], []
+    consolidado, indice, sem_locus = [], [], []
     for c in cenarios.CENARIOS:
         linha = tab[tab.numero == c.numero].iloc[0]
         por_sexo = {}
         for sexo in ("F", "M"):
             r = executar(linha.vcf_mae, linha.vcf_pai, saida / "cenarios" / f"cenario_{c.numero}_{sexo}", sexo=sexo, idade_atual=idade_atual, n=n, seed=seed,
-                         motor=motor, config=config, rotulo=f"Cenário {c.numero} ({sexo}): {c.descricao}")
+                         motor=motor, config=config, rotulo=f"Cenário {c.numero} ({sexo}): {c.descricao}", laudo_c9orf72=c.laudo_c9orf72, base_clinvar=base_clinvar)
+            indice.append(f"- Cenário {c.numero}, sexo {sexo}: [`cenarios/cenario_{c.numero}_{sexo}/relatorio.md`](cenarios/cenario_{c.numero}_{sexo}/relatorio.md)")
+            if r["res"] is None:
+                sem_locus.append(f"cenário {c.numero} ({sexo})")
+                continue
             por_sexo[sexo] = r
             for _, l in r["resumo"].iterrows():
                 consolidado.append({"cenario": c.numero, "descricao": c.descricao, "sexo": sexo, "variante": l.variante, "heranca": l.heranca,
@@ -208,16 +260,21 @@ def tudo(saida, seed: int = 42, n: int = 10_000, ns=(1_000, 10_000, 100_000), re
             consolidado.append({"cenario": c.numero, "descricao": c.descricao, "sexo": sexo, "variante": sobrevivencia.QUALQUER, "heranca": "independência",
                                 "p_portador": cb["p_portador_qualquer_exato"], "p_manifesta": cb["p_manifesta_qualquer_exato"],
                                 "ic95": f"{cb['p_manifesta_qualquer_q025']:.3f}–{cb['p_manifesta_qualquer_q975']:.3f}", "idade_mediana": cb["idade_mediana_primeiro_inicio"]})
-            indice.append(f"- Cenário {c.numero}, sexo {sexo}: [`cenarios/cenario_{c.numero}_{sexo}/relatorio.md`](cenarios/cenario_{c.numero}_{sexo}/relatorio.md)")
-        relatorio.figura_idade_inicio({s: r["res"] for s, r in por_sexo.items()}, saida / "cenarios" / f"figura_05_idade_inicio_cenario_{c.numero}.png")
+        if por_sexo:
+            relatorio.figura_idade_inicio({s: r["res"] for s, r in por_sexo.items()}, saida / "cenarios" / f"figura_05_idade_inicio_cenario_{c.numero}.png")
     cons = pd.DataFrame(consolidado)
     tabela3 = relatorio.salvar_tabela(cons, saida / "tabelas", "tabela_03_consolidada",
                                       "Tabela 3 (consolidada) — Probabilidade de transmissão, risco vitalício de manifestação (IC 95%) e idade mediana de início por cenário, lócus e sexo do descendente")
-    av = avaliar(saida / "sinteticos", saida / "avaliacao", ns=ns, repeticoes=repeticoes, seed=seed + 958, config=config, n_coerencia=n)
+    av = avaliar(saida / "sinteticos", saida / "avaliacao", ns=ns, repeticoes=repeticoes, seed=seed + 958, config=config, n_coerencia=n, base_clinvar=base_clinvar)
+    fontes = anotacao.tabela_anotacao(base_real=base_clinvar).attrs.get("fontes", {})
+    com_figura = [c for c in cenarios.CENARIOS if (saida / "cenarios" / f"figura_05_idade_inicio_cenario_{c.numero}.png").exists()]
     linhas = [f"# Resultados do artefato ela_preditivo v{__version__}", "", f"> {AVISO_LEGAL}", "",
               f"Gerado em {_dt.datetime.now():%d/%m/%Y %H:%M} com seed {seed}, N = {_n(n)} por execução, avaliação com N ∈ {list(ns)} × {repeticoes} repetições. Tempo total: {time.perf_counter() - t0:.0f} s.", "",
+              f"Base de anotação: {fontes.get('base_real') or 'tabela curada'}" + (f" ({fontes.get('n_real')} variantes do ClinVar dos quatro genes + {fontes.get('n_curada_extra')} da tabela curada)." if fontes.get("base_real") else "."),
+              "A expansão do C9orf72 entra pelo laudo laboratorial de cada cenário (TCC 4.2.1), não pelo VCF.", "",
+              *([f"Sem lócus de risco nesta base de anotação (relatório explica o motivo): {', '.join(sem_locus)}.", ""] if sem_locus else []),
               "## Relatórios por cenário", "", *indice, "", "## Avaliação transversal", "", "- [`avaliacao/relatorio.md`](avaliacao/relatorio.md) (Tabelas 5 a 9; Figuras 2, 3 e 7)", "",
               "## Tabela consolidada", "", Path(tabela3["md"]).read_text(encoding="utf-8"), "",
-              "## Figuras de idade de início por sexo", "", *[f"![Cenário {c.numero}](cenarios/figura_05_idade_inicio_cenario_{c.numero}.png)" for c in cenarios.CENARIOS], ""]
+              "## Figuras de idade de início por sexo", "", *[f"![Cenário {c.numero}](cenarios/figura_05_idade_inicio_cenario_{c.numero}.png)" for c in com_figura], ""]
     (saida / "README.md").write_text("\n".join(linhas), encoding="utf-8")
-    return {"saida": saida, "consolidado": cons, "avaliacao": av}
+    return {"saida": saida, "consolidado": cons, "avaliacao": av, "sem_locus": sem_locus}

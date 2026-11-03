@@ -23,9 +23,10 @@ Fluxo (TCC, 4.3 e 4.4):
 ```
 VCF materno + VCF paterno
    │  camada 1 — ingestao.py · anotacao.py · genotipo.py
-   │  PyVCF (pyvcf3): leitura; filtro de qualidade (FILTER/DP/GQ); máscara GRCh38 dos genes SOD1, C9orf72, TARDBP, FUS;
-   │  decomposição multialélica; expansão GGGGCC do C9orf72 por contagem de repetições (Biopython para o motivo);
-   │  anotação ClinVar/dbSNP (tabela curada ou subconjunto real); vetor de dosagem alélica 0/1/2 por lócus de risco
+   │  PyVCF (pyvcf3): leitura; conferência da montagem GRCh38 no cabeçalho; filtro de qualidade (FILTER/DP/GQ); máscara GRCh38
+   │  dos genes SOD1, C9orf72, TARDBP, FUS; decomposição multialélica e normalização REF/ALT; AC/AN/DB do INFO;
+   │  anotação ClinVar real (dados_reais/) + tabela curada; expansão GGGGCC do C9orf72 pelo laudo laboratorial (--c9orf72-mae/pai);
+   │  vetor de dosagem alélica 0/1/2 por lócus de risco (só Pathogenic/Likely pathogenic); indicadores de qualidade (TCC 4.2.3)
    ▼
 Rede Bayesiana (PyMC) + Monte Carlo (N = 10.000 fecundações hipotéticas)
    │  camada 2 — rede_bayesiana.py · monte_carlo.py · exato.py · calibracao.py
@@ -63,10 +64,10 @@ Fórmulas exatas de referência: dominante `P(C) = 1 − (1 − d_m/2)(1 − d_f
 | Penetrância, IC, herança, curvas de idade, efeito do sexo, limiares | `config/parametros_literatura.yaml` | cada valor tem `citacao` e `confirmar`; `confirmar: true` = provisório, a validar pela autora (hoje: curvas de idade de SOD1, TARDBP e FUS, à espera de Richard et al., 2026; pontos intermediários da curva de Murphy et al., 2017) |
 | Regiões dos genes (GRCh38) | `config/regioes_genes_grch38.yaml` | Ensembl REST, 24/10/2026, flanco de 5 kb |
 | Variantes conhecidas (anotação) | `data/variantes_curadas.csv` | SOD1 p.Ala5Val (rs121912442, chr21:31659783 C>T), SOD1 p.Asp91Ala recessiva (rs80265967, chr21:31667290 A>C), TARDBP p.Met337Val (rs80356730, chr1:11022418 A>G), FUS p.Arg521Cys (rs121909668, chr16:31191418 C>T), expansão GGGGCC do C9orf72 (chr9:27573529–27573534), SOD1 rs17883296 benigna (exemplo do TCC). Coordenadas conferidas no dbSNP/ClinVar em 24/10/2026 |
-| Subconjunto real do ClinVar/dbSNP (seção 4.2 do TCC) | fora do repositório, caminho em `ELA_DADOS_BRUTOS` | carregadores `anotacao.carregar_variant_summary` e `anotacao.carregar_dbsnp_exportacao`; não são necessários para o protótipo |
+| Subconjunto real do ClinVar/dbSNP (seção 4.2.2 do TCC) | `dados_reais/` na raiz do repositório (ignorada pelo git) ou `ELA_DADOS_BRUTOS` | `base_consolidada_ela.csv` (preferida), `clinvar_ela_4genes.csv`/`variant_summary.txt` ou `clinvar*.vcf`; encontrados automaticamente por `anotacao.tabela_anotacao()` e mesclados com a tabela curada (classificação do ClinVar prevalece; a curada contribui herança e a expansão do C9orf72). Sem eles o protótipo roda só com a tabela curada (`--so-tabela-curada`) |
 | Cenários familiares | `data/sinteticos/` (gerados por `cenarios.py`, seed 2026) | VCF 4.2, GRCh38, uma amostra por arquivo, com ruído para exercitar filtros (benigna, não anotada, fora dos genes, baixa qualidade, multialélica) |
 
-A expansão do C9orf72 é representada no VCF no estilo ExpansionHunter (`ALT=<STR45>`, `INFO RU=GGGGCC;SVTYPE=STR`, `FORMAT REPCN`), porque o ClinVar a registra como microssatélite por contagem de repetições, não por alelo (TCC, 4.2.5). Limiar: ≥ 30 repetições patogênico, 24–29 intermediário (configurável).
+A expansão do C9orf72 **não é lida do VCF**: o fluxo de variantes curtas não a detecta e o TCC (4.2.1) a trata como parâmetro do laudo laboratorial. Informe o nº de repetições do maior alelo de cada genitor (`--c9orf72-mae 45`, `--c9orf72-pai 2 45` para os dois alelos). Limiar: ≥ 30 repetições patogênico, 24–29 intermediário (configurável). Um VCF no estilo ExpansionHunter (`ALT=<STRn>`, `REPCN`) ainda é lido como caminho secundário; se divergir do laudo, prevalece o laudo e a divergência fica no relatório.
 
 ## 4. Instalação
 
@@ -216,10 +217,13 @@ ela_preditivo/
 | variantes ingeridas (`ingestao.ler_vcf`) | `cromossomo, posicao, ref, alt, indice_alt, n_alt` | coordenada GRCh38 sem prefixo "chr"; um registro por ALT após decomposição |
 | | `tipo` | snv, indel, repeticao, simbolica |
 | | `gt, dosagem` | genótipo e nº de cópias do ALT (0/1/2) |
-| | `repeticoes` | cópias do motivo GGGGCC (ALT `<STRn>`, FORMAT REPCN ou contagem) |
+| | `repeticoes` | cópias do motivo GGGGCC (ALT `<STRn>`, FORMAT REPCN ou contagem) — caminho secundário; o laudo entra em `vetor_dosagem` |
+| | `posicao_vcf, ref_vcf, alt_vcf, normalizada` | representação original e se foi normalizada (prefixo/sufixo comuns removidos) |
+| | `ac, an, no_dbsnp, montagem` | INFO AC (por ALT), AN e flag DB; montagem identificada no cabeçalho (GRCh38/GRCh37/desconhecida) |
 | | `aprovado, motivo_reprovacao` | fora_das_regioes, genotipo_ausente, filtro_nao_pass, dp_baixo, gq_baixo |
 | anotadas (`anotacao.anotar`) | `classe` | risco (P/LP), vus (VUS ou conflitante), benigna, nao_anotada, intermediaria/normal (repetições) |
-| | `clnsig, estrelas, heranca, fonte_anotacao` | classificação ClinVar, estado de revisão (0–4 estrelas), herança da variante, chave usada no cruzamento |
+| | `clnsig, estrelas, revstat, n_submissores, conflito, heranca, allele_id, freq_alfa, fonte_anotacao` | classificação ClinVar, estrelas, estado de revisão, nº de submissores, classificações conflitantes, herança (tabela curada), AlleleID, frequência ALFA, fonte e chave usadas no cruzamento (`clinvar_base_consolidada:posicao_alelos`, `tabela_curada:rs`, `rs_ambiguo:n_alelos`) |
+| vetor de dosagem | `fonte` | `vcf`, `laudo` ou `laudo+vcf` (origem da dosagem do lócus) |
 | vetor de dosagem (`genotipo.vetor_dosagem`) | `dosagem_mae, dosagem_pai, heranca, p_portador_exato` | entrada do nó inicial da Rede Bayesiana |
 | resumo (`ResultadoSimulacao.resumo`) | `p_portador_exato/mc, ep_portador` | transmissão exata, simulada e erro padrão |
 | | `penetrancia_media/q025/q975` | prior Beta: média e IC 95 % |
@@ -231,7 +235,7 @@ ela_preditivo/
 ## 11. Testes
 
 ```bash
-cd ela_preditivo && pytest -q        # 74 testes, ~10 s
+pytest -q ela_preditivo/tests        # 96 testes, ~15 s (5 deles só rodam com dados_reais/ presente)
 ```
 
 Cobrem: CPT e fórmulas exatas; calibração (Beta reproduz ponto e limite inferior do IC; Weibull recupera parâmetros conhecidos e a mediana de 58 anos de Murphy); geração e leitura dos VCFs (normalização de cromossomo, regiões, multialélicos, expansão, filtros); anotação (classes, estrelas, cruzamento por posição e por rs, limiar de repetições, carregador de `variant_summary`); vetor de dosagem nos 5 cenários; aderência PyMC ≈ NumPy ≈ exato; recessividade; reprodutibilidade por seed; efeito do sexo; condicionamento por idade; Lifelines (censura, KM = F(∞), cura mista recupera π, λ, ρ; risco condicional KM ≈ analítico); pipeline e CLI de ponta a ponta.

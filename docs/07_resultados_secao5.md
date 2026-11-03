@@ -1,5 +1,7 @@
 # 07 — Texto-base para a seção 5 (Resultados — análise e discussão)
 
+> **Nota de 03/11/2026.** `resultados/` foi regenerado após o alinhamento à revisão vigente do TCC (docs/04, D14 a D19): a base de anotação passou a ser o ClinVar real dos quatro genes (`dados_reais/`, release 2026-09-28; 1.458 variantes com posição em VCF + expansão do C9orf72 da tabela curada), a expansão do C9orf72 entra pelo laudo laboratorial e não pelo VCF, e o relatório ganhou a seção "Qualidade dos dados (TCC 4.2.3)". Consequências para o texto abaixo: (i) o **cenário 4** (SOD1 p.Asp91Ala, recessivo) deixa de ter lócus de risco, porque o ClinVar classifica a variante como *conflitante* e o TCC 4.2.2 só aceita Pathogenic/Likely pathogenic — o relatório do cenário 4 documenta isso e a decisão em aberto nº 5 de docs/04 pergunta à autora se prefere manter o cenário com a tabela curada; (ii) os valores exatos dos cenários 1, 2, 3 e 5 não mudam; os valores de Monte Carlo podem diferir na segunda casa porque a ordem dos lóci do cenário 3 mudou (SOD1 antes do C9orf72). Conferir os números abaixo com `resultados/tabelas/tabela_03_consolidada.csv` antes de levar ao texto.
+
 Rascunho em prosa, a partir da execução definitiva do artefato em 24/10/2026 (`resultados/`, seed 42, N = 10.000). A autora deve adaptar o estilo, converter decimais para vírgula e inserir as tabelas e figuras pelos nomes indicados. Nomes de arquivos entre parênteses referem-se a `resultados/`.
 
 ## 5.1 Saídas da camada de ingestão e anotação

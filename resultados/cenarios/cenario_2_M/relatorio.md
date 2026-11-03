@@ -1,10 +1,16 @@
-# Relatório do artefato — Cenário 2 (M): Mãe com expansão de hexanucleotídeos no C9orf72 (45 repetições) × pai selvagem
+# Relatório do artefato — Cenário 2 (M): Mãe com expansão de hexanucleotídeos no C9orf72 (45 repetições, laudo) × pai selvagem
 
 > AVISO: instrumento experimental de apoio à decisão no aconselhamento genético preditivo da ELA, construído com dados sintéticos e parâmetros populacionais da literatura. Não constitui diagnóstico, não substitui o julgamento clínico e não deve ser usado isoladamente em decisões sobre pacientes.
 
 ## Entrada
 
-VCF materno: `cenario_2_mae.vcf`; VCF paterno: `cenario_2_pai.vcf`; sexo do descendente: M; idade atual sem sintomas: 30.0; motor: pymc; N = 10.000; seed = 42; horizonte = 90 anos.
+VCF materno: `cenario_2_mae.vcf` (amostra MAE); VCF paterno: `cenario_2_pai.vcf` (amostra PAI); laudo do C9orf72: mae: 45 repetições; sexo do descendente: M; idade atual sem sintomas: 30.0; motor: pymc; N = 10.000; seed = 42; horizonte = 90 anos.
+
+## Qualidade dos dados (TCC 4.2.3)
+
+- Mãe: montagem GRCh38 (coerente); 4/6 registros aprovados (67%); 1 aprovados encontrados na base de anotação (25%; estado de revisão 2★: 1); classes {'nao_anotada': 3, 'benigna': 1}; significado incerto/conflitante: 0 (0% das anotadas); risco com frequência > 1%: 0.
+- Pai: montagem GRCh38 (coerente); 4/6 registros aprovados (67%); 1 aprovados encontrados na base de anotação (25%; estado de revisão 2★: 1); classes {'nao_anotada': 3, 'benigna': 1}; significado incerto/conflitante: 0 (0% das anotadas); risco com frequência > 1%: 0.
+- Base de anotação: clinvar_base_consolidada; regra de classe: só Pathogenic/Likely pathogenic sustentam risco; significado incerto e classificações conflitantes não (TCC 4.2.2).
 
 ## Resultado
 
@@ -13,7 +19,7 @@ VCF materno: `cenario_2_mae.vcf`; VCF paterno: `cenario_2_pai.vcf`; sexo do desc
 
 ## Verificações
 
-Aderência: maior desvio entre Monte Carlo e valor exato = 0.44 erros padrão (limite usual: 4). Coerência: risco vitalício por Kaplan-Meier = C9orf72 expansão GGGGCC: 16.8%, qualquer lócus: 16.8%. Recuperação Lifelines: erro relativo máximo em π = 0.1%. Tempo: 2.7 s no total (pymc: 1.33 s; motor cruzado: 0.00 s).
+Aderência: maior desvio entre Monte Carlo e valor exato = 0.44 erros padrão (limite usual: 4). Coerência: risco vitalício por Kaplan-Meier = C9orf72 expansão GGGGCC: 16.8%, qualquer lócus: 16.8%. Recuperação Lifelines: erro relativo máximo em π = 0.1%. Tempo: 3.2 s no total (pymc: 1.51 s; motor cruzado: 0.00 s).
 
 ## Limitações desta execução
 
@@ -28,24 +34,22 @@ Parâmetros provisórios (confirmar: true) em: SOD1, C9orf72, TARDBP, FUS. Indep
 | MAE | TARDBP | 1 | 11020000 | G | A |  | snv | 0 |  | nao_anotada |  |  |  |  |  |
 | MAE | TARDBP | 1 | 11020000 | G | T |  | snv | 1 |  | nao_anotada |  |  |  |  |  |
 | MAE | FUS | 16 | 31185000 | A | G |  | snv | 1 |  | nao_anotada |  |  |  |  |  |
-| MAE | SOD1 | 21 | 31659509 | G | T | rs17883296 | snv | 1 |  | benigna | Likely_benign | 1 | rs17883296 |  | tabela_curada:posicao_alelos |
-| MAE | C9orf72 | 9 | 27573529 | GGGGCC | <STR45> |  | repeticao | 1 | 45 | risco | Pathogenic | 1 | expansão GGGGCC | dominante | tabela_curada |
+| MAE | SOD1 | 21 | 31659509 | G | T | rs17883296 | snv | 1 |  | benigna | Likely benign | 2 | rs17883296 |  | clinvar_base_consolidada:posicao_alelos |
 | PAI | TARDBP | 1 | 11020000 | G | A |  | snv | 0 |  | nao_anotada |  |  |  |  |  |
 | PAI | TARDBP | 1 | 11020000 | G | T |  | snv | 1 |  | nao_anotada |  |  |  |  |  |
 | PAI | FUS | 16 | 31185000 | A | G |  | snv | 1 |  | nao_anotada |  |  |  |  |  |
-| PAI | SOD1 | 21 | 31659509 | G | T | rs17883296 | snv | 1 |  | benigna | Likely_benign | 1 | rs17883296 |  | tabela_curada:posicao_alelos |
-| PAI | C9orf72 | 9 | 27573529 | GGGGCC | <STR45> |  | repeticao | 0 |  | risco | Pathogenic | 1 | expansão GGGGCC | dominante | tabela_curada |
+| PAI | SOD1 | 21 | 31659509 | G | T | rs17883296 | snv | 1 |  | benigna | Likely benign | 2 | rs17883296 |  | clinvar_base_consolidada:posicao_alelos |
 
 *Fonte: elaborado pela autora (2026), a partir do artefato ela_preditivo.*
 
-Registros lidos/aprovados: mãe 7/5, pai 7/5. Reprovações: mãe {'fora_das_regioes': 1, 'filtro_nao_pass': 1, 'dp_baixo': 1, 'gq_baixo': 1}, pai {'fora_das_regioes': 1, 'filtro_nao_pass': 1, 'dp_baixo': 1, 'gq_baixo': 1}.
+Registros lidos/aprovados: mãe 6/4, pai 6/4. Reprovações: mãe {'fora_das_regioes': 1, 'filtro_nao_pass': 1, 'dp_baixo': 1, 'gq_baixo': 1}, pai {'fora_das_regioes': 1, 'filtro_nao_pass': 1, 'dp_baixo': 1, 'gq_baixo': 1}. Base de anotação: clinvar_base_consolidada (1458 variantes do ClinVar + 1 da tabela curada).
 
 
 **Tabela 1b — Vetor genotípico parental: dosagem alélica (0/1/2) por lócus de risco e P(portador) exata**
 
-| gene | variante | rs | tipo | heranca | dosagem_mae | dosagem_pai | repeticoes_mae | repeticoes_pai | clnsig | estrelas | p_portador_exato | observacao |
-|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| C9orf72 | expansão GGGGCC |  | repeticao | dominante | 1 | 0 | 45 |  | Pathogenic | 1 | 0.5 |  |
+| gene | variante | rs | tipo | heranca | dosagem_mae | dosagem_pai | repeticoes_mae | repeticoes_pai | clnsig | estrelas | fonte | p_portador_exato | observacao |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| C9orf72 | expansão GGGGCC |  | repeticao | dominante | 1 | 0 | 45 |  | Pathogenic | 1 | laudo | 0.5 |  |
 
 *Fonte: elaborado pela autora (2026), a partir do artefato ela_preditivo.*
 

@@ -84,25 +84,24 @@ Linhas iniciais (coordenadas GRCh38 **a conferir online antes de usar**, pelo rs
 
 Regiões (`config/regioes_genes_grch38.yaml`, conferir em `https://rest.ensembl.org/lookup/symbol/homo_sapiens/<GENE>?content-type=application/json`): SOD1 chr21:31.659.666–31.668.931; C9orf72 chr9:27.546.545–27.573.866; TARDBP chr1:11.012.654–11.030.528; FUS chr16:31.180.139–31.191.605; aplicar flanco de 5 kb (a benigna rs17883296 fica 157 pb acima do início do SOD1).
 
-Carregador do subconjunto real (opcional, quando a autora fornecer): `anotacao.carregar_clinvar_subconjunto(variant_summary_txt, clinvar_vcf, snp_result_txts)` lendo as chaves descritas em `01_analise_tcc.md` §7; mapa de classificação: `Pathogenic`, `Likely_pathogenic`, `Pathogenic/Likely_pathogenic` → risco; `Uncertain_significance`, `Conflicting_*` → VUS (sem risco, listado); `Benign*` → ignorado. Estrelas de `CLNREVSTAT`: practice_guideline 4, reviewed_by_expert_panel 3, criteria_provided,_multiple_submitters,_no_conflicts 2, criteria_provided,_single_submitter / conflicting 1, no_assertion* 0.
+Carregador do subconjunto real (**implementado em 03/11/2026**, D17): `anotacao.tabela_anotacao()` → `carregar_base_real()` → `carregar_variant_summary()` (csv/txt, inclusive `base_consolidada_ela.csv`) ou `carregar_clinvar_vcf()`; antes previsto como `anotacao.carregar_clinvar_subconjunto(variant_summary_txt, clinvar_vcf, snp_result_txts)` lendo as chaves descritas em `01_analise_tcc.md` §7; mapa de classificação: `Pathogenic`, `Likely_pathogenic`, `Pathogenic/Likely_pathogenic` → risco; `Uncertain_significance`, `Conflicting_*` → VUS (sem risco, listado); `Benign*` → ignorado. Estrelas de `CLNREVSTAT`: practice_guideline 4, reviewed_by_expert_panel 3, criteria_provided,_multiple_submitters,_no_conflicts 2, criteria_provided,_single_submitter / conflicting 1, no_assertion* 0.
 
 ## 4. VCF sintético (`cenarios.py`)
 
 VCF 4.2, GRCh38, uma amostra por arquivo (`MAE` ou `PAI`), colunas FORMAT `GT:DP:GQ`, cabeçalho com `##reference=GRCh38`, `##INFO`, `##FORMAT`, `##ALT=<ID=STR,...>`. Cada arquivo contém:
 - as variantes do cenário (GT `0/1` ou `1/1`);
 - ruído: 1 benigna (rs17883296), 1 VUS em FUS, 1 variante fora dos 4 genes (ex.: chr17), 1 registro com `DP=4` e `GQ=10` (reprovado no filtro `DP ≥ 10`, `GQ ≥ 20`, `FILTER=PASS`), 1 multialélico `ALT=A,T`.
-- expansão do C9orf72 no estilo ExpansionHunter:
-  `chr9  27573529  .  GGGGCC  <STR45>  .  PASS  END=27573534;RU=GGGGCC;REPID=C9ORF72;SVTYPE=STR  GT:REPCN:DP:GQ  0/1:2/45:30:60`
-  Parser: ALT `<STR(\d+)>` ou `REPCN` dá a contagem por alelo; patogênico se ≥ 30, intermediário 24–29; anotação por gene + intervalo + contagem (nunca por string de alelo); `Bio.Seq` normaliza RU (GGGGCC ↔ GGCCCC).
+- INFO com `AC` (por ALT), `AN` e `DB` (Quadro 2 do TCC) e `##contig` com comprimento GRCh38 (conferência de montagem, D14).
+- **(revisado em 03/11/2026, D16)** a expansão do C9orf72 **não vai no VCF**: entra pelo laudo (`Cenario.laudo_c9orf72`, `cenarios.csv` colunas `c9orf72_mae/pai`, CLI `--c9orf72-mae/--c9orf72-pai`). O parser do estilo ExpansionHunter (`<STR(\d+)>`, `REPCN`, contagem do motivo com `Bio.Seq`) continua como caminho secundário e é testado com `cenarios.c9orf72_expansao()`; patogênico se ≥ 30, intermediário 24–29.
 
 Cenários (seed fixa 2026; gerar ambos os sexos do descendente nos relatórios):
 
 | # | Pai | Mãe | P(C) exata | Objetivo |
 |---|---|---|---|---|
 | 1 | het SOD1 p.A5V | selvagem | 0,50 | caso-base dominante, alta penetrância |
-| 2 | selvagem | expansão C9orf72 (45 rep.) | 0,50 | expansão, efeito do sexo, π = 0,33 |
-| 3 | het SOD1 p.A5V | expansão C9orf72 | 0,50 e 0,50 (combinado 0,75 portador de ≥ 1) | **exemplo literal do TCC**, dois genes |
-| 4 | het SOD1 p.D91A | het SOD1 p.D91A | 0,25 (recessiva) | CPT recessiva |
+| 2 | selvagem | laudo: expansão C9orf72 (45 rep.) | 0,50 | expansão pelo laudo, efeito do sexo, π = 0,33 |
+| 3 | het SOD1 p.A5V | laudo: expansão C9orf72 | 0,50 e 0,50 (combinado 0,75 portador de ≥ 1) | **exemplo literal do TCC**, dois genes |
+| 4 | het SOD1 p.D91A | het SOD1 p.D91A | 0,25 (recessiva) com a tabela curada; **sem lócus de risco com o ClinVar real** (conflitante, D18) | CPT recessiva (testes) e regra "conflitante não sustenta risco" (resultados) |
 | 5 | het TARDBP p.M337V | het FUS p.R521C | 0,50 e 0,50 | penetrâncias menores, FUS precoce |
 
 Testes unitários cobrem pais homozigotos e controle sem variantes (P = 0).
@@ -130,7 +129,7 @@ Figuras: 1 DAG da rede; 2 priors de penetrância por gene; 3 G(t) ajustadas vs p
 |---|---|---|
 | 1 | scaffold, `pyproject`, YAML, regiões, tabela curada (coordenadas conferidas online) | `uv pip install -e ".[dev]"` e `python -c "import pymc, lifelines, vcf, Bio"` passam |
 | 2 | `calibracao.py`, `exato.py` + testes | Beta reproduz IC (erro < 0,01); CPT soma 1; 1×0 → 0,5; recessiva 1×1 → 0,25 |
-| 3 | `cenarios.py`, `ingestao.py`, `anotacao.py`, `genotipo.py` + testes | 10 VCFs gerados; dosagens dos 5 cenários batem com a tabela §4; ruído filtrado; `<STR45>` detectado |
+| 3 | `cenarios.py`, `ingestao.py`, `anotacao.py`, `genotipo.py` + testes | 10 VCFs gerados; dosagens dos 5 cenários batem com a tabela §4; ruído filtrado; laudo do C9orf72 vira lócus (D16); `<STR45>` ainda detectado no caminho secundário |
 | 4 | `monte_carlo.py`, `rede_bayesiana.py` + testes | PyMC ≈ NumPy ≈ exato (< 4·EP) com N = 10.000, seed 42 |
 | 5 | `sobrevivencia.py` + testes | `MisturaCuraWeibullFitter` recupera π, k, λ (< 5%); F(∞) ≈ P(C)·π |
 | 6 | `avaliacao.py`, `relatorio.py`, `cli.py`; `ela-preditivo tudo` | 8 tabelas + 8 figuras em `resultados/`; DP ∝ N^−1/2 |

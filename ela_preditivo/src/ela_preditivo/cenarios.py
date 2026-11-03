@@ -1,9 +1,14 @@
-"""Cenários familiares sintéticos e gerador de VCF 4.2 (TCC, seções 3.4 e 4.5).
+"""Cenários familiares sintéticos e gerador de VCF 4.2 (TCC, seções 3.4, 4.2.1 e 4.5).
 
 Os dados são inteiramente sintéticos: as variantes de risco vêm da tabela curada (coordenadas públicas
-do dbSNP/ClinVar), mas os genótipos, profundidades e qualidades são gerados por seed. Cada arquivo inclui
+do dbSNP/ClinVar), mas os genótipos, profundidades e qualidades são gerados por seed. Cada arquivo reproduz a
+estrutura do Quadro 2 do TCC (CHROM, POS, ID, REF, ALT, QUAL, FILTER, INFO com AC/AN/DB, FORMAT GT:DP:GQ) e inclui
 "ruído" (variante benigna, variante não anotada, variante fora dos genes-alvo, registro de baixa qualidade e
 registro multialélico) para exercitar os filtros e a anotação.
+
+A expansão do C9orf72 não aparece nos VCFs: conforme o TCC 4.2.1, ela entra como parâmetro do laudo laboratorial
+(`Cenario.laudo_c9orf72`), porque o fluxo de variantes curtas não a detecta. `c9orf72_expansao()` continua
+disponível para testar o caminho secundário (VCF no estilo ExpansionHunter).
 """
 from __future__ import annotations
 
@@ -14,10 +19,12 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from . import __version__
+from . import __version__, anotacao
 from .exato import prob_portador
 
 ORDEM_CONTIGS = ["1", "9", "16", "17", "21"]
+# Comprimentos GRCh38 (NCBI GRCh38.p14), declarados no cabeçalho para a conferência de montagem
+COMPRIMENTOS_GRCH38 = {"1": 248956422, "9": 138394717, "16": 90338345, "17": 83257441, "21": 46709983}
 
 
 @dataclass(frozen=True)
@@ -68,6 +75,7 @@ class Cenario:
     pai: list[VarianteSintetica]
     mae: list[VarianteSintetica]
     herancas: dict[str, str] = field(default_factory=dict)
+    laudo_c9orf72: dict[str, int] = field(default_factory=dict)   # {"mae": repetições, "pai": repetições} do laudo laboratorial
 
     @property
     def esperado(self) -> pd.DataFrame:
@@ -78,6 +86,13 @@ class Cenario:
                 chave = v.rotulo
                 loci.setdefault(chave, {"gene": v.gene, "variante": v.rotulo, "dosagem_mae": 0, "dosagem_pai": 0})
                 loci[chave][f"dosagem_{lado}"] = v.dosagem
+        if self.laudo_c9orf72:
+            pat = anotacao.limiar_patogenico_repeticao(anotacao.carregar_tabela_curada(), "C9orf72")
+            d = {"gene": "C9orf72", "variante": "C9orf72 expansão GGGGCC (laudo)", "dosagem_mae": 0, "dosagem_pai": 0}
+            for lado, n in self.laudo_c9orf72.items():
+                d[f"dosagem_{lado}"] = int(anotacao.classe_por_repeticoes(n, pat) == "risco")
+            if d["dosagem_mae"] + d["dosagem_pai"] > 0:
+                loci[d["variante"]] = d
         linhas = []
         for d in loci.values():
             heranca = self.herancas.get(d["gene"], "dominante")
@@ -90,10 +105,10 @@ class Cenario:
 CENARIOS: list[Cenario] = [
     Cenario(1, "pai_het_SOD1_A5V", "Pai heterozigoto SOD1 p.Ala5Val (alta penetrância) × mãe selvagem",
             pai=[SOD1_A5V], mae=[]),
-    Cenario(2, "mae_C9orf72_expansao", "Mãe com expansão de hexanucleotídeos no C9orf72 (45 repetições) × pai selvagem",
-            pai=[], mae=[c9orf72_expansao(45)]),
-    Cenario(3, "pai_SOD1_mae_C9orf72", "Pai heterozigoto SOD1 p.Ala5Val × mãe com expansão C9orf72 (exemplo literal do TCC, 4.5)",
-            pai=[SOD1_A5V], mae=[c9orf72_expansao(45)]),
+    Cenario(2, "mae_C9orf72_expansao", "Mãe com expansão de hexanucleotídeos no C9orf72 (45 repetições, laudo) × pai selvagem",
+            pai=[], mae=[], laudo_c9orf72={"mae": 45}),
+    Cenario(3, "pai_SOD1_mae_C9orf72", "Pai heterozigoto SOD1 p.Ala5Val × mãe com expansão C9orf72 (45 repetições, laudo; exemplo literal do TCC, 4.5)",
+            pai=[SOD1_A5V], mae=[], laudo_c9orf72={"mae": 45}),
     Cenario(4, "SOD1_D91A_recessiva", "Ambos os pais heterozigotos para SOD1 p.Asp91Ala (herança recessiva)",
             pai=[SOD1_D91A], mae=[SOD1_D91A], herancas={"SOD1": "recessiva"}),
     Cenario(5, "pai_TARDBP_mae_FUS", "Pai heterozigoto TARDBP p.Met337Val × mãe heterozigota FUS p.Arg521Cys",
@@ -125,8 +140,11 @@ def _cabecalho(amostra: str, descricao: str, contagens_str: set[int]) -> list[st
         f"##source=ela_preditivo v{__version__} (DADOS SINTETICOS: {descricao})",
         "##reference=GRCh38",
     ]
-    linhas += [f"##contig=<ID=chr{c}>" for c in ORDEM_CONTIGS]
+    linhas += [f"##contig=<ID=chr{c},length={COMPRIMENTOS_GRCH38[c]},assembly=GRCh38>" for c in ORDEM_CONTIGS]
     linhas += [
+        '##INFO=<ID=AC,Number=A,Type=Integer,Description="Contagem do alelo alternativo nos genotipos">',
+        '##INFO=<ID=AN,Number=1,Type=Integer,Description="Total de alelos nos genotipos">',
+        '##INFO=<ID=DB,Number=0,Type=Flag,Description="Variante presente no dbSNP">',
         '##INFO=<ID=END,Number=1,Type=Integer,Description="Fim do intervalo da repeticao">',
         '##INFO=<ID=RU,Number=1,Type=String,Description="Unidade de repeticao">',
         '##INFO=<ID=REPID,Number=1,Type=String,Description="Identificador do locus de repeticao">',
@@ -157,8 +175,11 @@ def escrever_vcf(caminho: str | Path, amostra: str, variantes: list[VarianteSint
         else:
             qual, filtro = round(float(rng.uniform(60, 500)), 1), "PASS"
             dp, gq = int(rng.integers(25, 61)), int(rng.integers(60, 100))
-        info = "SINTETICO"
-        formato, dados = "GT:DP:GQ", f"{_gt(v.dosagem, v.alt)}:{dp}:{gq}"
+        gt = _gt(v.dosagem, v.alt)
+        n_alt = v.alt.count(",") + 1
+        ac = ",".join(str(gt.split("/").count(str(i))) for i in range(1, n_alt + 1))   # Number=A: um valor por ALT
+        info = f"AC={ac};AN=2" + (";DB" if v.rs else "") + ";SINTETICO"
+        formato, dados = "GT:DP:GQ", f"{gt}:{dp}:{gq}"
         if e_str:
             info = f"END={v.posicao + len(v.ref) - 1};RU={v.ref};REPID={v.gene.upper()};SVTYPE=STR;SINTETICO"
             repcn = {0: "2/2", 1: f"2/{v.repeticoes}", 2: f"{v.repeticoes}/{v.repeticoes}"}[v.dosagem]
@@ -172,7 +193,11 @@ def escrever_vcf(caminho: str | Path, amostra: str, variantes: list[VarianteSint
 
 
 def gerar_cenarios(dir_saida: str | Path, seed: int = 2026, incluir_ruido: bool = True) -> pd.DataFrame:
-    """Gera os VCFs materno e paterno de cada cenário. Cada genitor recebe os lóci de risco do outro com GT 0/0."""
+    """Gera os VCFs materno e paterno de cada cenário. Cada genitor recebe os lóci de risco do outro com GT 0/0.
+
+    O índice `cenarios.csv` traz também `c9orf72_mae` e `c9orf72_pai` (repetições do laudo; vazio = sem laudo),
+    que devem ser passados a `pipeline.executar(..., laudo_c9orf72=...)`.
+    """
     dir_saida = Path(dir_saida)
     rng = np.random.default_rng(seed)
     linhas = []
@@ -186,7 +211,19 @@ def gerar_cenarios(dir_saida: str | Path, seed: int = 2026, incluir_ruido: bool 
                                    descricao=f"cenario {c.numero}, {lado}: {c.descricao}", incluir_ruido=incluir_ruido)
             por_lado[lado] = caminho
         linhas.append({"numero": c.numero, "nome": c.nome, "descricao": c.descricao,
-                       "vcf_mae": str(por_lado["mae"]), "vcf_pai": str(por_lado["pai"])})
+                       "vcf_mae": str(por_lado["mae"]), "vcf_pai": str(por_lado["pai"]),
+                       "c9orf72_mae": c.laudo_c9orf72.get("mae"), "c9orf72_pai": c.laudo_c9orf72.get("pai")})
     df = pd.DataFrame(linhas)
+    df["c9orf72_mae"] = df["c9orf72_mae"].astype("Int64"); df["c9orf72_pai"] = df["c9orf72_pai"].astype("Int64")
     df.to_csv(dir_saida / "cenarios.csv", index=False)
     return df
+
+
+def laudo_da_linha(linha) -> dict[str, int]:
+    """Reconstrói `laudo_c9orf72` a partir de uma linha de `cenarios.csv` (ou do DataFrame de `gerar_cenarios`)."""
+    laudo = {}
+    for lado in ("mae", "pai"):
+        v = linha[f"c9orf72_{lado}"] if f"c9orf72_{lado}" in linha else None
+        if v is not None and not pd.isna(v):
+            laudo[lado] = int(v)
+    return laudo

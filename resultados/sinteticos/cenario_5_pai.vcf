@@ -1,12 +1,15 @@
 ##fileformat=VCFv4.2
-##fileDate=20261024
+##fileDate=20261103
 ##source=ela_preditivo v0.1.0 (DADOS SINTETICOS: cenario 5, pai: Pai heterozigoto TARDBP p.Met337Val × mãe heterozigota FUS p.Arg521Cys)
 ##reference=GRCh38
-##contig=<ID=chr1>
-##contig=<ID=chr9>
-##contig=<ID=chr16>
-##contig=<ID=chr17>
-##contig=<ID=chr21>
+##contig=<ID=chr1,length=248956422,assembly=GRCh38>
+##contig=<ID=chr9,length=138394717,assembly=GRCh38>
+##contig=<ID=chr16,length=90338345,assembly=GRCh38>
+##contig=<ID=chr17,length=83257441,assembly=GRCh38>
+##contig=<ID=chr21,length=46709983,assembly=GRCh38>
+##INFO=<ID=AC,Number=A,Type=Integer,Description="Contagem do alelo alternativo nos genotipos">
+##INFO=<ID=AN,Number=1,Type=Integer,Description="Total de alelos nos genotipos">
+##INFO=<ID=DB,Number=0,Type=Flag,Description="Variante presente no dbSNP">
 ##INFO=<ID=END,Number=1,Type=Integer,Description="Fim do intervalo da repeticao">
 ##INFO=<ID=RU,Number=1,Type=String,Description="Unidade de repeticao">
 ##INFO=<ID=REPID,Number=1,Type=String,Description="Identificador do locus de repeticao">
@@ -18,10 +21,10 @@
 ##FORMAT=<ID=GQ,Number=1,Type=Integer,Description="Qualidade do genotipo">
 ##FORMAT=<ID=REPCN,Number=1,Type=String,Description="Numero de repeticoes por alelo (ordem do GT)">
 #CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO	FORMAT	PAI
-chr1	11020000	.	G	A,T	327.0	PASS	SINTETICO	GT:DP:GQ	0/2:46:94
-chr1	11022418	rs80356730	A	G	300.3	PASS	SINTETICO	GT:DP:GQ	0/1:53:96
-chr16	31185000	.	A	G	330.8	PASS	SINTETICO	GT:DP:GQ	0/1:29:76
-chr16	31191418	rs121909668	C	T	162.6	PASS	SINTETICO	GT:DP:GQ	0/0:52:83
-chr17	7675088	.	C	T	397.1	PASS	SINTETICO	GT:DP:GQ	0/1:37:62
-chr21	31659509	rs17883296	G	T	418.3	PASS	SINTETICO	GT:DP:GQ	0/1:42:65
-chr21	31663000	.	T	C	8.3	LowQual	SINTETICO	GT:DP:GQ	0/1:4:10
+chr1	11020000	.	G	A,T	162.6	PASS	AC=0,1;AN=2;SINTETICO	GT:DP:GQ	0/2:52:83
+chr1	11022418	rs80356730	A	G	308.2	PASS	AC=1;AN=2;DB;SINTETICO	GT:DP:GQ	0/1:45:95
+chr16	31185000	.	A	G	341.2	PASS	AC=1;AN=2;SINTETICO	GT:DP:GQ	0/1:27:86
+chr16	31191418	rs121909668	C	T	464.1	PASS	AC=0;AN=2;DB;SINTETICO	GT:DP:GQ	0/0:31:67
+chr17	7675088	.	C	T	300.3	PASS	AC=1;AN=2;SINTETICO	GT:DP:GQ	0/1:53:96
+chr21	31659509	rs17883296	G	T	474.5	PASS	AC=1;AN=2;DB;SINTETICO	GT:DP:GQ	0/1:33:91
+chr21	31663000	.	T	C	8.3	LowQual	AC=1;AN=2;SINTETICO	GT:DP:GQ	0/1:4:10

@@ -10,6 +10,7 @@ dist/
 .ipynb_checkpoints/
 # dados brutos reais (nunca versionar; ver ELA_DADOS_BRUTOS)
 dados_brutos/
+dados_reais/
 *.vcf.gz
 clinvar*.vcf
 variant_summary*.txt

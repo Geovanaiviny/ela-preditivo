@@ -2,12 +2,12 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from ela_preditivo import cenarios, exato, genotipo, monte_carlo, rede_bayesiana
+from ela_preditivo import anotacao, cenarios, exato, genotipo, monte_carlo, rede_bayesiana
 
 
 def _loci(anotados, parametros, numero, sexo=None):
     mae, pai = anotados[numero]
-    return monte_carlo.loci_de_vetor(genotipo.vetor_dosagem(mae, pai, parametros), parametros, sexo=sexo)
+    return monte_carlo.loci_de_vetor(genotipo.vetor_dosagem(mae, pai, parametros, laudo_c9orf72=cenarios.cenario_por_numero(numero).laudo_c9orf72, tabela=anotacao.tabela_anotacao(base_real=False)), parametros, sexo=sexo)
 
 
 @pytest.mark.parametrize("numero", [1, 2, 3, 4, 5])
@@ -61,7 +61,7 @@ def test_condicionar_idade(anotados, parametros):
 
 def test_penetrancia_fixa_e_sensibilidade(anotados, parametros):
     mae, pai = anotados[1]
-    vetor = genotipo.vetor_dosagem(mae, pai, parametros)
+    vetor = genotipo.vetor_dosagem(mae, pai, parametros, laudo_c9orf72=cenarios.cenario_por_numero(1).laudo_c9orf72, tabela=anotacao.tabela_anotacao(base_real=False))
     loci = monte_carlo.loci_de_vetor(vetor, parametros, penetrancia_fixa={"SOD1": 0.9})
     res = monte_carlo.simular_numpy(loci, n=20_000, seed=2)
     assert np.all(res.penetrancia == 0.9)

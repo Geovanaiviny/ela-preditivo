@@ -63,3 +63,19 @@ curl -s "https://api.ncbi.nlm.nih.gov/variation/v0/refsnp/121912442" | python -c
 curl -s "https://rest.ensembl.org/lookup/symbol/homo_sapiens/SOD1?content-type=application/json"
 ```
 Registrar `conferido_em` na tabela curada e `regioes_genes_grch38.yaml`.
+
+## Dados reais (03/11/2026, máquina de origem)
+
+Levantamento repetido em 03/11/2026 na mesma máquina (NOTEBOOK-8VRSKY3, Rocky 9.8, uv 0.12.5, CPython 3.12.13 gerenciado pelo uv, g++ ausente): sem mudanças em relação a 24/10/2026. `.venv` recriado com `uv venv --python 3.12 .venv` + `uv pip install -e "./ela_preditivo[dev]"` (pymc 5.28.5, pytensor 2.38.3, lifelines 0.30.3).
+
+O usuário colocou o subconjunto real do ClinVar dos quatro genes em `dados_reais/` (raiz do repositório, **ignorada pelo git**; caminho alternativo em `ELA_DADOS_BRUTOS`):
+
+| Arquivo | Conteúdo | Como o pacote usa |
+|---|---|---|
+| `base_consolidada_ela.csv` (1,2 MB, 1.463 linhas × 66 colunas) | `variant_summary` filtrado (43 colunas do ClinVar) + consequência molecular, classificação conflitante, AF_ESP/EXAC/TGP, `VCF_POS/REF/ALT`, casamento com o dbSNP (`dbsnp_rsid_casado`, método, validação, classe funcional, nº de estudos) e frequências ALFA/TOPMED/gnomAD/1000G | **fonte preferida** de `anotacao.tabela_anotacao()` (1.458 variantes com posição em VCF; 5 microssatélites/inserção do C9orf72 sem posição ficam de fora e são cobertas pela tabela curada) |
+| `clinvar_ela_4genes.csv` (724 kB, 1.463 × 43) | `variant_summary.txt` filtrado por gene e GRCh38, em CSV | mesma leitura (`carregar_variant_summary`), sem as colunas do dbSNP |
+| `clinvar_ela_4genes.vcf` (753 kB, VCF 4.1, 1.541 registros) | projeção do ClinVar (release 2026-09-28, GRCh38) sobre o VCF: sem amostras, QUAL/FILTER nulos, classificação em INFO (CLNSIG, CLNREVSTAT, GENEINFO, RS, AF_TGP, CLNSIGCONF) | `carregar_clinvar_vcf` (1.540 registros úteis; 1 sem ALT); alternativa quando as tabelas não estiverem presentes |
+
+Contagens conferidas em 03/11/2026: 394 registros no cromossomo 1 (TARDBP), 698 no 16 (FUS), 331 no 21 (SOD1), 118 no 9 (C9orf72); CLNSIG: 616 incertas, 375 provavelmente benignas, 111 benignas, 90 patogênicas, 80 provavelmente patogênicas, 76 conflitantes, 53 B/LB, 47 P/LP. Na base consolidada: 1.082 rs casados por rsID, 203 por coordenada, 99 recusados por alelo divergente, 77 sem candidato. Observações que mudaram o código: SOD1 p.Asp91Ala é *conflitante* (D18); FUS c.1561C>G/T/A compartilham o rs121909668 (chave por coordenadas, D17); `GeneSymbol` pode vir como `MASP2;TARDBP`.
+
+**Ainda não há VCF parental real.** Quando chegar: conferir `##reference`, prefixo `chr`, mono/multiamostra (`--amostra-mae/--amostra-pai`), campos FORMAT (`GT:DP:GQ` esperados) e se o laudo do C9orf72 vem à parte (`--c9orf72-mae/--c9orf72-pai`).

@@ -1,6 +1,6 @@
-numero,nome,descricao,vcf_mae,vcf_pai
-1,pai_het_SOD1_A5V,Pai heterozigoto SOD1 p.Ala5Val (alta penetrância) × mãe selvagem,ela_preditivo/data/sinteticos/cenario_1_mae.vcf,ela_preditivo/data/sinteticos/cenario_1_pai.vcf
-2,mae_C9orf72_expansao,Mãe com expansão de hexanucleotídeos no C9orf72 (45 repetições) × pai selvagem,ela_preditivo/data/sinteticos/cenario_2_mae.vcf,ela_preditivo/data/sinteticos/cenario_2_pai.vcf
-3,pai_SOD1_mae_C9orf72,"Pai heterozigoto SOD1 p.Ala5Val × mãe com expansão C9orf72 (exemplo literal do TCC, 4.5)",ela_preditivo/data/sinteticos/cenario_3_mae.vcf,ela_preditivo/data/sinteticos/cenario_3_pai.vcf
-4,SOD1_D91A_recessiva,Ambos os pais heterozigotos para SOD1 p.Asp91Ala (herança recessiva),ela_preditivo/data/sinteticos/cenario_4_mae.vcf,ela_preditivo/data/sinteticos/cenario_4_pai.vcf
-5,pai_TARDBP_mae_FUS,Pai heterozigoto TARDBP p.Met337Val × mãe heterozigota FUS p.Arg521Cys,ela_preditivo/data/sinteticos/cenario_5_mae.vcf,ela_preditivo/data/sinteticos/cenario_5_pai.vcf
+numero,nome,descricao,vcf_mae,vcf_pai,c9orf72_mae,c9orf72_pai
+1,pai_het_SOD1_A5V,Pai heterozigoto SOD1 p.Ala5Val (alta penetrância) × mãe selvagem,ela_preditivo/data/sinteticos/cenario_1_mae.vcf,ela_preditivo/data/sinteticos/cenario_1_pai.vcf,,
+2,mae_C9orf72_expansao,"Mãe com expansão de hexanucleotídeos no C9orf72 (45 repetições, laudo) × pai selvagem",ela_preditivo/data/sinteticos/cenario_2_mae.vcf,ela_preditivo/data/sinteticos/cenario_2_pai.vcf,45,
+3,pai_SOD1_mae_C9orf72,"Pai heterozigoto SOD1 p.Ala5Val × mãe com expansão C9orf72 (45 repetições, laudo; exemplo literal do TCC, 4.5)",ela_preditivo/data/sinteticos/cenario_3_mae.vcf,ela_preditivo/data/sinteticos/cenario_3_pai.vcf,45,
+4,SOD1_D91A_recessiva,Ambos os pais heterozigotos para SOD1 p.Asp91Ala (herança recessiva),ela_preditivo/data/sinteticos/cenario_4_mae.vcf,ela_preditivo/data/sinteticos/cenario_4_pai.vcf,,
+5,pai_TARDBP_mae_FUS,Pai heterozigoto TARDBP p.Met337Val × mãe heterozigota FUS p.Arg521Cys,ela_preditivo/data/sinteticos/cenario_5_mae.vcf,ela_preditivo/data/sinteticos/cenario_5_pai.vcf,,

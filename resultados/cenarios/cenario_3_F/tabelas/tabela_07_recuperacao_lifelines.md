@@ -2,7 +2,7 @@
 
 | variante | n_portadores | eventos | pi_entrada | lambda_entrada | rho_entrada | delta_sexo | pi_lifelines | lambda_lifelines | rho_lifelines | erro_rel_pi | erro_rel_lambda | erro_rel_rho | weibull_lambda_manifestantes | weibull_rho_manifestantes | mediana_weibull_manifestantes |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| C9orf72 expansão GGGGCC | 5042 | 1679 | 0.3327 | 61.5171 | 6.8334 | 1 | 0.333 | 62.2609 | 6.8997 | 0.0009 | 0.0042 | 0.0097 | 62.2608 | 6.9 | 59.0399 |
-| SOD1 A4V (p.A5V) | 4954 | 2646 | 0.5387 | 54.3171 | 4.7185 | 0 | 0.5341 | 54.302 | 4.7054 | 0.0085 | 0.0003 | 0.0028 | 54.3007 | 4.7066 | 50.2326 |
+| SOD1 p.Ala5Val | 4954 | 2637 | 0.5387 | 54.3171 | 4.7185 | 0 | 0.5323 | 53.8753 | 4.7158 | 0.0119 | 0.0081 | 0.0006 | 53.8745 | 4.7167 | 49.8466 |
+| C9orf72 expansão GGGGCC | 5042 | 1694 | 0.3327 | 61.5171 | 6.8334 | 1 | 0.336 | 62.7422 | 6.8934 | 0.0098 | 0.0037 | 0.0088 | 62.7419 | 6.894 | 59.4934 |
 
 *Fonte: elaborado pela autora (2026), a partir do artefato ela_preditivo.*

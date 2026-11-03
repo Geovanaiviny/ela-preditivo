@@ -15,7 +15,7 @@ Fonte: `docs/00_tcc_texto_extraido.md` (extraído de `TCC II - Escrita.docx` em 
 |---|---|---|
 | 1 Introdução, 2 Fundamentação, 3 Metodologia | escritas | definem requisitos e ferramentas |
 | 4.1 Entendimento do Negócio | escrita | define as três perguntas do aconselhamento e os parâmetros epidemiológicos |
-| 4.2 Entendimento dos Dados (4.2.2 a 4.2.6) | escrita e detalhada | descreve os arquivos ClinVar/dbSNP que a autora tem (não estão nesta máquina) |
+| 4.2 Entendimento dos Dados | **reescrita na revisão de 03/11/2026**: 4.2.1 entrada em VCF (Quadro 2, "quatro cuidados", C9orf72 como parâmetro do laudo), 4.2.2 ClinVar/dbSNP (só P/LP sustentam risco; rs complementar), 4.2.3 parâmetros epidemiológicos e indicadores de qualidade | a exploração bruta (Quadros 2 a 6 da revisão anterior) saiu do texto; os arquivos reais estão em `dados_reais/` desde 03/11/2026 (docs/05) |
 | 4.3 Preparação, 4.4 Modelagem, 4.5 Avaliação, 4.6 Implantação | esquemáticas (tópicos) | o código precisa materializar o que está prometido |
 | **5 Resultados** | **vazia** (só "Interpretação", "Conexão com a fundamentação", "Limitações") | **o código deve gerar as tabelas e figuras** |
 | **6 Conclusão** | **vazia** | depende dos resultados |

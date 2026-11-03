@@ -1,15 +1,14 @@
-<!-- Texto extraído automaticamente de "TCC II - Escrita.docx" em 24/10/2026. Fonte da verdade sobre os requisitos do artefato. Não editar aqui; editar o .docx. -->
+# 00 — Texto integral do TCC (revisão vigente)
+
+> Cópia em Markdown da revisão do TCC enviada pelo usuário em 03/11/2026 e declarada por ele como a **versão vigente**. Substitui a extração de 24/10/2026 feita a partir de `TCC II - Escrita.docx` (o `.docx` no repositório ainda é a revisão anterior; a diferença principal está na seção 4.2, que antes trazia a exploração bruta do ClinVar/dbSNP com os Quadros 2 a 6 e agora descreve a entrada em VCF, as bases de referência e os parâmetros epidemiológicos). Fonte da verdade sobre requisitos; consulte quando houver dúvida.
 
 # Desenvolvimento de Sistema Preditivo de Herança e Manifestação Clínica para Esclerose Lateral Amiotrófica (ELA) Baseado em Modelagem Estocástica e Redes Bayesianas
+
 Geovana Íviny Santos Lima, Fabricio Carneiro Costa
 
 **Resumo:** A área dos Sistemas de Informação aplicados à saúde vem se consolidando como campo de desenvolvimento de soluções capazes de transformar dados moleculares em conhecimento útil à decisão clínica, especialmente no contexto da medicina de precisão. No domínio do aconselhamento genético, entretanto, observa-se uma defasagem entre o avanço do sequenciamento genético e a oferta de ferramentas computacionais integradas, capazes de apoiar predições personalizadas sobre a transmissão e a manifestação de doenças hereditárias. Esse cenário se manifesta de forma particularmente crítica na Esclerose Lateral Amiotrófica, doença neurodegenerativa marcada por penetrância incompleta, expressividade variável e risco dependente da idade, atributos que os modelos clássicos de herança e as ferramentas atualmente disponíveis não conseguem representar de maneira satisfatória. Diante dessa lacuna, o presente trabalho tem como objetivo geral desenvolver um artefato computacional de apoio à decisão para o aconselhamento genético preditivo da Esclerose Lateral Amiotrófica, fundamentado no padrão da modelagem estocástica. A pesquisa adota a metodologia Design Science Research, com construção e avaliação iterativa do artefato a partir de dados sintéticos calibrados pela literatura científica. A solução é organizada em três camadas integradas: o tratamento e a interpretação dos dados genômicos parentais; a representação das dependências entre variáveis genéticas por meio de Redes Bayesianas, articuladas a simulações de Monte Carlo para a propagação da incerteza sobre a transmissão; e a projeção temporal do risco por meio de análise de sobrevivência, com a estimativa da manifestação clínica ao longo da vida e da idade provável de início da doença. Como resultado, espera-se entregar um protótipo funcional acompanhado da documentação da arquitetura e da descrição dos modelos empregados, apto a ser apropriado por equipes clínicas e de pesquisa em estudos posteriores. Estima-se, ainda, contribuir para o campo dos Sistemas de Informação aplicados à saúde ao demonstrar, por meio de um caso concreto, como a integração entre dados genômicos e modelagem estocástica pode dar origem a soluções alinhadas aos princípios da medicina de precisão e ao processo de aconselhamento genético preditivo.
 
-**Palavras-Chave:** Sistemas de Informação em Saúde; Aconselhamento Genético
-
-Preditivo; Esclerose Lateral Amiotrófica; Redes Bayesianas; Apoio à Decisão
-
-Clínica.
+**Palavras-Chave:** Sistemas de Informação em Saúde; Aconselhamento Genético Preditivo; Esclerose Lateral Amiotrófica; Redes Bayesianas; Apoio à Decisão Clínica.
 
 ## Introdução
 
@@ -25,7 +24,9 @@ Assim, o problema de pesquisa foi delimitado em duas questões principais: É vi
 
 Para Zatz (2001), mais do que uma demanda técnica, trata-se de uma necessidade que vem sendo apontada há mais de duas décadas no contexto brasileiro das doenças neuromusculares, em que se observa uma defasagem entre o avanço do sequenciamento genético e uma proposta definitiva de ferramentas de apoio ao aconselhamento genético. É nesse encontro entre a acessibilidade e estabilidade das ferramentas de análises de dados, a persistência de uma demanda clínica e social ainda não atendida que se justifica o desenvolvimento deste trabalho.
 
-A partir do exposto, o presente trabalho tem como objetivo o desenvolvimento de um artefato computacional voltado ao apoio à decisão no aconselhamento genético preditivo da Esclerose Lateral Amiotrófica. Para atingir o desenvolvimento, adota-se como referência processual o modelo CRISP-DM (Chapman et al., 2000), seguindo os seguintes objetivos específicos descritos a seguir. A proposta se desenvolve no campo dos Sistemas de Informação aplicados à saúde e prevê a construção de uma solução modular, organizada em três grandes etapas integradas. A primeira etapa é responsável pela leitura e pelo tratamento dos dados genômicos parentais, transformando informações brutas oriundas de exames de sequenciamento em um conjunto estruturado de variáveis interpretáveis pelo restante do sistema. A segunda aplica os modelos probabilísticos: a partir das variantes identificadas, o artefato calcula o risco de transmissão da doença entre gerações, considerando as características de cada perfil familiar e a variabilidade observada na literatura científica. A terceira projeta esse risco ao longo do tempo, gerando estimativas personalizadas sobre a manifestação clínica ao longo da vida e a idade provável de início, organizadas em formato de curvas que podem ser consultadas pelo profissional de saúde.
+A partir do exposto, o presente trabalho tem como objetivo o desenvolvimento de um artefato computacional voltado ao apoio à decisão no aconselhamento genético preditivo da Esclerose Lateral Amiotrófica. Para atingir o desenvolvimento, adota-se como referência processual o modelo CRISP-DM (Chapman et al., 2000), seguindo os seguintes objetivos específicos descritos a seguir.
+
+A proposta se desenvolve no campo dos Sistemas de Informação aplicados à saúde e prevê a construção de uma solução modular, organizada em três grandes etapas integradas. A primeira etapa é responsável pela leitura e pelo tratamento dos dados genômicos parentais, transformando informações brutas oriundas de exames de sequenciamento em um conjunto estruturado de variáveis interpretáveis pelo restante do sistema. A segunda aplica os modelos probabilísticos: a partir das variantes identificadas, o artefato calcula o risco de transmissão da doença entre gerações, considerando as características de cada perfil familiar e a variabilidade observada na literatura científica. A terceira projeta esse risco ao longo do tempo, gerando estimativas personalizadas sobre a manifestação clínica ao longo da vida e a idade provável de início, organizadas em formato de curvas que podem ser consultadas pelo profissional de saúde.
 
 Tem-se como hipótese que um protótipo funcional com documentação fundamentada na literatura, possa ser uma ferramenta de grande utilidade para pesquisadores e equipes clínicas para experimentação e evolução em estudos. O impacto pretendido se distribui em três frentes. Para os profissionais de aconselhamento genético, a ferramenta busca oferecer um ambiente único em que informações hoje dispersas passem a ser organizadas de maneira interpretável, contribuindo para um diálogo mais consistente com as famílias atendidas, sem substituir o julgamento clínico. Para as famílias que convivem com o histórico hereditário da doença, o impacto está na qualidade da informação recebida nos momentos de decisão mais delicados, especialmente os que envolvem planejamento reprodutivo e o acompanhamento de indivíduos assintomáticos geneticamente predispostos. Para o campo da tecnologia aplicada à saúde, o estudo visa demonstrar, por meio de um caso concreto, como a integração entre dados genômicos e modelagem probabilística pode dar origem a soluções alinhadas aos princípios da medicina de precisão.
 
@@ -43,7 +44,7 @@ Um aspecto ainda bastante discutido em pesquisas recentes diz respeito ao fato d
 
 O sequenciamento de nova geração trouxe ao campo da genética uma escala de informação até então nunca vista. Stephens et al. (2015) chamaram a atenção para o fato de que, dentre os domínios mais produtores de dados, a genômica caminha de forma ágil para igualar o volume gerado em áreas como astronomia e mídia digital. A consequência perceptível desse crescimento foi o deslocamento do principal desafio da pesquisa: não se trata mais de obter as sequências, mas de interpretá-las de modo confiável.
 
-Para tornar essa interpretação possível, a comunidade científica adotou padrões comuns para a representação dos dados genéticos. O formato chamado Variant Call Format, introduzido no contexto do 1000 Genomes Project, tornou-se a maneira mais usada de registrar as variantes encontradas em um genoma, conforme (DANECK et al., 2011). A leitura e análise desses arquivos, no entanto, depende de pipelines bem definidas que combinam etapas de alinhamento, chamada e anotação de variantes, conforme as boas práticas consolidadas (VAN DER AUWERA e O’CONNOR, 2020). Landrum et al. (2018) propõe que a interpretação clínica das variantes acontece em diálogo com bases públicas: o ClinVar reúne classificações de patogenicidade segundo critérios reconhecidos internacionalmente, enquanto o dbSNP organiza a variação observada em diferentes populações, conforme (SHERRY et al., 2001). Apesar dessa infraestrutura consolidada, a manutenção dessas bases envolve constantes reclassificações e atualizações, o que impõe desafios contínuos de sincronização e compatibilidade entre os repositórios.
+Para tornar essa interpretação possível, a comunidade científica adotou padrões comuns para a representação dos dados genéticos. O formato chamado Variant Call Format, introduzido no contexto do 1000 Genomes Project, tornou-se a maneira mais usada de registrar as variantes encontradas em um genoma, conforme (DANECK et al., 2011). A leitura e análise desses arquivos, no entanto, depende de pipelines bem definidas que combinam etapas de alinhamento, chamada e anotação de variantes, conforme as boas práticas consolidadas (VAN DER AUWERA e O'CONNOR, 2020). Landrum et al. (2018) propõe que a interpretação clínica das variantes acontece em diálogo com bases públicas: o ClinVar reúne classificações de patogenicidade segundo critérios reconhecidos internacionalmente, enquanto o dbSNP organiza a variação observada em diferentes populações, conforme (SHERRY et al., 2001). Apesar dessa infraestrutura consolidada, a manutenção dessas bases envolve constantes reclassificações e atualizações, o que impõe desafios contínuos de sincronização e compatibilidade entre os repositórios.
 
 ### 2.3. Modelagem estocástica à predição clínica
 
@@ -89,7 +90,7 @@ Nessa fase, foi feito o levantamento do problema a partir da literatura sobre ac
 
 ### 3.2. Definição dos requisitos do artefato
 
-A partir do problema identificado, foram definidos os requisitos que o sistema precisa atender. Os requisitos funcionais descrevem o que o artefato deve fazer: ler arquivos no formato Variant Call Format provenientes dos pais; reconhecer variantes nos genes mais associados à ELA, como SOD1, C9orf72, TARDBP e FUS; consultar bases públicas, como ClinVar e dbSNP, para classificar a relevância clínica dessas variantes; calcular o risco de transmissão por meio de uma Rede Bayesiana; simular cenários de herança com o método de Monte Carlo; estimar a idade provável de início da doença; e apresentar os resultados em forma de gráficos.Já os requisitos não funcionais tratam de aspectos da qualidade do sistema, como a organização em módulos independentes, a possibilidade de atualizar as bases de variantes ao longo do tempo, o desempenho frente a arquivos grandes e a clareza dos resultados gerados.
+A partir do problema identificado, foram definidos os requisitos que o sistema precisa atender. Os requisitos funcionais descrevem o que o artefato deve fazer: ler arquivos no formato Variant Call Format provenientes dos pais; reconhecer variantes nos genes mais associados à ELA, como SOD1, C9orf72, TARDBP e FUS; consultar bases públicas, como ClinVar e dbSNP, para classificar a relevância clínica dessas variantes; calcular o risco de transmissão por meio de uma Rede Bayesiana; simular cenários de herança com o método de Monte Carlo; estimar a idade provável de início da doença; e apresentar os resultados em forma de gráficos. Já os requisitos não funcionais tratam de aspectos da qualidade do sistema, como a organização em módulos independentes, a possibilidade de atualizar as bases de variantes ao longo do tempo, o desempenho frente a arquivos grandes e a clareza dos resultados gerados.
 
 ### 3.3. Design e desenvolvimento
 
@@ -105,284 +106,154 @@ A demonstração consiste em executar o artefato em cima de dados sintéticos, c
 
 O desenvolvimento do artefato computacional adota como referência processual o modelo CRISP-DM, articulado à abordagem metodológica da Design Science Research (DSR). A condução técnica organiza-se nas seis fases iterativas do ciclo de vida, guiando o projeto desde a formalização do problema clínico até a entrega do protótipo funcional.
 
-#### 4.1 Entendimento do Negócio
+### 4.1 Entendimento do Negócio
 
 A delimitação da primeira fase se baseia na compreensão do domínio da aplicação, desenvolvendo essa fase em objetivos analíticos bem alinhados e na definição dos critérios para a validação dos resultados obtidos (CHAPMAN et al., 2000).
+
+#### 4.1.1 Mapeamento do Problema Clínico
 
 O aconselhamento genético preditivo atende assintomáticos em risco hereditário, sobretudo familiares de primeiro grau de portadores de variantes associadas à ELA e se estrutura em três perguntas: a probabilidade de transmissão do gene mutado, o risco de manifestação clínica e a projeção da idade de início. A lógica de processamento computacional proposta precisa diferenciar essas dimensões, evitando unificar parâmetros de origens distintas.
 
 Feldman et al. (2022) descrevem a forma familiar entre 10% e 15% dos casos e observam que um histórico mal conhecido pode ocultar casos familiares, o que coloca o dado genômico como evidência principal. Dos mais de 40 genes associados à doença, os quatro desse trabalho respondem por cerca de 55% das famílias de ascendência europeia (DOUGLAS; BARALLE, 2024, p. 294), recorte que define as regiões a selecionar no arquivo.
 
-A transmissão segue o padrão de herança do gene, predominantemente dominante e raramente recessivo (FELDMAN et al., 2022; DOUGLAS; BARALLE, 2024). A lógica de manifestação clínica se encontra descrita no levantamento de Douglas e Baralle (2024), que estimaram a penetrância populacional das variantes patogênicas e provavelmente patogênicas em valores máximos de 33% para o C9orf72 (IC 95% 20,9–53,2), 54% para o SOD1 (IC 95% 32,7–88,6), 38% para o TARDBP (IC 95% 21,1–69,8) e 19% para o FUS (IC 95% 13,0–28,4).
+A transmissão segue o padrão de herança do gene, predominantemente dominante e raramente recessivo (FELDMAN et al., 2022; DOUGLAS; BARALLE, 2024). A lógica de manifestação clínica se encontra descrita no levantamento de Douglas e Baralle (2024), que estimaram a penetrância populacional das variantes patogênicas e provavelmente patogênicas em valores máximos de 33% para o C9orf72 (IC 95% 20,9–53,2), 54% para o SOD1 (IC 95% 32,7–88,6), 38% para o TARDBP (IC 95% 21,1–69,8) e 19% para o FUS (IC 95% 13,0–28,4). Essa amplitude dos intervalos mostra o quanto a estimativa é incerta e delimita os valores para contexto populacional, não para o caso individual. Inseridos nesse cenário, somado ao tempo e o sexo observa-se que o pico de incidência se concentra entre 60 e 75 anos e o adoecimento ocorre em múltiplas etapas (FELDMAN et al., 2022; DOUGLAS; BARALLE, 2024). Seguindo essa perspectiva, o período já vivido pelo indivíduo sem sintomas atua como variável de cálculo, complementado pela distinção de sexo, dado que homens portadores da expansão no C9orf72 tendem a manifestar a condição cerca de dois anos mais cedo do que as mulheres (GOUTMAN et al., 2022).
 
-Essa amplitude dos intervalos mostra o quanto a estimativa é incerta e delimita os valores para contexto populacional, não para o caso individual. Inseridos nesse cenário, somado ao tempo e o sexo observa-se que o pico de incidência se concentra entre 60 e 75 anos e o adoecimento ocorre em múltiplas etapas (FELDMAN et al., 2022; DOUGLAS; BARALLE, 2024). Seguindo essa perspectiva, o período já vivido pelo indivíduo sem sintomas atua como variável de cálculo, complementado pela distinção de sexo, dado que homens portadores da expansão no C9orf72 tendem a manifestar a condição cerca de dois anos mais cedo do que as mulheres (GOUTMAN et al., 2022).
+A definição do risco com base apenas na frequência fixa de herança desconsidera que a proporção de 50% reflete exclusivamente a transmissão do alelo, divergindo da probabilidade real de manifestação da doença. Dessa forma, o cálculo exige a separação de duas variáveis, entre o mecanismo de herança e o prognóstico clínico da condição. Uma representação adequada mantém as três variáveis separadas, condicionando a manifestação da condição à idade e ao sexo, além de manter a incerteza dos parâmetros até os resultados finais. A literatura opera em outro momento, trazendo o modelo ENCALS (WESTENENG et al., 2018), bem como os trabalhos de Pancotti et al. (2022) e Papaiz et al. (2025), em um período de tempo diferente daquele do aconselhamento, pois utilizam variáveis pós-manifestação e baseadas no diagnóstico. O aconselhamento, no entando, ocorre em uma etapa pré-clínica, limitando a análise às informações genômicas disponíveis e aos dados populacionais da literatura sobre portadores.
 
-A definição do risco com base apenas na frequência fixa de herança desconsidera que a proporção de 50% reflete exclusivamente a transmissão do alelo, divergindo da probabilidade real de manifestação da doença. Dessa forma, o cálculo exige a separação de duas variáveis, entre o mecanismo de herança e o prognóstico clínico da condição. Uma representação adequada mantém as três variáveis separadas, condicionando a manifestação da condição à idade e ao sexo, além de manter a incerteza dos parâmetros até os resultados finais.
+#### 4.1.2 Objetivo do Artefato
 
-A literatura opera, trazendo o modelo ENCALS (WESTENENG et al., 2018), bem como os trabalhos de Pancotti et al. (2022) e Papaiz et al. (2025),  em um período de tempo diferente daquele do aconselhamento, pois utilizam variáveis pós-manifestação e baseadas no diagnóstico. O aconselhamento, no entanto, ocorre em uma etapa pré-clínica, limitando a análise às informações genômicas disponíveis e aos dados populacionais da literatura sobre portadores.
+O delineamento do artefato se fundamenta na unificação de dados genômicos brutos e parâmetros epidemiológicos para gerar estimativas probabilísticas projetadas no tempo, que hoje estão dispersas. Esse método, é estruturado a partir de taxas de penetrância populacional, caracterizando como instrumento de apoio à decisão, sem pretensão diagnóstica.
 
-Dessa forma o estudo se fundamentou na unificação de dados genômicos brutos e parâmetros epidemiológicos para gerar estimativas probabilísticas projetadas no tempo, que são dispersas nas atuais pesquisas. Esse método, foi estruturado a partir de taxas de penetrância populacional, caracterizando como instrumento de apoio à decisão, sem pretensão diagnóstica.
+#### 4.1.3 Critérios de Sucesso do Projeto
 
-O sistema então deverá ler e processar dados no padrão VCF, verificados por arquivos de teste de conteúdo conhecido, sabendo diferenciar as deduções de risco segundo o gene afetado, refletindo as variações de penetrância documentadas (DOUGLAS; BARALLE, 2024). E a partir disso ser possível gerar diferentes probabilidades de transmissão além da curva temporal de risco,  mantendo registros dos intervalos de confiança e versões das bases.
+O sistema deve ler e processar dados no padrão VCF, verificados por arquivos de teste de conteúdo conhecido, sabendo diferenciar as deduções de risco segundo o gene afetado, refletindo as variações de penetrância documentadas (DOUGLAS; BARALLE, 2024). Gerar de forma diferente a probabilidade de transmissão e a curva temporal de risco, registrando também os intervalos de confiança e as versões das bases.
 
-O modelo que prevê a integração de quatro fontes principais de informação, envolvendo os arquivos parentais no padrão Variant Call Format (VCF), as bases ClinVar e dbSNP, a literatura epidemiológica e a massa sintética de validação, onde está totalmente embasado na Lei Geral de Proteção de Dados para as classificações de dados pessoais sensíveis (BRASIL, 2018, art. 5º, II).
+O desenvolvimento do modelo prevê a integração de quatro fontes principais de informação, envolvendo os arquivos parentais no padrão Variant Call Format (VCF), as bases ClinVar e dbSNP, a literatura epidemiológica e a massa sintética de validação. Como suas estruturas, vocabulários e ciclos de atualização diferem, a preparação exige um fluxo de extração, transformação e carga voltado à combinação das chaves genômicas, à verificação de integridade e à rastreabilidade das versões, com isolamento dos dados parentais, que a Lei Geral de Proteção de Dados classifica como pessoais sensíveis (BRASIL, 2018, art. 5º, II).
 
-#### 4.2. Entendimento dos Dados
+Essa etapa apresenta um risco metodológico de gerar dados incorretos, porém coerentes de forma estrutural, caso ocorra uma correspondência equivocada entre as fontes. Como no cruzamento de uma variante com um registro anotado em outra versão do genoma de referência (DANECEK et al., 2011). Realizar essa detecção depois da modelagem gera custos, o que justifica uma verificação própria na preparação.
 
-Para compreender os dados, foi realizada uma análise exploratória junto de uma avaliação de integridade das bases públicas do ClinVar e dbSNP em seus formatos brutos de distribuição, antecedendo as etapas de transformação e modelagem. Nesta análise foi possível observar detalhes dentro da estrutura nativa das bases, para que o mapeamento das informações disponíveis e seus comportamento fossem contextualizadas para a identificação das lacunas, as inconsistências e divergência entre as duas fontes.
+### 4.2. Entendimento dos Dados
 
-Como o escopo da pesquisa estava concentrando nos genes SOD1, C9orf72, TARDBP e FUS a serem mapeados para a montagem de referência GRCh38, utilizou-se a versão do ClinVar lançada em 28 de setembro de 2026, sendo a última que teve publicação com validação presente no cabeçalho do arquivo VCF com o registro de procedência do subconjunto gerado.
+A segunda fase compreende a coleta inicial dos dados, sua descrição, exploração e verificação de qualidade (CHAPMAN et al., 2000), mapeando as potencialidades, limitações e exigências técnicas específicas de cada fonte consultada.
 
-A disponibilização dos dados no ClinVar ocorre por meio de múltiplos formatos estruturais que atendem a diferentes requisitos de integração de sistemas, no Quadro 2 é possível observar a organização das variantes segundo o padrão nativo gerado por pipelines laboratoriais de sequenciamento.
+#### 4.2.1 Entrada Principal no Variant Call Format
 
-**Quadro 2 — Arquivos brutos extraídos das bases públicas**
+O arquivo de entrada resulta de um fluxo de laboratório que alinha as leituras brutas do sequenciamento de nova geração contra um genoma de referência e identifica onde a amostra difere dele (VAN DER AUWERA; O'CONNOR, 2020). O VCF é o formato em que esse resultado é registrado (DANECEK et al., 2011) e foi escolhido por ser a saída desses fluxos e um dos formatos de distribuição do ClinVar (LANDRUM et al., 2018). Como um genoma humano difere da referência em 4,1 a 5,0 milhões de sítios (THE 1000 GENOMES PROJECT CONSORTIUM, 2015), a filtragem prévia das regiões dos quatro genes surge como um requisito de viabilidade metodológica. O arquivo utilizado para esse mapeamento é composto por um cabeçalho descritivo da versão de referência e do programa gerador, além de uma seção de dados com os campos fundamentais apresentados no Quadro 2.
 
-| Arquivo de origem | Tamanho | Conteúdo |
+**Quadro 2 — Campos essenciais do VCF e uso previsto no artefato**
+
+| Campo | O que contém | Uso no artefato |
 |---|---|---|
-| clinvar.vcf | 1,98 GB | variantes em GRCh38, com a interpretação clínica nas chaves do campo INFO |
-| variant_summary.txt | 4,04 GB | uma linha por alelo e montagem, com 43 colunas de classificação e coordenada |
-| submission_summary.txt | 3,62 GB | uma linha por submissão, com submissor, método e justificativa |
-| hgvs4variation.txt | 4,71 GB | expressões HGVS de cada variante, por montagem e tipo de referência |
-| var_citations.txt e cross_references.txt | 252 MB e 112 MB | ligação com publicações e identificadores em bases externas |
-| gene_specific_summary.txt e organization_summary.txt | 3,50 MB e 936 kB | totais por gene e cadastro dos submissores |
-| snp_result_*.txt (4 arq.) | 935 kB a 2,32 MB | registros do dbSNP por gene, com classe da variação, consequência e frequências |
+| CHROM, POS, REF e ALT | Cromossomo, posição contada a partir de 1, alelo de referência e alelos alternativos | Chave de correspondência com as bases; multialélicos exigem decomposição |
+| ID | Identificador único da variante, normalmente o rsID | Ligação complementar com o dbSNP |
+| QUAL, FILTER e INFO | Qualidade phred do sítio, resultado dos filtros e anotações, com chaves reservadas como AC, AN e DB | Critérios de qualidade da leitura; presença no dbSNP e contagens alélicas |
+| FORMAT, GT, DP e GQ | Campos de amostra: genótipo, com 0 para o alelo de referência, profundidade e qualidade da chamada | Indicam se o genitor é heterozigoto ou homozigoto, base do cálculo de transmissão |
 
-*Fonte: elaborado pela autora, a partir dos arquivos de distribuição do ClinVar e do dbSNP (release de 28 de setembro de 2026).*
+*Fonte: elaborado pela autora, com base em Danecek et al. (2011).*
 
-Analisando o arquivo origem chamado variant_summary encontramos uma entrada por alelo vinculada à respectiva classificação clínica agregada, já o arquivo origem submission_summary específica o registro individual de cada submissão efetuada, à medida que as tabelas complementares realizam o mapeamento dos variantes frente a identificadores externos, evidências da literatura e nomenclaturas padronizadas.
+O arquivo informa qual variante existe e em que genótipo, mas não especifica sobre patogenicidade, frequência e risco, o que torna as bases de referência parte essencial da entrada. Sua leitura requer quatro cuidados (DANECEK et al., 2011) como conferir a versão do genoma de referência, porque as mesmas coordenadas apontam para posições diferentes em GRCh37 e GRCh38. Em seguida, normalizar a representação da variante, já que descrições distintas do mesmo evento não se encontram em comparação direta e decompor os sítios multialélicos, que reúnem em uma linha alelos que precisam ser avaliados em separado. Por fim, distinguir QUAL, qualidade do sítio, de GQ, qualidade da chamada de genótipo.
 
-Na estrutura do ClinVar, o cabeçalho declara versão 4.1 do formato, data de 28 de setembro de 2026, origem ClinVar e referência GRCh38 (DANECEK et al., 2011), essa seção possui oito colunas obrigatórias, e a observação mais relevante para o trabalho está em duas delas.
+Identificou-se uma limitação maior que afeta a um dos quatro genes do escopo, resultante do fato de o fluxo de trabalho gera um arquivo de variantes curtas, e as repetições em série confundem a detecção de variantes em regiões complexas do genoma (VAN DER AUWERA; O'CONNOR, 2020). A expansão de hexanucleotídeos do C9orf72 entra no modelo como um parâmetro da literatura, por isso, Douglas e Baralle (2024) buscaram suas frequências em estudos anteriores, já que a detecção laboratorial desse gene está fora do escopo. A entrada efetiva do desenvolvimento será uma massa sintética que reproduz a estrutura do formato nas regiões dos quatro genes selecionados. Por ser baseada na literatura, essa avaliação verifica se o artefato se comporta como esperado em cenários predefinidos. No entanto, ela não valida as afirmações da própria literatura, uma limitação que condiciona todo o processo.
 
-As colunas QUAL e FILTER encontram-se nulas em todos os registros, visto que o arquivo é baseado na projeção de um repositório de interpretações clínicas sobre o formato VCF e não o resultado de um alinhamento primário de NGS. Consequentemente, a metrificação de confiança da variante desloca-se da qualidade de chamada para a chave de estado de revisão no campo INFO, sendo omitido as colunas de genótipo e FORMAT típicas de amostras individuais.
+#### 4.2.2 Bases de Dados Genômicas de Referência
 
-As contagens por classificação nos dois arquivos diferem, 90 patogênicas no VCF contra 93 no variant_summary, porque os conjuntos de registros não são os mesmos.
+O ClinVar é um arquivo público de interpretação clínica formado por submissões de mais de 800 organizações. Como uma mesma variante pode receber interpretações divergentes, a plataforma agrega esses dados e atribui um status de revisão que varia em uma escala de zero a quatro estrelas (LANDRUM et al., 2018; NCBI, 2026a). Interessam Pathogenic e Likely pathogenic, que sustentam a atribuição de risco e Uncertain significance, cujo tratamento segue o estudo que fornece os parâmetros de penetrância, já que Douglas e Baralle (2024) contaram como causadoras apenas as duas primeiras. Como a classificação é revisável e as atualizações semanais não são arquivadas, só a publicação mensal permite reproduzir uma estimativa depois (NCBI, 2026b).
 
-**Quadro 3 — Chaves do campo INFO presentes no subconjunto do ClinVar**
+O dbSNP é o catálogo geral da variação genética e não exige frequência alélica mínima ou neutralidade funcional das variações depositadas (SHERRY et al., 2001): cataloga a variação sem afirmar se ela causa doença. O rsID é identificador complementar, e a chave de coordenadas e alelos permanece como critério primário, porque nem sempre está presente e pode ser retirado entre versões da base, hoje na edição 157 (NCBI, 2025). Suas frequências populacionais ajudam a verificar inconsistências de anotação, mas refletem as populações submetidas, predominantemente de ascendência europeia (DOUGLAS; BARALLE, 2024), limitação que pesa em um trabalho destinado à população brasileira.
 
-| Chave | O que contém | O que se observou no subconjunto |
-|---|---|---|
-| CLNSIG | classificação germinativa agregada | 616 incertas, 375 provavelmente benignas, 111 benignas, 90 patogênicas, 80 provavelmente patogênicas |
-| CLNREVSTAT | estado de revisão | ausente nos registros sem classificação agregada |
-| CLNSIGCONF | classificações divergentes | 76 registros, como Uncertain_significance_(1) e Likely_benign_(2) |
-| CLNVC e CLNVCSO | tipo da variante e termo na Sequence Ontology | 1.372 de nucleotídeo único, 72 deleções, 50 duplicações, 39 microssatélites, 6 indels, 2 inserções |
-| RS | identificador rs do dbSNP | ausente em 408 dos 1.541 |
-| AF_ESP, AF_EXAC, AF_TGP | frequências de GO-ESP, ExAC e TGP | em 124, 306 e 236 das 1.463 variantes |
+#### 4.2.3 Parâmetros Epidemiológicos e Genéticos
 
-*Fonte: elaborado pela autora, com base no cabeçalho de clinvar.vcf e no subconjunto extraído. As contagens de CLNSIG, CLNSIGCONF, CLNVC e RS referem-se aos 1.541 registros do VCF, e as de frequência às 1.463 variantes do variant_summary.*
+Para estimar com precisão a probabilidade e a idade de adoecimento de um portador, a análise deve separar informações da literatura que costumam ser tratadas de forma unificada. Essa abordagem requer o isolamento entre a presença da variante no arquivo clínico, a taxa de penetrância no grupo analisado, a curva de probabilidade de manifestação ao longo do tempo e as nuances de variabilidade fenotípica entre indivíduos com o mesmo genótipo.
 
-Um registro do subconjunto, com o INFO abreviado, mostra esses campos combinados.
+As estimativas de Douglas e Baralle (2024) são agregadas por gene e deixam de fora a distribuição ao longo da idade, exigida pelas curvas de risco temporal. No caso do gene C9orf72, as estimativas disponíveis baseiam-se no estudo de Murphy et al. (2017), que avaliaram a penetrância relacionada à idade via curvas de Kaplan-Meier em uma amostra de 1.170 indivíduos. Essa análise indicou uma idade mediana de início dos sintomas aos 58,0 anos (IC 95% 57,0–59,0) e uma penetrância descrita como próxima de completa aos 83 anos. Para os outros três genes se apresenta maior variabilidade na literatura, conforme evidenciado pela revisão de Richard et al. (2026) sobre o comportamento da penetrância nessa doença. No caso do SOD1, os autores apontam uma penetrância baixa antes dos 40 a 50 anos que se torna quase completa após os 50 a 60 anos nas mutações mais frequentes, ressalvando a variante D91A em heterozigose como uma exceção. Já para os genes TARDBP e FUS, as evidências indicam, uma penetrância incompleta e dependente do contexto genético e uma taxa de desenvolvimento do quadro clínico superior a 80% em portadores adultos. São descrições por faixa etária, de granularidade menor do que a de uma tabela acumulada ano a ano, de modo que os quatro genes entrarão no modelo com resoluções diferentes. O sexo entra como atributo desses parâmetros, com risco ao longo da vida de 1 em 347 para homens e 1 em 436 para mulheres (DOUGLAS; BARALLE, 2024, p. 294), assim como o modo de herança.
 
-21  31659509  1207199  G  T  .  .  AF_TGP=0.00739;CLNSIG=Likely_benign;GENEINFO=SOD1:6647;RS=17883296
+O encadeamento entre as fontes parte do VCF, identifica as variantes pela chave de coordenadas e alelos, consulta o ClinVar e soma os parâmetros da literatura. A verificação de qualidade prevista nesta fase (CHAPMAN et al., 2000) acompanha esse processo por meio de indicadores mensuráveis, avaliando taxas de variantes aprovadas nos filtros, volume de variantes registradas encontradas no ClinVar e seus estados de revisão, a proporção de variantes de significado incerto e a coerência entre as versões de referência adotadas.
 
-A linha descreve uma substituição de G por T no cromossomo 21, provavelmente benigna, atribuída ao SOD1, com frequência de 0,7% no 1000 Genomes e a coluna ID traz o identificador da variação no ClinVar, não o rs.
+Essa etapa resulta no estabelecimento de um conjunto de dados estruturado, que reúne as curvas de penetrância por idade para os quatro genes, o modelo de herança, o sexo, a população de origem e as incertezas associadas a cada estimativa.
 
-Não há distribuição de qualidade a apresentar por gene. A coluna QUAL permanece nula nos 1.541 registros do subconjunto, de modo que nenhum dos quatro genes recebe valor de qualidade de chamada passível de comparação.
-
-O mesmo se aplica à profundidade de leitura. Sem as colunas FORMAT e de amostra, o arquivo não transporta o campo DP, e a profundidade das leituras que originaram cada variante não está disponível em nenhum dos quatro genes.
-
-#### 4.2.2 Exploração de ClinVar Bruto
-
-O arquivo variant_summary constitui a fonte mais abrangente do repositório com 43 colunas, englobando 1.463 variantes no recorte dos quatro genes, sendo 698 do FUS, 331 do SOD1, 311 do TARDBP e 123 do C9orf72, em intervalos cromossômicos restritos.
-
-Os dados contidos no submission_summary detalham os componentes da classificação agregada ao revelar a composição das 2.388 submissões que cobrem as 1.463 variantes. A amostragem envolve 87 organizações, sendo que 1.377 submissões contam com identificação institucional e mais de 50% do volume concentra-se em quatro submissores principais, com 702 registros atribuídos ao Labcorp Genetics, 292 à Illumina, 201 à Ambry Genetics e 174 à GeneDx, abrangendo ensaios clínicos de 2.175 casos.
-
-Os arquivos complementares trazem o vínculo com a literatura e com outras bases. O var_citations liga 922 variantes a 3.319 citações, 2.948 do PubMed, e deixa 541 sem publicação associada. O cross_references traz 1.083 ligações externas, todas para o dbSNP, atualizadas entre 2015 e 2025, e os 72 vínculos parados em 2015 mostram que parte das correspondências tem dez anos. O hgvs4variation traz 11.808 expressões para 1.462 variantes, média de oito e até catorze. A mesma alteração tem várias descrições válidas, e uma comparação textual entre fontes que usem nomes diferentes não acha a correspondência.
-
-A análise de preenchimento revelou colunas sem variabilidade ou sem aplicabilidade ao domínio da pesquisa: o campo Guidelines se apresentou nulo em 100% dos registros, TestedInGTR manteve o valor constante e N e os campos nsv/esv (dbVar) não tem nenhum valor, confirmando a ausência de variações estruturais de grande porte no subconjunto analisado. A coluna RS# (dbSNP) traz -1 em 380 linhas, que é como o ClinVar marca a ausência de identificador, e em 1.317 linhas Start e Stop coincidem. Em cinco linhas, quatro microssatélites e uma inserção do C9orf72, a coluna PositionVCF traz -1 e ReferenceAlleleVCF traz o texto na, ou seja, não existe representação em coordenada e alelo para o registro.
-
-Foram identificados dois parâmetros estruturais que auxiliam na avaliação da consistência dos dados, revelando inicialmente que a coluna de contribuição para a classificação agregada exclui 232 das 2.388 submissões desse cálculo. Essa diferenciação indica que o número total de envios não corresponde diretamente ao conjunto de julgamentos que definem o status da variante. Outro fator limitante é a ausência de justificativas textuais por parte dos submissores, cenário verificado em 945 submissões, o que coexiste com o fato de que 196 das 1.377 variantes apresentam interpretações distintas entre si, sendo esse um conflito mitigado pela conciliação do valor associado da base (LANDRUM et al., 2018), mas que permanece rastreável nos metadados originais de cada envio.
-
-O cadastro de organizações caracteriza quem produziu essas interpretações, uma vez normalizados os nomes, que no submission_summary vêm na grafia livre do submissor. Dado que dos 87 submissores, 85 têm correspondência no cadastro, 72 deles laboratórios e os 84 com país declarado se distribuem por 29 países. Essa concentração geográfica é evidenciada pelo fato de os Estados Unidos responderem por 1.894 das 2.388 submissões, o equivalente a 79,3% do total, enquanto o Brasil contribui com apenas 15 registros provenientes de três laboratórios, uma métrica que delimita o polo de produção da interpretação clínica e se distingue, de forma analítica, da perspectiva de ancestralidade observado nas frequências populacionais.
-
-Quanto ao tipo, 1.292 são substituições de nucleotídeo único, seguidas de 71 deleções, 49 duplicações, 43 microssatélites, 5 indels e 3 inserções, com origem germinativa em 1.356 linhas. A última avaliação vai de abril de 1994 a setembro de 2026, com 315 linhas em 2025 e 210 em 2024, ausente em 99, sendo a maior categoria isolada de consequência molecular é a troca de sentido, com 325 registros, ou 549 somadas as anotações combinadas, seguida da intrônica, com 292 e 303.
-
-**Quadro 4 — Classificação clínica por gene no subconjunto do ClinVar**
-
-| Classificação | SOD1 | C9orf72 | TARDBP | FUS | Total |
-|---|---|---|---|---|---|
-| Patogênica | 50 | 3 | 9 | 31 | 93 |
-| Provavelmente patogênica | 55 | 0 | 7 | 17 | 79 |
-| Patogênica/provavelmente patogênica | 33 | 0 | 8 | 6 | 47 |
-| Significado incerto | 85 | 51 | 135 | 288 | 559 |
-| Classificações conflitantes | 20 | 0 | 15 | 38 | 73 |
-| Benigna e provavelmente benigna | 81 | 50 | 124 | 268 | 523 |
-| Sem classificação agregada | 6 | 19 | 11 | 50 | 86 |
-
-*Fonte: elaborado pela autora, a partir de variant_summary.txt filtrado pelos quatro genes em GRCh38. As linhas somam 1.460 das 1.463 variantes, ficando de fora três registros residuais.*
-
-As 219 variantes que sustentam atribuição de risco, somando as patogênicas e as provavelmente patogênicas nas três formas de registro, se concentram no SOD1, com 138, contra 54 do FUS, 24 do TARDBP e 3 do C9orf72. O estado de revisão reparte as 1.463 em 962 com critério informado por submissor único, 288 com vários submissores sem conflito, 73 com classificações conflitantes, 52 sem critério de asserção e 88 sem classificação ou status, com média de 1,69 submissores por variante. A categoria sem critério corresponde a zero estrelas na escala do ClinVar (NCBI, 2024), e o peso da evidência varia dentro do próprio grupo que sustenta a atribuição de risco.
-
-#### 4.2.3 Exploração de dbSNP Bruto
-
-Em relação ao dbSNP, optou-se pela extração pontual via interface por gene, uma vez que o dump completo do build excede 20 GB compactados e a função do repositório no pipeline restringe-se à validação dos identificadores rs e à recuperação de frequências alélicas populacionais. As consultas foram realizadas individualmente por gene por meio da interface da plataforma, utilizando a exportação tabular por ser o único formato a fornecer os dados de frequência estratificados por estudo. Após a consolidação dos dados e a remoção dos cabeçalhos repetidos gerados na paginação da exportação, os quatro arquivos totalizaram 41.406 registros, correspondentes a 40.736 variantes distintas. Essa discrepância decorre exclusivamente da presença de 355 identificadores duplicados em linhas idênticas dentro do mesmo arquivo, sem haver qualquer sobreposição entre os genes analisados e por fim, foi constatado que das 1.463 variantes iniciais, 1.083 apresentavam o identificador rs, quantidade que se reduz a 999 registros únicos devido ao compartilhamento de 65 posições.
-
-A consulta devolveu 13.555 variantes do C9orf72, 10.889 do FUS, 10.418 do TARDBP e 5.874 do SOD1.
-
-**Quadro 5 — Campos do registro do dbSNP e o que se observou nos quatro genes**
-
-| Campo | O que contém | O que se observou |
-|---|---|---|
-| variation | alelo de referência e alternativos, C>A,T | reúne todos os alelos observados no sítio |
-| variant_type | classe da variação | 35.343 snv, 3.898 delins, 1.104 del, 385 ins, 6 mnv |
-| snp_id | número do identificador rs | liga-se à coluna RS# (dbSNP) do ClinVar |
-| clinical_significance | significado clínico herdado do ClinVar | vazio em 39.652 dos 40.736 |
-| function_class | consequência funcional | 16.137 intron_variant, maior categoria isolada |
-| frequency | frequências por estudo, T:0.242812:1216:1000Genomes | preenchido em 38.083, vazio em 2.653 |
-
-*Fonte: elaborado pela autora, a partir dos arquivos snp_result_*.txt exportados da interface do dbSNP no formato tabular.*
-
-A validação quantitativa das premissas da literatura demonstra que o significado clínico está ausente em 97% dos registros do dbSNP uma vez que a plataforma foca no mapeamento da variação nucleotídica sem realizar atribuições de causalidade patológica (SHERRY et al., 2001) e o pouco que exibe vem importado do ClinVar. E a maior categoria isolada de consequência funcional é a variante intrônica, com 16.137 registros, variação majoritariamente não codificante que explica a diferença de ordem de grandeza entre as duas bases.
-
-Os dados evidenciam a restrição identificada por Douglas e Baralle (2024), daod que apenas os quatro maiores estudos respondem por três quartos dos registros analisados e agregam populações predominantemente de ascendência europeia ou norte-americana. Essa repartição populacional resulta na ausência de amostragens brasileiras entre os 32 grupos avaliados, limitando a representação nominal da América Latina a um único grupo responsável por apenas 8 registros.
-
-O campo de frequência é o mais denso do registro, e empilha quatro informações separadas por dois-pontos, o alelo, a frequência, a contagem de observações e o estudo. Desdobrado, rende 100.255 linhas de 32 estudos, os maiores ALFA com 27.838, TOPMED com 19.408, gnomAD com 17.003 em genomas e 11.044 em exomas, e TOMMO com 5.643.
-
-A frequência cumpre uma função verificável, cruzando o agregado ALFA com a classificação do ClinVar, as 127 variantes patogênicas com frequência conhecida têm mediana zero e máximo de 0,000417, sem nenhuma acima de 1%, e a mediana zero significa alelo não observado no painel, não informação ausente. Entre as 437 benignas, 53 passam de 1% e a maior chega a 0,462583, e as 343 de significado incerto têm máximo de 0,00776. A separação serve de controle de consistência, porque uma variante causadora e ao mesmo tempo comum sinalizaria erro de anotação.
-
-#### 4.2.4 Exploração de Parâmetros Epidemiológicos Brutos
-
-A terceira fonte de dados é composta por estimativas epidemiológicas da literatura que ingressam no conjunto sob diferentes estruturas de amostragem, conforme o levantamento de Douglas e Baralle (2024), a penetrância parte da agregação por gene, sem associação direta ao longo da idade. Esse mapeamento temporal é viabilizado para o C9orf72, estimado por Kaplan-Meier em 1.170 indivíduos (MURPHY et al., 2017) e para os outros três é descrita por faixa etária (RICHARD et al., 2026).
-
-O refinamento por sexo está documentado de forma desigual, com cerca de dois anos de diferença na idade de início para portadores do C9orf72 (GOUTMAN et al., 2022), os cenários evidenciam a resolução não uniforme dos dados literários que operam de forma restrita ao escopo do gene.
-
-As margens de variação da penetrância agregada por gene estão estabelecidas entre 32,7 e 88,6 no SOD1 e entre 21,1 e 69,8 no TARDBP (DOUGLAS; BARALLE, 2024).
-
-#### 4.2.5 Especificidades Identificadas nos Dados Brutos
-
-O mapeamento de correspondências entre o subconjunto extraído do ClinVar e o banco de dados dbSNP indica que 1.083 das 1.463 variantes originais apresentam um identificador rs, das quais 1.082 localizam com sucesso o registro equivalente. Por outro lado, as 380 sem identificador só podem ser procuradas por coordenada e alelos, e aí a correspondência deixa de ser unívoca. Seguindo nessa abordagem, 203 o registro da posição tem alelos coincidentes, em 2 a coincidência aparece com deslocamento de uma base, em 99 o registro que ocupa a posição tem alelo diferente do declarado pelo ClinVar e 77 não têm candidato algum. Somados os dois últimos casos, 176 variantes não têm contrapartida identificável, entre elas 29 patogênicas. Só por posição, 297 das 380 encontrariam algum registro e 38 com deslocamento de uma base, números que caem para 203 e 2 ao se exigir coincidência de alelo, diferença que mede quantas posições do dbSNP são ocupadas por variante distinta da que o ClinVar descreve.
-
-O deslocamento aparece também no grupo ligado pelo identificador, onde o vínculo não depende da posição. Entre os 1.082 pares a posição coincide em 996, e em 85 a do dbSNP está uma base à frente da que o ClinVar declara em PositionVCF, sendo 42 deleções, 28 microssatélites e 15 duplicações, sem nenhuma substituição de nucleotídeo único. A diferença acompanha o tipo da variante e reflete convenções distintas de ancoragem, e nesses casos a comparação textual de alelo também deixa de valer, com 62 pares de representação não comparável, porque o dbSNP descreve o trecho repetitivo inteiro como registro multialélico enquanto o ClinVar descreve o evento ancorado à esquerda. No sentido de que uma comparação por posição não identifica como erro e devolve um resultado plausível, e só aparece quando se confrontam o tipo da variante e a convenção de cada base.
-
-Um par ficou fora de qualquer padrão, a variante 183034, inserção no C9orf72 classificada como patogênica, com PositionVCF igual a -1 e por isso incomparável por coordenada. O caso leva ao achado mais relevante, no gene que o entendimento do negócio trata como parâmetro da literatura. A expansão de hexanucleotídeos do C9orf72 está registrada no ClinVar, por meio de registros de microssatélites estruturados pela contagem de repetições, inviabilizando o rastreamento convencional baseado exclusivamente em coordenadas absolutas e alelos isolados, como as nomenclaturas  GGGGCC[>24] e GGCCCC[24_30], fixos no intervalo de seis bases entre 27.573.529 e 27.573.534. O que distingue aí um registro patogênico de um benigno não é a troca de uma base e sim a faixa de repetições, que não cabe nas colunas de alelo, e três deles, dois patogênicos, vêm sem critério de asserção. O que a literatura indicava quanto à detecção laboratorial (VAN DER AUWERA; O'CONNOR, 2020) se repete no catálogo, já que o dado existe, mas não na representação que o restante do conjunto usa.
-
-#### 4.2.6 Limitações e Contexto dos Dados Brutos
-
-O mapeamento de conformidade dos dados consolida o levantamento de restrições das fontes utilizadas, parametrizando as limitações estruturais quantificadas no subconjunto e detalhadas no Quadro 6 (CHAPMAN et al., 2000). Essas inconsistências resultam diretamente da natureza de características de cada banco de dados, às quais se somam fatores críticos como a diferença temporal nos vínculos de integração entre as plataformas, a ausência de registros de genótipo e a falta de métricas sobre a qualidade de leitura das sequências genômicas.
-
-**Quadro 6 — Limitações observadas no subconjunto extraído**
-
-| Limitação | Onde foi observada | Efeito sobre o entendimento |
-|---|---|---|
-| Frequência de coortes europeias e norte-americanas | 4 dos 32 estudos reúnem três quartos das 100.255 linhas, sem coorte brasileira | descreve população diferente da de destino |
-| Interpretação clínica concentrada fora do país | 1.894 das 2.388 submissões dos Estados Unidos, 15 de três laboratórios brasileiros | o julgamento vem de outro contexto de atendimento |
-| Evidência de submissor único | 962 das 1.463 variantes, e 117 das 219 patogênicas | o peso da evidência não é uniforme no grupo causador |
-| Classificação sem critério de asserção | 52 variantes, 23 delas patogênicas, zero estrelas | a atribuição de risco não declara o critério |
-| Sem correspondência aceita no dbSNP | 176 variantes, 29 delas patogênicas | ficam sem frequência para conferir a anotação |
-| Expansão do C9orf72 por contagem de repetições | quatro microssatélites em 27.573.529–27.573.534 e uma inserção, sem posição em VCF | o gene não é endereçável pela chave do conjunto |
-
-*Fonte: elaborado pela autora, a partir dos arquivos extraídos.*
-
-A partir da perspectiva dos metadados de proveniência, existem características de registro que não se enquadram nas categorias de conteúdo genômico bruto, como ocorre com a dupla datação adotada pelo dbSNP para o build 157. Essa informação cronológica se divide entre a documentação de cada variante e o anúncio oficial da versão da base, sendo obtida na análise de procedência juntamente com a métrica de volume do cadastro de organizações do ClinVar, que contabiliza os envios históricos totais de cada entidade no repositório, em vez de restringir a métrica ao recorte amostral adotado nesta pesquisa.
-
-A delimitação da base sobre a qual o artefato opera apoia-se em um núcleo de 1.463 variantes do ClinVar distribuídas entre os quatro genes selecionados, cuja identificação precisa ocorre por meio do parâmetro AlleleID. Para qualificar essa amostragem, o modelo consolida atributos provenientes de três matrizes distintas, iniciando pelos dados extraídos do variant_summary que fornecem a classificação clínica, o estado de revisão, as coordenadas genômicas, o fenótipo associado e o quantitativo de submissores. Esse perfil é aprimorado pelas informações do arquivo VCF, responsável por introduzir variáveis de consequência molecular, o termo da Sequence Ontology, o indicador de classificação conflitante e posicionamento padronizado no formato. Completando a estrutura, cujo repositório dbSNP fornece os parâmetros de classe funcional e a frequência observada por estudo, acessíveis pelo rs em 1.082 variantes e pela coordenada com alelos nas demais.
-
-A chave que une as origens é dupla, e nenhuma das duas alcança o conjunto inteiro, o que delimita o que a base pode responder. Alguma frequência populacional alcança 1.141 das 1.463 variantes, ou 78,0%, com mediana de quatro estudos entre as cobertas, sendo 994 do ALFA, 661 do TOPMED, 636 e 618 do gnomAD em exomas e genomas, e 289 do 1000 Genomes. A literatura se liga por gene, no nível em que as estimativas estão publicadas.
-
-Esse conjunto está materializado em um arquivo de base consolidada sobre a ELA, com a procedência de cada origem registrada em três arquivos que guardam data, endereço, critério de filtragem e build, necessário porque o ClinVar recebe atualizações semanais não arquivadas e só a publicação mensal permite reproduzir uma consulta (NCBI, 2026). O elemento principal de análise do repositório se delimita ao mapeamento de variantes isoladas, atribuindo a unificação das fontes documentais e o tratamento das restrições detalhadas no Quadro 6 para a etapa posterior de processamento. Essa estrutura de metodologia implica a ausência de parâmetros genotípicos, dados de qualidade de leitura, informações de faseamento ou histórico de herança familiar nesta fase inicial da amostragem.
-
-#### 4.3. Preparação dos Dados
+### 4.3. Preparação dos Dados
 
 A fase de preparação engloba o pipeline de ETL (Extract, Transform, Load) genômico responsável por higienizar, normalizar e preparar as variáveis para os motores estatísticos.
 
 [VCF Materno/Paterno] ➔ [Ingestão & Validação] ➔ [Filtragem por Genes Alvo] ➔ [Anotação (ClinVar/dbSNP)] ➔ [Matriz de Variáveis Controladas]
 
-Ingestão e Validação: Filtro de qualidade de leitura para descartar artefatos de sequenciamento.
+- Ingestão e Validação: Filtro de qualidade de leitura para descartar artefatos de sequenciamento.
+- Filtragem por Região de Interesse: Aplicação de máscaras de coordenadas genômicas delimitando exclusivamente os exons e regiões intrônicas adjacentes dos quatro genes de estudo (SOD1, C9orf72, TARDBP, FUS).
+- Normalização e Anotação de Variantes: Decomposição de variantes complexas (multialélicas) e cruzamento automatizado das chaves genômicas com as tabelas do ClinVar e dbSNP.
+- Construção do Vetor Genotípico Parental: Mapeamento do genótipo dos pais em termos de dosagem alélica (0 = homozigoto selvagem; 1 = heterozigoto; 2 = homozigoto mutante), que alimentará o nó inicial da Rede Bayesiana.
 
-Filtragem por Região de Interesse: Aplicação de máscaras de coordenadas genômicas delimitando exclusivamente os exons e regiões intrônicas adjacentes dos quatro genes de estudo (SOD1, C9orf72, TARDBP, FUS).
-
-Normalização e Anotação de Variantes: Decomposição de variantes complexas (multialélicas) e cruzamento automatizado das chaves genômicas com as tabelas do ClinVar e dbSNP.
-
-Construção do Vetor Genotípico Parental: Mapeamento do genótipo dos pais em termos de dosagem alélica (0 = homozigoto selvagem; 1 = heterozigoto; 2 = homozigoto mutante), que alimentará o nó inicial da Rede Bayesiana.
-
-#### 4.4. Modelagem
+### 4.4. Modelagem
 
 Na fase de modelagem constitui o núcleo estocástico do artefato, composto por três componentes matemático-computacionais integrados:
 
-NÚCLEO ESTOCÁSTICO:
+NÚCLEO ESTOCÁSTICO: Redes Bayesianas (Dependência Gen.) -> Simulação Monte Carlo (Propag. Incerteza) -> Análise de Sobrev. (Lifelines / Risco)
 
-Redes Bayesianas (Dependência Gen.) -> Simulação Monte Carlo (Propag. Incerteza) -> Análise de Sobrev. (Lifelines / Risco)
-
-##### A. Rede Bayesiana (Representação de Dependências)
+#### A. Rede Bayesiana (Representação de Dependências)
 
 Construção de um Grafo Acíclico Dirigido (DAG) aplicando os formalismos de Pearl (1988) e Koller e Friedman (2009).
 
-Nós de Entrada (Variáveis Aleatórias): Genótipo Materno e Genótipo Paterno.
+- Nós de Entrada (Variáveis Aleatórias): Genótipo Materno e Genótipo Paterno.
+- Nó Intermediário (Herança Mendeliana): Genótipo do Descendente, cujas Tabelas de Probabilidade Condicional (CPT) derivam da segregação alemática.
+- Nó de Saída (Status de Portador / Expressão): Probabilidade de portar a variante de risco combinada ao fator modificador de penetrância incompleta específico do gene identificado.
 
-Nó Intermediário (Herança Mendeliana): Genótipo do Descendente, cujas Tabelas de Probabilidade Condicional (CPT) derivam da segregação alemática.
+#### B. Simulação de Monte Carlo (Propagação de Incerteza)
 
-Nó de Saída (Status de Portador / Expressão): Probabilidade de portar a variante de risco combinada ao fator modificador de penetrância incompleta específico do gene identificado.
+- Execução de reamostragens sucessivas via algoritmo de Monte Carlo sobre a Rede Bayesiana, simulando N = 10.000 eventos de fecundação e transmissão hipotética.
+- Permite estimar a distribuição de probabilidade empírica do fenótipo da prole diante de cenários de penetrância incerta.
 
-##### B. Simulação de Monte Carlo (Propagação de Incerteza)
-
-Execução de reamostragens sucessivas via algoritmo de Monte Carlo sobre a Rede Bayesiana, simulando N = 10.000 eventos de fecundação e transmissão hipotética.
-
-Permite estimar a distribuição de probabilidade empírica do fenótipo da prole diante de cenários de penetrância incerta.
-
-##### C. Análise de Sobrevivência (Projeção Temporal de Risco)
+#### C. Análise de Sobrevivência (Projeção Temporal de Risco)
 
 Integração do status probabilístico do descendente a funções de risco acumulado.
 
-Função de Sobrevivência S(t): Modela a probabilidade de um indivíduo portador permanecer assintomático até a idade t.
+- Função de Sobrevivência S(t): Modela a probabilidade de um indivíduo portador permanecer assintomático até a idade t.
+- Função de Risco Incondicional / Penetrância F(t) = 1 - S(t): Gera estimativas da idade provável de início dos sintomas baseadas em distribuições parametricas calibradas com dados da literatura.
 
-Função de Risco Incondicional / Penetrância F(t) = 1 - S(t): Gera estimativas da idade provável de início dos sintomas baseadas em distribuições parametricas calibradas com dados da literatura.
-
-##### D. Arquitetura Modular e Tecnologias
+#### D. Arquitetura Modular e Tecnologias
 
 O software construído sob uma arquitetura modular em Python:
 
-Biopython e PyVCF: Manipulação e parsing de arquivos VCF.
+- Biopython e PyVCF: Manipulação e parsing de arquivos VCF.
+- Pandas e NumPy: Estruturação e manipulação matricial dos dados genômicos e CPTs.
+- PyMC: Implementação e inferência probabilística nas Redes Bayesianas e simulação de Monte Carlo.
+- Lifelines: Modelagem da análise de sobrevivência e curvas de risco temporal.
+- Matplotlib e Seaborn: Renderização das curvas de penetrância e gráficos de risco para interface gráfica de suporte clínico.
 
-Pandas e NumPy: Estruturação e manipulação matricial dos dados genômicos e CPTs.
-
-PyMC: Implementação e inferência probabilística nas Redes Bayesianas e simulação de Monte Carlo.
-
-Lifelines: Modelagem da análise de sobrevivência e curvas de risco temporal.
-
-Matplotlib e Seaborn: Renderização das curvas de penetrância e gráficos de risco para interface gráfica de suporte clínico.
-
-#### 4.5. Avaliação
+### 4.5. Avaliação
 
 Nesta etapa, verifica-se a acurácia, estabilidade e consistência do modelo desenvolvido frente aos objetivos do negócio.
 
-Simulações com Dados Sintéticos: Devido a restrições éticas e de conformidade com a LGPD, o artefato foi testado com genótipos sintéticos criados para simular 5 cenários clínicos familiares representativos (ex.: Pai heterozigoto para variante de alta penetrância no SOD1 vs. Mãe portadora da expansão de hexanucleotídeos no C9orf72).
+- Simulações com Dados Sintéticos: Devido a restrições éticas e de conformidade com a LGPD, o artefato foi testado com genótipos sintéticos criados para simular 5 cenários clínicos familiares representativos (ex.: Pai heterozigoto para variante de alta penetrância no SOD1 vs. Mãe portadora da expansão de hexanucleotídeos no C9orf72).
 
 Métricas e Critérios de Validação:
 
-Aderência Teórica: Comparação das frequências obtidas na Simulação de Monte Carlo com as distribuições teóricas esperadas pela genética populacional.
+- Aderência Teórica: Comparação das frequências obtidas na Simulação de Monte Carlo com as distribuições teóricas esperadas pela genética populacional.
+- Estabilidade Numérica: Avaliação da variação do desvio padrão e erro padrão dos resultados em execuções sucessivas (N=1.000, N=10.000 e N=100.000 iterações).
+- Coerência das Curvas de Risco: Verificação do comportamento assintótico das curvas temporais de sobrevivência/manifestação em relação aos dados de idade de início descritos por Douglas e Baralle (2024).
 
-Estabilidade Numérica: Avaliação da variação do desvio padrão e erro padrão dos resultados em execuções sucessivas (N=1.000, N=10.000 e N=100.000 iterações).
-
-Coerência das Curvas de Risco: Verificação do comportamento assintótico das curvas temporais de sobrevivência/manifestação em relação aos dados de idade de início descritos por Douglas e Baralle (2024).
-
-#### 4.6. Implantação
+### 4.6. Implantação
 
 Na fase final do CRISP-DM a entrega do artefato para uso em ambiente experimental de pesquisa e suporte ao aconselhamento.
 
-Protótipo Funcional: Empacotamento do código em uma aplicação modular.
+- Protótipo Funcional: Empacotamento do código em uma aplicação modular.
+- Interface de Visualização Clínica: Módulo gráfico que exibe o perfil de variantes detectadas, a probabilidade de transmissão e as curvas de risco de manifestação por idade, de forma simplificada para interpretação médica.
+- Documentação Técnica e Repositório: Disponibilização da arquitetura do sistema, especificações das APIs internas, dicionário de dados e instruções de instalação para uso por equipes de pesquisa.
+- Diretrizes de Apropriação: Inclusão explícita no relatório do sistema de avisos legais indicando o caráter preditivo-experimental da solução, reforçando seu papel estritamente voltado ao apoio à decisão e não como diagnóstico autônomo.
 
-Interface de Visualização Clínica: Módulo gráfico que exibe o perfil de variantes detectadas, a probabilidade de transmissão e as curvas de risco de manifestação por idade, de forma simplificada para interpretação médica.
-
-Documentação Técnica e Repositório: Disponibilização da arquitetura do sistema, especificações das APIs internas, dicionário de dados e instruções de instalação para uso por equipes de pesquisa.
-
-Diretrizes de Apropriação: Inclusão explícita no relatório do sistema de avisos legais indicando o caráter preditivo-experimental da solução, reforçando seu papel estritamente voltado ao apoio à decisão e não como diagnóstico autônomo.
-
-### 5. RESULTADOS - ANÁLISE E DISCUSSÃO
+## 5. RESULTADOS
 
 O objetivo é demonstrar o funcionamento prático do artefato e validar sua lógica estocástica diante de cenários clínicos representativos. Como o sistema opera sob a perspectiva da Design Science Research e do CRISP-DM, a seção de resultados deve apresentar as saídas geradas em cada etapa do pipeline (ingestão/anotação, inferência bayesiana, simulação de Monte Carlo e análise de sobrevivência).
 
-## Interpretação dos resultados
+## 6. ANÁLISE E DISCUSSÃO
 
-## Conexão com a fundamentação teórica
+- Interpretação dos resultados
+- Conexão com a fundamentação teórica
+- Limitações
 
-## Limitações
+## 7. CONCLUSÃO
 
-### 6. CONCLUSÃO
-
-## Resposta ao problema
-
-## Contribuições
-
-## Trabalhos futuros
+- Resposta ao problema
+- Contribuições
+- Trabalhos futuros
 
 ## Referências
 
@@ -447,12 +318,3 @@ VAN DER AUWERA, G. A.; O'CONNOR, B. D. Genomics in the cloud: using Docker, GATK
 WESTENENG, H.-J. et al. Prognosis for patients with amyotrophic lateral sclerosis: development and validation of a personalised prediction model. The Lancet Neurology, [s. l.], v. 17, n. 5, p. 423-433, 2018. Disponível em: https://www.thelancet.com/journals/laneur/article/PIIS1474-4422(18)30089-9/abstract. Acesso em: 17 maio 2026.
 
 ZATZ, M. O estudo do genoma humano contribuindo para a compreensão, o diagnóstico e a prevenção de doenças genéticas: o exemplo das doenças neuromusculares. Revista de Medicina, São Paulo, v. 80, n. 1, p. 24-40, jan./mar. 2001.
-
-
-## Notas de rodapé
-
-- Acadêmico do Curso de Sistemas de Informação. Centro Universitário Paraíso (UniFAP). Rua da Conceição, 1228 - São Miguel - CEP: 63.010-465 - Juazeiro do Norte, CE. E-mail: geovana0@aluno.fapce.edu.br
-- Mestre em Educação e Engenharia de Sotware. Professor do Curso de Sistemas de Informação. Centro Universitário Paraíso (UniFAP). Rua da Conceição, 1228 - São Miguel - CEP: 63.010-465 - Juazeiro do Norte, CE. E-mail: fabricio.carneiro@fapce.edu.br
-- 1000 Genomes Project: Consórcio internacional de pesquisa conduzido entre 2008 e 2015 que sequenciou os genomas de mais de 2.500 indivíduos de diversas populações, com o objetivo de produzir um catálogo público de referência da variação genética humana.
-- ClinVar: Base de dados pública mantida pelo National Center for Biotechnology Information (NCBI), que reúne registros de associações entre variantes genéticas humanas e fenótipos clínicos, com classificações de patogenicidade reconhecidas internacionalmente.
-- DbSNP: Base de dados pública mantida pelo National Center for Biotechnology Information (NCBI) que cataloga variantes genéticas humanas, incluindo polimorfismos de nucleotídeo único e pequenas inserções e deleções, com informações sobre frequências populacionais.

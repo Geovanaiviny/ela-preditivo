@@ -1,12 +1,15 @@
 ##fileformat=VCFv4.2
-##fileDate=20261024
-##source=ela_preditivo v0.1.0 (DADOS SINTETICOS: cenario 2, pai: Mãe com expansão de hexanucleotídeos no C9orf72 (45 repetições) × pai selvagem)
+##fileDate=20261103
+##source=ela_preditivo v0.1.0 (DADOS SINTETICOS: cenario 2, pai: Mãe com expansão de hexanucleotídeos no C9orf72 (45 repetições, laudo) × pai selvagem)
 ##reference=GRCh38
-##contig=<ID=chr1>
-##contig=<ID=chr9>
-##contig=<ID=chr16>
-##contig=<ID=chr17>
-##contig=<ID=chr21>
+##contig=<ID=chr1,length=248956422,assembly=GRCh38>
+##contig=<ID=chr9,length=138394717,assembly=GRCh38>
+##contig=<ID=chr16,length=90338345,assembly=GRCh38>
+##contig=<ID=chr17,length=83257441,assembly=GRCh38>
+##contig=<ID=chr21,length=46709983,assembly=GRCh38>
+##INFO=<ID=AC,Number=A,Type=Integer,Description="Contagem do alelo alternativo nos genotipos">
+##INFO=<ID=AN,Number=1,Type=Integer,Description="Total de alelos nos genotipos">
+##INFO=<ID=DB,Number=0,Type=Flag,Description="Variante presente no dbSNP">
 ##INFO=<ID=END,Number=1,Type=Integer,Description="Fim do intervalo da repeticao">
 ##INFO=<ID=RU,Number=1,Type=String,Description="Unidade de repeticao">
 ##INFO=<ID=REPID,Number=1,Type=String,Description="Identificador do locus de repeticao">
@@ -17,11 +20,9 @@
 ##FORMAT=<ID=DP,Number=1,Type=Integer,Description="Profundidade de leitura">
 ##FORMAT=<ID=GQ,Number=1,Type=Integer,Description="Qualidade do genotipo">
 ##FORMAT=<ID=REPCN,Number=1,Type=String,Description="Numero de repeticoes por alelo (ordem do GT)">
-##ALT=<ID=STR45,Description="Expansao de repeticao curta em tandem com 45 copias">
 #CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO	FORMAT	PAI
-chr1	11020000	.	G	A,T	456.2	PASS	SINTETICO	GT:DP:GQ	0/2:25:72
-chr9	27573529	.	GGGGCC	<STR45>	152.1	PASS	END=27573534;RU=GGGGCC;REPID=C9ORF72;SVTYPE=STR;SINTETICO	GT:REPCN:DP:GQ	0/0:2/2:58:94
-chr16	31185000	.	A	G	211.8	PASS	SINTETICO	GT:DP:GQ	0/1:41:97
-chr17	7675088	.	C	T	307.9	PASS	SINTETICO	GT:DP:GQ	0/1:46:77
-chr21	31659509	rs17883296	G	T	410.9	PASS	SINTETICO	GT:DP:GQ	0/1:44:84
-chr21	31663000	.	T	C	8.3	LowQual	SINTETICO	GT:DP:GQ	0/1:4:10
+chr1	11020000	.	G	A,T	211.8	PASS	AC=0,1;AN=2;SINTETICO	GT:DP:GQ	0/2:41:97
+chr16	31185000	.	A	G	152.1	PASS	AC=1;AN=2;SINTETICO	GT:DP:GQ	0/1:58:94
+chr17	7675088	.	C	T	410.9	PASS	AC=1;AN=2;SINTETICO	GT:DP:GQ	0/1:44:84
+chr21	31659509	rs17883296	G	T	251.5	PASS	AC=1;AN=2;DB;SINTETICO	GT:DP:GQ	0/1:48:71
+chr21	31663000	.	T	C	8.3	LowQual	AC=1;AN=2;SINTETICO	GT:DP:GQ	0/1:4:10

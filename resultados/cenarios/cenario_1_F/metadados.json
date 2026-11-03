@@ -2,21 +2,76 @@
   "pacote": "ela_preditivo",
   "versao": "0.1.0",
   "aviso_legal": "AVISO: instrumento experimental de apoio à decisão no aconselhamento genético preditivo da ELA, construído com dados sintéticos e parâmetros populacionais da literatura. Não constitui diagnóstico, não substitui o julgamento clínico e não deve ser usado isoladamente em decisões sobre pacientes.",
-  "data": "2026-10-24T22:54:41",
+  "data": "2026-11-03T14:26:30",
+  "horizonte": 90.0,
+  "tabela_variantes": "/home/paulo.filho/Documentos/paulo-fabiano/geovana/ela_preditivo/data/variantes_curadas.csv",
+  "loci": [
+    "SOD1 p.Ala5Val"
+  ],
+  "tempo_total_s": 3.32,
   "seed": 42,
   "n": 10000,
   "motor": "pymc",
   "sexo": "F",
   "idade_atual": 30.0,
-  "horizonte": 90.0,
-  "parametros": "/home/paulo.filho/paulo/ela_preditivo/config/parametros_literatura.yaml",
+  "laudo_c9orf72": null,
+  "parametros": "/home/paulo.filho/Documentos/paulo-fabiano/geovana/ela_preditivo/config/parametros_literatura.yaml",
   "versao_parametros": 1,
   "data_parametros": "2026-10-24",
-  "tabela_variantes": "/home/paulo.filho/paulo/ela_preditivo/data/variantes_curadas.csv",
+  "base_anotacao": {
+    "base_real": "clinvar_base_consolidada",
+    "curada": "/home/paulo.filho/Documentos/paulo-fabiano/geovana/ela_preditivo/data/variantes_curadas.csv",
+    "n_real": 1458,
+    "n_curada_extra": 1
+  },
   "vcf_mae": "resultados/sinteticos/cenario_1_mae.vcf",
   "vcf_pai": "resultados/sinteticos/cenario_1_pai.vcf",
-  "loci": [
-    "SOD1 A4V (p.A5V)"
-  ],
-  "tempo_total_s": 2.72
+  "montagem": {
+    "mae": "GRCh38",
+    "pai": "GRCh38"
+  },
+  "indicadores_qualidade": {
+    "mae": {
+      "risco_com_frequencia_acima_1pct": 0,
+      "registros": 7,
+      "aprovados": 5,
+      "taxa_aprovacao": 0.7142857142857143,
+      "anotadas": 2,
+      "taxa_anotacao": 0.4,
+      "por_estrelas": {
+        "2": 2
+      },
+      "por_classe": {
+        "nao_anotada": 3,
+        "benigna": 1,
+        "risco": 1
+      },
+      "n_risco": 1,
+      "n_vus": 0,
+      "proporcao_vus": 0.0,
+      "montagem": "GRCh38",
+      "montagem_coerente": true
+    },
+    "pai": {
+      "risco_com_frequencia_acima_1pct": 0,
+      "registros": 7,
+      "aprovados": 5,
+      "taxa_aprovacao": 0.7142857142857143,
+      "anotadas": 2,
+      "taxa_anotacao": 0.4,
+      "por_estrelas": {
+        "2": 2
+      },
+      "por_classe": {
+        "nao_anotada": 3,
+        "benigna": 1,
+        "risco": 1
+      },
+      "n_risco": 1,
+      "n_vus": 0,
+      "proporcao_vus": 0.0,
+      "montagem": "GRCh38",
+      "montagem_coerente": true
+    }
+  }
 }
