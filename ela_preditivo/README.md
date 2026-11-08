@@ -4,7 +4,7 @@ Artefato computacional do TCC **"Desenvolvimento de Sistema Preditivo de Heranç
 
 > **Aviso.** Instrumento experimental de apoio à decisão no aconselhamento genético preditivo da ELA, construído com dados sintéticos e parâmetros populacionais da literatura. Não constitui diagnóstico, não substitui o julgamento clínico e não deve ser usado isoladamente em decisões sobre pacientes. Nenhum dado genômico real é lido, armazenado ou distribuído por este repositório (Lei 13.709/2018, art. 5º, II; TCC, seção 3.4).
 
-Versão 0.1.0 — 24 de outubro de 2026. Documentos de apoio em `../docs/` (análise do TCC, modelo matemático, plano, decisões, ambiente, relação com o exemplo do orientador).
+Versão 0.1.0 — 24 de outubro de 2026; revisão de 8 de novembro de 2026 (correções da revisão da autora/orientador: `../docs/04_decisoes.md`, D20 a D29). Documentos de apoio em `../docs/` (análise do TCC, modelo matemático, plano, decisões, ambiente, relação com o exemplo do orientador).
 
 ---
 
@@ -23,10 +23,11 @@ Fluxo (TCC, 4.3 e 4.4):
 ```
 VCF materno + VCF paterno
    │  camada 1 — ingestao.py · anotacao.py · genotipo.py
-   │  PyVCF (pyvcf3): leitura; conferência da montagem GRCh38 no cabeçalho; filtro de qualidade (FILTER/DP/GQ); máscara GRCh38
+   │  PyVCF (pyvcf3): leitura; conferência da montagem GRCh38 no cabeçalho; filtro de qualidade (FILTER = PASS, DP ≥ 20, GQ ≥ 30; TCC 4.3); máscara GRCh38
    │  dos genes SOD1, C9orf72, TARDBP, FUS; decomposição multialélica e normalização REF/ALT; AC/AN/DB do INFO;
    │  anotação ClinVar real (dados_reais/) + tabela curada; expansão GGGGCC do C9orf72 pelo laudo laboratorial (--c9orf72-mae/pai);
-   │  vetor de dosagem alélica 0/1/2 por lócus de risco (só Pathogenic/Likely pathogenic); indicadores de qualidade (TCC 4.2.3)
+   │  vetor de dosagem alélica 0/1/2 por lócus de risco (só Pathogenic/Likely pathogenic; sítio com genótipo não determinado
+   │  num genitor descarta o lócus inteiro, TCC 4.3); indicadores de qualidade (TCC 4.2.3)
    ▼
 Rede Bayesiana (PyMC) + Monte Carlo (N = 10.000 fecundações hipotéticas)
    │  camada 2 — rede_bayesiana.py · monte_carlo.py · exato.py · calibracao.py
@@ -61,10 +62,10 @@ Fórmulas exatas de referência: dominante `P(C) = 1 − (1 − d_m/2)(1 − d_f
 
 | Fonte | Onde está | Observações |
 |---|---|---|
-| Penetrância, IC, herança, curvas de idade, efeito do sexo, limiares | `config/parametros_literatura.yaml` | cada valor tem `citacao` e `confirmar`; `confirmar: true` = provisório, a validar pela autora (hoje: curvas de idade de SOD1, TARDBP e FUS, à espera de Richard et al., 2026; pontos intermediários da curva de Murphy et al., 2017) |
+| Penetrância, IC, herança, curvas de idade, efeito do sexo, limiares | `config/parametros_literatura.yaml` | cada valor tem `citacao` e `confirmar`; `confirmar: true` = provisório, a validar pela autora (hoje: curvas de idade de SOD1, TARDBP e FUS, à espera de Richard et al., 2026; pontos intermediários da curva de Murphy et al., 2017). A distribuição de início de cada gene aceita `pontos` (curva de Kaplan-Meier ou faixas etárias) ou `estatisticas` (`{media, dp}` ou `{mediana, iqr}`, resolvidas em forma fechada; `metodo_inicio` na Tabela 6) |
 | Regiões dos genes (GRCh38) | `config/regioes_genes_grch38.yaml` | Ensembl REST, 24/10/2026, flanco de 5 kb |
 | Variantes conhecidas (anotação) | `data/variantes_curadas.csv` | SOD1 p.Ala5Val (rs121912442, chr21:31659783 C>T), SOD1 p.Asp91Ala recessiva (rs80265967, chr21:31667290 A>C), TARDBP p.Met337Val (rs80356730, chr1:11022418 A>G), FUS p.Arg521Cys (rs121909668, chr16:31191418 C>T), expansão GGGGCC do C9orf72 (chr9:27573529–27573534), SOD1 rs17883296 benigna (exemplo do TCC). Coordenadas conferidas no dbSNP/ClinVar em 24/10/2026 |
-| Subconjunto real do ClinVar/dbSNP (seção 4.2.2 do TCC) | `dados_reais/` na raiz do repositório (ignorada pelo git) ou `ELA_DADOS_BRUTOS` | `base_consolidada_ela.csv` (preferida), `clinvar_ela_4genes.csv`/`variant_summary.txt` ou `clinvar*.vcf`; encontrados automaticamente por `anotacao.tabela_anotacao()` e mesclados com a tabela curada (classificação do ClinVar prevalece; a curada contribui herança e a expansão do C9orf72). Sem eles o protótipo roda só com a tabela curada (`--so-tabela-curada`) |
+| Subconjunto real do ClinVar/dbSNP (seção 4.2.2 do TCC) | `dados_reais/` na raiz do repositório (ignorada pelo git) ou `ELA_DADOS_BRUTOS` | `base_consolidada_ela.csv` (preferida), `clinvar_ela_4genes.csv`/`variant_summary.txt` ou `clinvar*.vcf`; encontrados automaticamente por `anotacao.tabela_anotacao()` e mesclados com a tabela curada (classificação do ClinVar prevalece; a curada contribui herança e a expansão do C9orf72). Sem eles o protótipo roda só com a tabela curada (`--so-tabela-curada`). `ela-preditivo atualizar-base` baixa a release mensal do ClinVar (quatro genes), registra release e sha256 em `dados_reais/versoes/` e compara com a release anterior; cada execução grava arquivo, release e sha256 da base em `metadados.json` |
 | Cenários familiares | `data/sinteticos/` (gerados por `cenarios.py`, seed 2026) | VCF 4.2, GRCh38, uma amostra por arquivo, com ruído para exercitar filtros (benigna, não anotada, fora dos genes, baixa qualidade, multialélica) |
 
 A expansão do C9orf72 **não é lida do VCF**: o fluxo de variantes curtas não a detecta e o TCC (4.2.1) a trata como parâmetro do laudo laboratorial. Informe o nº de repetições do maior alelo de cada genitor (`--c9orf72-mae 45`, `--c9orf72-pai 2 45` para os dois alelos). Limiar: ≥ 30 repetições patogênico, 24–29 intermediário (configurável). Um VCF no estilo ExpansionHunter (`ALT=<STRn>`, `REPCN`) ainda é lido como caminho secundário; se divergir do laudo, prevalece o laudo e a divergência fica no relatório.
@@ -100,9 +101,12 @@ ela-preditivo avaliar --dir-cenarios ela_preditivo/data/sinteticos --saida resul
 
 # 4) tudo de uma vez: cenários → 5 casos × 2 sexos → avaliação → índice resultados/README.md
 ela-preditivo tudo --saida resultados --seed 42
+
+# 5) atualizar a base ClinVar: baixa a release mensal (4 genes) para dados_reais/, registra a versão e compara com a anterior
+ela-preditivo atualizar-base --baixar                      # ou --base dados_reais/clinvar_ela_4genes.vcf --release 2026-09-28; --listar mostra o registro
 ```
 
-Opções de `executar`: `--motor {pymc,numpy}` (o outro motor roda sempre como verificação cruzada), `--config` (YAML alternativo), `--tabela-variantes` (CSV de anotação alternativo), `--horizonte` (padrão 90 anos), `--sem-figuras`. Toda saída grava `metadados.json` com seed, N, versões e caminhos, para reprodução.
+Opções de `executar`: `--motor {pymc,numpy}` (o outro motor roda sempre como verificação cruzada), `--config` (YAML alternativo), `--tabela-variantes` (CSV de anotação alternativo), `--horizonte` (padrão 90 anos), `--sem-figuras`. A pasta de saída é limpa das saídas de uma execução anterior antes de gravar (só os nomes que o próprio artefato produz; outros arquivos ficam). Toda saída grava `metadados.json` com seed, N, versões, caminhos, release e sha256 da base ClinVar, lóci descartados e a limpeza feita, para reprodução.
 
 Uso como biblioteca:
 
@@ -121,10 +125,10 @@ Por execução (`executar`):
 | Arquivo | Conteúdo |
 |---|---|
 | `relatorio.md` | texto com aviso legal, entrada, resultado por lócus e combinado, verificações e limitações; incorpora as tabelas e figuras |
-| `tabelas/tabela_01_variantes_anotadas` | variantes aprovadas no filtro, por genitor, com classe (risco, VUS, benigna, não anotada), CLNSIG, estrelas, herança |
-| `tabelas/tabela_01b_vetor_dosagem` | dosagens 0/1/2 por lócus de risco e P(portador) exata |
+| `tabelas/tabela_01_variantes_anotadas` | variantes aprovadas no filtro, por genitor, com classe (risco, VUS, conflitante, benigna, não anotada), CLNSIG, estrelas, herança |
+| `tabelas/tabela_01b_vetor_dosagem` | dosagens 0/1/2 por lócus de risco e P(portador) exata; lócus com genótipo não determinado num genitor aparece marcado como descartado, com a dosagem desconhecida vazia e o motivo em `observacao`, sem entrar no cálculo (TCC 4.3) |
 | `tabelas/tabela_02_aderencia` | exato vs PyMC vs NumPy, erro padrão, desvio em EPs, qui-quadrado do genótipo |
-| `tabelas/tabela_03_risco_vitalicio` | P(portador), penetrância (média e IC), risco vitalício (IC de credibilidade 95 %), idade de início (mediana, p10, p90), combinado |
+| `tabelas/tabela_03_risco_vitalicio` | P(portador), penetrância (média e IC), risco vitalício (IC de credibilidade 95 %; no combinado, percentil dos sorteios de π, o mesmo cálculo da Figura 4), idade de início (mediana, p10, p90), combinado |
 | `tabelas/tabela_04_risco_condicional` (+ `04b` Kaplan-Meier) | por idade atual (0 a 70): P(portador \| assintomático), risco em 10 e 20 anos, vitalício residual |
 | `tabelas/tabela_07_recuperacao_lifelines` | parâmetros π, λ, ρ recuperados pelo modelo de cura mista |
 | `tabelas/tabela_10_kaplan_meier` | S(t) com IC em 40–80 anos, mediana ("não atingida" sob cura mista), idade em que 90 % do risco já ocorreu |
@@ -132,16 +136,18 @@ Por execução (`executar`):
 | `figuras/figura_04_risco_temporal.png` | F(t) e S(t) com banda de credibilidade e Kaplan-Meier sobreposto |
 | `figuras/figura_05_idade_inicio.png` | histograma da idade de início por lócus (por sexo em `tudo`) |
 | `figuras/figura_06_aderencia.png` | barras exato vs Monte Carlo |
-| `figuras/figura_08_hazard.png` | h(t) com a faixa 60–75 anos |
+| `figuras/figura_08_hazard.png` | h(t) com a faixa 60–75 anos (pico de incidência populacional, só referência; comparada apenas com o pico do risco combinado) |
 | `curvas.csv`, `variantes_ingeridas_anotadas.csv`, `metadados.json` | dados brutos e proveniência |
 
-Avaliação (`avaliar`): Tabela 5 (estabilidade por N × 30 sementes vs erro padrão teórico), Tabela 6 (calibração das priors), Tabela 7 (coerência das curvas), Tabela 8 (tempos PyMC × NumPy), Tabela 9 (sensibilidade: literatura × exemplo do orientador × C9orf72 de coorte familiar); Figuras 2 (priors), 3 (G(t) ajustadas vs literatura) e 7 (DP vs N, log-log).
+Avaliação (`avaliar`): Tabela 5 (estabilidade por N × 30 sementes vs erro padrão teórico), Tabela 6 (calibração das priors), Tabela 7 (coerência das curvas, com o pico de h(t) por lócus e do risco combinado; a faixa 60–75 anos só é comparada com o combinado, como referência), Tabela 8 (tempos PyMC × NumPy), Tabela 9 (sensibilidade: literatura × exemplo do orientador × C9orf72 de coorte familiar); Figuras 2 (priors), 3 (G(t) ajustadas vs literatura) e 7 (DP vs N, log-log).
 
 Todas as legendas saem no padrão "Tabela N — ... / Figura N — ...; Fonte: elaborado pela autora (2026)". Números em tabelas usam ponto decimal (padrão do CSV); o texto do TCC pode converter para vírgula.
 
 ## 7. Cenários e resultados
 
 Execução definitiva em 24/10/2026 (`ela-preditivo tudo --saida resultados --seed 42`): 5 cenários × 2 sexos com N = 10.000, avaliação com N ∈ {1.000, 10.000, 100.000} × 30 sementes; 5 min 22 s no total. Índice completo em `../resultados/README.md`; relatório de cada caso em `../resultados/cenarios/cenario_<n>_<sexo>/relatorio.md`; avaliação em `../resultados/avaliacao/relatorio.md`.
+
+> **Nota de 08/11/2026.** Os números desta seção vêm de `resultados/` gerado em 03/11/2026, antes das correções D20 a D29. Ao regenerar (`ela-preditivo tudo`, numa máquina com `dados_reais/`), mudam: o IC do risco combinado, que passa a ser o percentil dos sorteios de π (cenário 3: 39,1 % [28,8–48,6] em vez de [24,9–52,1]; cenário 5: 26,9 % [18,5–35,9] em vez de [16,2–38,2]); a Tabela 7, que ganha a linha do risco combinado e perde a coluna de aprovação por lócus (pico de h(t) do combinado: cenário 1 53,0; cenário 2 62,0; cenário 3 57,5; cenário 5 54,0 anos); o rótulo `conflitante` da SOD1 p.Asp91Ala no cenário 4; e os metadados (release e sha256 da base, lóci descartados, limpeza da pasta). Os valores por lócus não mudam.
 
 ### 7.1 Os cinco cenários (Tabela 3 consolidada)
 
@@ -172,7 +178,7 @@ O que os números mostram:
 |---|---|
 | Aderência teórica (Tabela 2) | maior desvio entre Monte Carlo e valor exato nos 10 casos: 1,39 erros padrão (limite usual 4); qui-quadrado do genótipo sem rejeição; PyMC e NumPy concordam |
 | Estabilidade numérica (Tabela 5, Figura 7) | razão DP observado / EP teórico média de 1,04 nos 5 cenários; no cenário 3 o DP de P(manifestação) cai de 0,0146 (N = 1.000) para 0,0054 (10.000) e 0,0017 (100.000), inclinação −½ em log-log |
-| Coerência das curvas (Tabelas 7 e 10, Figura 4) | risco vitalício por Kaplan-Meier difere de P(C)·π em no máximo 0,006; mediana de início da Weibull da Lifelines difere da exata em até 1,2 ano; o modelo de cura mista recupera π com erro ≤ 3 % (ex.: SOD1 0,526–0,537 vs 0,539; FUS 0,194 vs 0,192), λ e ρ dentro de 4 %; pico de risco do C9orf72 aos 62 anos (dentro da faixa 60–75), SOD1 53, TARDBP 57, FUS 43,5 (início mais precoce, curvas provisórias) |
+| Coerência das curvas (Tabelas 7 e 10, Figura 4) | risco vitalício por Kaplan-Meier difere de P(C)·π em no máximo 0,006; mediana de início da Weibull da Lifelines difere da exata em até 1,2 ano; o modelo de cura mista recupera π com erro ≤ 3 % (ex.: SOD1 0,526–0,537 vs 0,539; FUS 0,194 vs 0,192), λ e ρ dentro de 4 %; pico de h(t): C9orf72 62 anos, SOD1 53, TARDBP 57, FUS 43,5 (início mais precoce, curvas provisórias); a faixa de incidência populacional 60–75 anos (Feldman et al., 2022) é comparada só com o pico do risco combinado, como referência, e não aprova nem reprova variantes |
 | Tempo (Tabela 8) | NumPy: 0,007 s para N = 100.000; PyMC: 0,20 s (1.000), 1,7 s (10.000), 16,4 s (100.000) em modo Python sem g++; caso completo com figuras ≈ 4 s |
 | Sensibilidade (Tabela 9, cenário 3) | risco combinado de 39,1 % com a literatura, 61,5 % com os parâmetros do exemplo do orientador (penetrância 0,90/0,60) e 59,8 % com C9orf72 de coorte familiar (π = 0,90): a escolha da penetrância domina o resultado |
 
@@ -182,7 +188,7 @@ O que os números mostram:
 |---|---|---|
 | Aderência teórica | P(portador) e P(manifesta) simuladas vs fórmulas exatas, em erros padrão; qui-quadrado das frequências de D ∈ {0,1,2} vs CPT; PyMC vs NumPy | Tabela 2, Figura 6, testes `test_nucleo_estocastico.py` |
 | Estabilidade numérica | 30 execuções por N ∈ {1e3, 1e4, 1e5}; DP entre execuções vs √(p(1−p)/N); inclinação −½ em log-log | Tabela 5, Figura 7 |
-| Coerência das curvas | F(∞) = P(C)·π vs Kaplan-Meier; mediana exata vs Weibull da Lifelines; cura mista recupera π, λ, ρ; pico de h(t) vs 60–75 anos | Tabelas 7 e 10, Figura 4 |
+| Coerência das curvas | F(∞) = P(C)·π vs Kaplan-Meier; mediana exata vs Weibull da Lifelines; cura mista recupera π, λ, ρ; pico de h(t) por lócus e do risco combinado (faixa 60–75 só como referência para o combinado) | Tabelas 7 e 10, Figura 4 |
 | Tempo de processamento | por motor e por N | Tabela 8 |
 | Sensibilidade | literatura × parâmetros do exemplo do orientador × C9orf72 familiar (π = 0,9) | Tabela 9 |
 
@@ -198,16 +204,17 @@ ela_preditivo/
     ingestao.py        ler_vcf, carregar_regioes, contar_repeticoes, resumo_ingestao          (camada 1)
     anotacao.py        anotar, classificar_clnsig, estrelas_de_revstat, carregadores ClinVar/dbSNP
     genotipo.py        vetor_dosagem, perfil_variantes
-    calibracao.py      ajustar_beta, ajustar_weibull/lognormal, carregar_parametros (YAML → priors)
+    calibracao.py      ajustar_beta, ajustar_weibull/lognormal (pontos), weibull_de_momentos/quantis (estatísticas), carregar_parametros (YAML → priors)
     exato.py           cpt_segregacao, prob_portador, DistribuicaoInicio, f_acumulada, risco_condicional, hazard
     monte_carlo.py     Locus, ResultadoSimulacao, simular_numpy, repetir, condicionar_idade   (camada 2)
     rede_bayesiana.py  construir_modelo (PyMC), simular_pymc, descrever_dag
     sobrevivencia.py   coorte_sintetica, ajustar_km, MisturaCuraWeibullFitter, curvas_analiticas, tabela_risco_condicional (camada 3)
     avaliacao.py       aderencia, estabilidade, tempos, coerencia, sensibilidade
     relatorio.py       figuras 1 a 8, salvar_tabela, escrever_relatorio, escrever_metadados
-    pipeline.py        executar, avaliar, tudo
-    cli.py             ela-preditivo {gerar-cenarios | executar | avaliar | tudo}
-  tests/               74 testes (pytest)
+    atualizacao.py     baixar_clinvar, registrar_versao, comparar_versoes, atualizar (versões da base ClinVar)
+    pipeline.py        executar, avaliar, tudo (limpam a pasta de saída no início)
+    cli.py             ela-preditivo {gerar-cenarios | executar | avaliar | tudo | atualizar-base}
+  tests/               106 testes (pytest)
 ```
 
 ## 10. Dicionário de dados (colunas principais)
@@ -221,28 +228,29 @@ ela_preditivo/
 | | `posicao_vcf, ref_vcf, alt_vcf, normalizada` | representação original e se foi normalizada (prefixo/sufixo comuns removidos) |
 | | `ac, an, no_dbsnp, montagem` | INFO AC (por ALT), AN e flag DB; montagem identificada no cabeçalho (GRCh38/GRCh37/desconhecida) |
 | | `aprovado, motivo_reprovacao` | fora_das_regioes, genotipo_ausente, filtro_nao_pass, dp_baixo, gq_baixo |
-| anotadas (`anotacao.anotar`) | `classe` | risco (P/LP), vus (VUS ou conflitante), benigna, nao_anotada, intermediaria/normal (repetições) |
+| anotadas (`anotacao.anotar`) | `classe` | risco (P/LP), vus (significado incerto, inclusive VUS-high), conflitante (classificações conflitantes ou mistura de patogênico e benigno), benigna, nao_anotada, intermediaria/normal (repetições) |
 | | `clnsig, estrelas, revstat, n_submissores, conflito, heranca, allele_id, freq_alfa, fonte_anotacao` | classificação ClinVar, estrelas, estado de revisão, nº de submissores, classificações conflitantes, herança (tabela curada), AlleleID, frequência ALFA, fonte e chave usadas no cruzamento (`clinvar_base_consolidada:posicao_alelos`, `tabela_curada:rs`, `rs_ambiguo:n_alelos`) |
 | vetor de dosagem | `fonte` | `vcf`, `laudo` ou `laudo+vcf` (origem da dosagem do lócus) |
-| vetor de dosagem (`genotipo.vetor_dosagem`) | `dosagem_mae, dosagem_pai, heranca, p_portador_exato` | entrada do nó inicial da Rede Bayesiana |
+| vetor de dosagem (`genotipo.vetor_dosagem`) | `dosagem_mae, dosagem_pai, heranca, p_portador_exato, descartado, observacao` | entrada do nó inicial da Rede Bayesiana; `descartado = True` quando um genitor tem o sítio com genótipo não determinado (dosagem vazia, motivo em `observacao`; o lócus não entra no cálculo, TCC 4.3) |
 | resumo (`ResultadoSimulacao.resumo`) | `p_portador_exato/mc, ep_portador` | transmissão exata, simulada e erro padrão |
 | | `penetrancia_media/q025/q975` | prior Beta: média e IC 95 % |
 | | `p_manifesta_exato/mc/q025/q975` | risco vitalício e intervalo de credibilidade |
 | | `idade_mediana_exata/mc, idade_p10/p90_mc` | idade de início entre os que manifestam |
 | curvas (`sobrevivencia.curvas_analiticas`) | `t, F, S, h, F_q025, F_mediana, F_q975` | curvas por unidade (lócus ou "qualquer lócus") |
 | risco condicional | `idade_atual, p_portador_condicional, risco_10_anos, risco_20_anos, risco_vitalicio (+q025/q975)` | Tabela 4 |
+| `metadados.json` | `base_anotacao (arquivo_base_real, release_base_real, sha256_base_real), loci_descartados, saida_limpa` | proveniência: versão da base usada, lóci descartados por genótipo indeterminado e o que foi apagado da pasta antes de gravar |
 
 ## 11. Testes
 
 ```bash
-pytest -q ela_preditivo/tests        # 96 testes, ~15 s (5 deles só rodam com dados_reais/ presente)
+pytest -q ela_preditivo/tests        # 106 testes, ~15 s (5 deles só rodam com dados_reais/ presente)
 ```
 
-Cobrem: CPT e fórmulas exatas; calibração (Beta reproduz ponto e limite inferior do IC; Weibull recupera parâmetros conhecidos e a mediana de 58 anos de Murphy); geração e leitura dos VCFs (normalização de cromossomo, regiões, multialélicos, expansão, filtros); anotação (classes, estrelas, cruzamento por posição e por rs, limiar de repetições, carregador de `variant_summary`); vetor de dosagem nos 5 cenários; aderência PyMC ≈ NumPy ≈ exato; recessividade; reprodutibilidade por seed; efeito do sexo; condicionamento por idade; Lifelines (censura, KM = F(∞), cura mista recupera π, λ, ρ; risco condicional KM ≈ analítico); pipeline e CLI de ponta a ponta.
+Cobrem: CPT e fórmulas exatas; calibração (Beta reproduz ponto e limite inferior do IC; Weibull recupera parâmetros conhecidos e a mediana de 58 anos de Murphy); geração e leitura dos VCFs (normalização de cromossomo, regiões, multialélicos, expansão, filtros); anotação (classes, estrelas, cruzamento por posição e por rs, limiar de repetições, carregador de `variant_summary`); vetor de dosagem nos 5 cenários; aderência PyMC ≈ NumPy ≈ exato; recessividade; reprodutibilidade por seed; efeito do sexo; condicionamento por idade; Lifelines (censura, KM = F(∞), cura mista recupera π, λ, ρ; risco condicional KM ≈ analítico); pipeline e CLI de ponta a ponta; correções da revisão de 08/11/2026, um teste por item (`test_correcoes_revisao.py`: genótipo indeterminado, classe conflitante, estatísticas em forma fechada, N pequeno sem ajuste da Lifelines, DataFrame como tabela curada, limpeza da pasta, limiares do TCC 4.3, faixa 60–75 só no combinado, banda combinada, VUS-high e valores mistos, laudo sem linha de repetição, fileDate fixo); atualização de bases (`test_atualizacao.py`: registro, comparação entre releases, download filtrado a partir de um arquivo local e CLI).
 
 ## 12. Limitações e pontos a confirmar pela autora
 
-1. **Curvas de idade de SOD1, TARDBP e FUS são placeholders** (`confirmar: true`) até a autora transcrever as faixas etárias de Richard et al. (2026). Os pontos intermediários da curva do C9orf72 (45 e 70 anos) foram lidos aproximadamente da figura de Murphy et al. (2017) e devem ser digitalizados.
+1. **Curvas de idade de SOD1, TARDBP e FUS são placeholders** (`confirmar: true`) até a autora transcrever as faixas etárias de Richard et al. (2026). Os pontos intermediários da curva do C9orf72 (45 e 70 anos) foram lidos aproximadamente da figura de Murphy et al. (2017) e devem ser digitalizados. O YAML já aceita, no lugar dos pontos, as estatísticas publicadas — média e desvio padrão (Berdyński et al., 2022) ou mediana e IQR (McFarlane et al., 2025) — resolvidas em forma fechada; adotá-las é decisão da autora (`../docs/04_decisoes.md`, decisão em aberto nº 8).
 2. **Prior Beta vs IC publicado**: os IC de Douglas & Baralle são simétricos em escala logarítmica; a Beta reproduz o ponto (mediana) e o limite inferior, mas subestima o limite superior (SOD1: 0,74 vs 0,886). O erro é reportado na Tabela 6; `calibracao_beta.peso_ponto: 0` no YAML inverte a prioridade (reproduz o IC e desloca a mediana).
 3. **Penetrância do C9orf72**: nível populacional de Douglas & Baralle (0,33); a curva de Murphy (coortes familiares, quase completa aos 80 anos) entra só como forma etária. A Tabela 9 mostra o efeito de usar π = 0,9.
 4. **Independência entre lóci** e ausência de fatores modificadores, oligogenia, mosaicismo, variantes de novo e faseamento.
@@ -253,8 +261,8 @@ Cobrem: CPT e fórmulas exatas; calibração (Beta reproduz ponto e limite infer
 
 ## 13. Trabalhos futuros
 
-Ligação direta ao subconjunto real do ClinVar/dbSNP (seção 4.2) com versionamento das bases; validação externa com dados de coortes (mediante aprovação ética); modelo oligogênico; fatores modificadores (idade dos pais, ancestralidade); interface clínica interativa; empacotamento com Docker.
+Versionamento do dbSNP e execução periódica automática de `atualizar-base` (o ClinVar já tem download, registro de versão e comparação entre releases, `atualizacao.py`); validação externa com dados de coortes (mediante aprovação ética); modelo oligogênico; fatores modificadores (idade dos pais, ancestralidade); interface clínica interativa; empacotamento com Docker.
 
 ## 14. Referências principais (ver lista completa no TCC)
 
-Douglas & Baralle (2024) *J Med Genet* 61:294–297; Murphy et al. (2017) *Sci Rep* 7:2116; Feldman et al. (2022) *Lancet* 400:1363–1380; Goutman et al. (2022) *Lancet Neurol* 21:480–493; Richard et al. (2026) *Genes* 17(5):576; Danecek et al. (2011) *Bioinformatics* 27:2156–2158; Landrum et al. (2018) *NAR* 46:D1062–D1067; Sherry et al. (2001) *NAR* 29:308–311; Pearl (1988); Koller & Friedman (2009); Metropolis & Ulam (1949); Davidson-Pilon (2026) Lifelines 0.30.3; PyMC Development Team (2026); Chapman et al. (2000) CRISP-DM; Hevner et al. (2004); Peffers et al. (2007).
+Douglas & Baralle (2024) *J Med Genet* 61:294–297; Murphy et al. (2017) *Sci Rep* 7:2116; Feldman et al. (2022) *Lancet* 400:1363–1380; Goutman et al. (2022) *Lancet Neurol* 21:480–493; Richard et al. (2026) *Genes* 17(5):576; Danecek et al. (2011) *Bioinformatics* 27:2156–2158; Landrum et al. (2018) *NAR* 46:D1062–D1067; Sherry et al. (2001) *NAR* 29:308–311; Pearl (1988); Koller & Friedman (2009); Metropolis & Ulam (1949); Davidson-Pilon (2026) Lifelines 0.30.3; PyMC Development Team (2026); Chapman et al. (2000) CRISP-DM; Hevner et al. (2004); Peffers et al. (2007); Berdyński et al. (2022) *SOD1 mutations associated with ALS: analysis of variant severity* (média e desvio padrão da idade de início; a confirmar pela autora); McFarlane et al. (2025) *ALS & FTD* 26(sup. 1):41–49, DOI 10.1080/21678421.2025.2450805 (mediana e IQR; a confirmar pela autora).

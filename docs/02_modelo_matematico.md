@@ -62,13 +62,23 @@ Entrada: pontos `(t_i, pen_i)` da literatura (Murphy 2017 para C9orf72, digitali
 
 Valores de partida provisórios (até a autora confirmar com Richard et al. 2026): C9orf72 mediana ≈ 58 anos (Murphy); SOD1 ≈ 50; TARDBP ≈ 54; FUS ≈ 44 (início mais precoce). Todos com `confirmar: true` no YAML.
 
+### Distribuição de início a partir de estatísticas publicadas (forma fechada; 08/11/2026, D22)
+
+Quando a literatura publica estatísticas e não pontos de curva (Berdyński et al. 2022: média e desvio padrão da idade de início; McFarlane et al. 2025: mediana e IQR), `calibracao.ajustar_inicio(estatisticas=...)` resolve (k, λ) sem ajuste numérico de curva:
+
+- **Momentos** `{media: m, dp: s}`: `CV² = s²/m² = Γ(1 + 2/k)/Γ(1 + 1/k)² − 1` depende só de k e decresce com k → k por bissecção (`scipy.optimize.brentq` em [0,1; 500]); depois `λ = m / Γ(1 + 1/k)`.
+- **Quantis** `{mediana: Q₂, iqr: Q₃ − Q₁}` (casamento de quantis): com `Q(p) = λ(−ln(1 − p))^{1/k}`, `IQR/Q₂ = [(ln 4)^{1/k} − (ln 4/3)^{1/k}] / (ln 2)^{1/k}` depende só de k e decresce com k → k por bissecção; depois `λ = Q₂ / (ln 2)^{1/k}`.
+- Log-normal alternativa (coluna da Tabela 6): momentos `σ² = ln(1 + CV²)`, `μ = ln m − σ²/2`; quantis `μ = ln Q₂`, `σ = asenh(IQR / 2Q₂) / z₀,₇₅`.
+
+No YAML: `inicio: {distribuicao: weibull, estatisticas: {media: 50.2, dp: 10.6}}` ou `estatisticas: {mediana: 58.30, iqr: 16.23}`, no lugar de `pontos` (exatamente um dos dois por gene). A Tabela 6 informa `metodo_inicio` (pontos, momentos ou quantis); sem pontos não há soma de quadrados residual. Os pontos continuam valendo para o C9orf72 (curva de Murphy) e, se a autora preferir, para o FUS.
+
 **Reconciliação Murphy × Douglas & Baralle (C9orf72)**: Douglas & Baralle fornecem π (nível populacional, 0,33); Murphy fornece apenas a forma de G(t). Análise de sensibilidade adicional com π = 0,9 ("cenário familiar") para mostrar o efeito da escolha.
 
 ## 3. Modelo de cura mista e projeção temporal
 
 - `F(t) = P(C=1) · π · G(t)` é a probabilidade de o descendente ter manifestado até a idade t; `S(t) = 1 − F(t)`.
 - `F(∞) = P(C=1) · π` (fração que manifesta); `1 − F(∞)` é a "fração curada" (nunca manifesta). Consequência: a mediana de sobrevivência é infinita quando `F(∞) < 0,5`; reportar percentis (ex.: idade em que F atinge 90% de F(∞)) e risco condicional em vez da mediana.
-- Função de risco (hazard): `h(t) = f(t) / S(t)`, com `f = dF/dt`; usado na figura de pico de risco (esperado entre 60–75 anos).
+- Função de risco (hazard): `h(t) = f(t) / S(t)`, com `f = dF/dt`; usado na figura de pico de risco. A faixa 60–75 anos é o pico de incidência populacional (Feldman et al., 2022) e só é comparada, como referência, com o pico de h(t) do **risco combinado** de cada cenário; o pico de cada variante é propriedade da sua própria G(t) e não é aprovado nem reprovado por essa faixa (D25).
 
 ### Condicionamento à idade atual a (assintomático)
 
@@ -109,7 +119,7 @@ with pm.Model(coords={"gene": genes}) as modelo:
     idata = pm.sample_prior_predictive(draws=N, random_seed=seed)
 ```
 
-Bandas de credibilidade: reutilizar os sorteios `π_j` e calcular `F_j(t) = P(C) · π_j · G(t)`, tomando percentis 2,5 / 50 / 97,5 sobre j.
+Bandas de credibilidade: reutilizar os sorteios `π_j` e calcular `F_j(t) = P(C) · π_j · G(t)`, tomando percentis 2,5 / 50 / 97,5 sobre j. Para o risco combinado (linha "qualquer lócus" da Tabela 3 e curva correspondente da Figura 4) vale a mesma propagação, `F_any,j(t) = 1 − ∏_g (1 − P(C_g) · π_{g,j} · G_g(t))`, com percentis sobre j — e não a combinação dos quantis de cada lócus, que alarga a banda (D26).
 
 Opcional (ilustra "atualização de crenças"): `pm.sample()` em um modelo Beta-Binomial sobre uma coorte sintética de portadores para mostrar o estreitamento da posterior de π.
 
@@ -142,7 +152,7 @@ Construir uma coorte sintética a partir dos sorteios do MC: `duracao = min(T, 9
 
 - **Aderência teórica**: `|P̂_MC(C) − P_exata(C)|` com IC de 95% do MC; teste binomial/qui-quadrado das frequências de D ∈ {0,1,2} vs CPT.
 - **Estabilidade numérica**: para N ∈ {1e3, 1e4, 1e5} e R = 30 sementes: DP entre execuções de P̂(C), P̂(M) e mediana de T; comparar com `EP_teórico = √(p(1−p)/N)`; gráfico log-log (inclinação esperada −1/2).
-- **Coerência das curvas**: mediana/percentis de início (Lifelines) vs literatura por gene; `F(∞) ≈ P(C)·π`; posição do pico de h(t).
+- **Coerência das curvas**: mediana/percentis de início (Lifelines) vs literatura por gene; `F(∞) ≈ P(C)·π`; posição do pico de h(t) por lócus e do risco combinado (a faixa 60–75 anos só para o combinado, como referência; D25).
 - **Tempo de processamento** por cenário e por N (PyMC e NumPy separados).
 
 ## 7. Limitações a declarar na seção 5
