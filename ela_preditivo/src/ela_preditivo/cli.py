@@ -46,6 +46,14 @@ def construir_parser() -> argparse.ArgumentParser:
     t.add_argument("--ns", nargs="+", type=int, default=[1_000, 10_000, 100_000]); t.add_argument("--repeticoes", type=int, default=30)
     t.add_argument("--motor", choices=["pymc", "numpy"], default="pymc"); t.add_argument("--config", default=None); t.add_argument("--idade-atual", type=float, default=30.0)
     _arg_base(t)
+
+    u = sub.add_parser("atualizar-base", help="registra a versão da base ClinVar (release, sha256, instantâneo) e mostra o que mudou desde a anterior")
+    u.add_argument("--base", default=None, metavar="ARQUIVO", help="base local a registrar (padrão: a encontrada em ELA_DADOS_BRUTOS ou dados_reais/)")
+    u.add_argument("--baixar", action="store_true", help="antes, baixa a release mensal do ClinVar (VCF GRCh38 do NCBI) filtrada aos quatro genes para dados_reais/")
+    u.add_argument("--release", default=None, metavar="AAAA-MM-DD", help="release a baixar (padrão: a mais recente) ou rótulo de uma base local sem data no nome/cabeçalho")
+    u.add_argument("--registro", default=None, metavar="DIR", help="pasta do registro de versões (padrão: dados_reais/versoes)")
+    u.add_argument("--destino", default=None, metavar="DIR", help="pasta onde o download é gravado (padrão: dados_reais/)")
+    u.add_argument("--listar", action="store_true", help="só lista as versões registradas")
     return p
 
 
@@ -94,6 +102,26 @@ def main(argv=None) -> int:
         r = pipeline.tudo(args.saida, seed=args.seed, n=args.n, ns=tuple(args.ns), repeticoes=args.repeticoes, motor=args.motor, config=args.config, idade_atual=args.idade_atual,
                           base_clinvar=_base(args))
         print(f"Índice: {r['saida'] / 'README.md'}")
+    elif args.comando == "atualizar-base":
+        from . import anotacao, atualizacao
+        if args.listar:
+            versoes = atualizacao.carregar_registro(args.registro)
+            print("\n".join(f"{v['release']}  {v['arquivo']}  sha256 {v['sha256'][:12]}  {v['n_variantes']} variantes  registrado em {v['registrado_em']}" for v in versoes)
+                  or "nenhuma versão registrada")
+            return 0
+        base = args.base
+        if args.baixar:
+            d = atualizacao.baixar_clinvar(release=args.release, destino=args.destino)
+            base = d["arquivo"]
+            print(f"Baixado: {base} (release {d['release']}; {d['n_registros']} registros dos genes-alvo)")
+        if base is None:
+            base = anotacao.localizar_base_real()
+            if base is None:
+                print("nenhuma base encontrada em ELA_DADOS_BRUTOS/dados_reais; informe --base ARQUIVO ou use --baixar", file=sys.stderr)
+                return 2
+        r = atualizacao.atualizar(base, diretorio=args.registro, release=(None if args.baixar else args.release))
+        print(atualizacao.resumo_texto(r))
+        print(f"\n{AVISO_LEGAL}")
     return 0
 
 
