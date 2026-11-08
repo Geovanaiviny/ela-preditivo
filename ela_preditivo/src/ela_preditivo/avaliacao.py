@@ -83,22 +83,40 @@ def tempos(loci: list[Locus], ns=(1_000, 10_000, 100_000), repeticoes_numpy: int
     return pd.DataFrame(linhas)
 
 
+FAIXA_INCIDENCIA = (60.0, 75.0)   # pico de incidência populacional da ELA (FELDMAN et al., 2022): referência, não critério de aprovação
+
+
+def _idade_pico(curvas: pd.DataFrame, unidade: str) -> float:
+    c = curvas[curvas.unidade == unidade]
+    return float(c.t.iloc[int(np.argmax(c.h.values))])
+
+
 def coerencia(res: ResultadoSimulacao, horizonte: float = 90.0) -> pd.DataFrame:
-    """Coerência das curvas (TCC 4.5): F(∞) exato vs Kaplan-Meier, medianas de início (exata, MC, Weibull da Lifelines),
-    idade do pico de risco h(t) e se cai na faixa de incidência 60–75 anos (FELDMAN et al., 2022)."""
+    """Coerência das curvas (TCC 4.5): F(∞) exato vs Kaplan-Meier, medianas de início (exata, Weibull da Lifelines),
+    parâmetros recuperados pelo modelo de cura mista e idade do pico de h(t), por lócus e para o risco combinado.
+
+    A faixa de incidência populacional 60–75 anos (FELDMAN et al., 2022) é comparada apenas com o pico do risco
+    combinado (`pico_combinado_na_faixa_60_75`, preenchida só na linha "qualquer lócus"): o pico de cada variante é
+    propriedade da sua própria distribuição de início (SOD1 p.Ala5Val e FUS têm início precoce) e não é aprovado nem
+    reprovado por essa faixa."""
     km = sobrevivencia.tabela_km(res, horizonte).set_index("unidade")
     rec = sobrevivencia.recuperacao_parametros(res, horizonte).set_index("variante")
     curvas = sobrevivencia.curvas_analiticas(res, horizonte)
     linhas = []
     for l in res.loci:
-        c = curvas[curvas.unidade == l.rotulo]
-        pico = float(c.t.iloc[int(np.argmax(c.h.values))])
         r = rec.loc[l.rotulo]
         linhas.append({"variante": l.rotulo, "F_inf_exato": l.p_manifesta_exato, "risco_vitalicio_km": km.loc[l.rotulo, "risco_vitalicio_km"],
                        "idade_mediana_exata": l.dist.mediana, "idade_mediana_weibull_lifelines": r.get("mediana_weibull_manifestantes", np.nan),
                        "pi_recuperado": r.get("pi_lifelines", np.nan), "lambda_recuperado": r.get("lambda_lifelines", np.nan), "rho_recuperado": r.get("rho_lifelines", np.nan),
-                       "idade_pico_hazard": pico, "pico_em_60_75": bool(60 <= pico <= 75),
+                       "idade_pico_hazard": _idade_pico(curvas, l.rotulo), "pico_combinado_na_faixa_60_75": None,
                        "idade_90pct_do_risco": km.loc[l.rotulo, "idade_90pct_do_risco"], "mediana_sobrevivencia": km.loc[l.rotulo, "mediana_sobrevivencia"]})
+    comb, q = res.resumo_combinado(), sobrevivencia.QUALQUER
+    pico = _idade_pico(curvas, q)
+    linhas.append({"variante": q, "F_inf_exato": comb["p_manifesta_qualquer_exato"], "risco_vitalicio_km": km.loc[q, "risco_vitalicio_km"],
+                   "idade_mediana_exata": np.nan, "idade_mediana_weibull_lifelines": np.nan,
+                   "pi_recuperado": np.nan, "lambda_recuperado": np.nan, "rho_recuperado": np.nan,
+                   "idade_pico_hazard": pico, "pico_combinado_na_faixa_60_75": bool(FAIXA_INCIDENCIA[0] <= pico <= FAIXA_INCIDENCIA[1]),
+                   "idade_90pct_do_risco": km.loc[q, "idade_90pct_do_risco"], "mediana_sobrevivencia": km.loc[q, "mediana_sobrevivencia"]})
     return pd.DataFrame(linhas)
 
 

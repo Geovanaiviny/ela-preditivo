@@ -49,12 +49,20 @@ def _locus_laudo_c9orf72(laudo: dict, parametros: Parametros, tabela: pd.DataFra
     pat = anotacao.limiar_patogenico_repeticao(tabela, GENE_EXPANSAO, limiar)
     inter = int(limiar.get("intermediario", 24))
     cand = tabela[(tabela.tipo == "repeticao") & (tabela.gene == GENE_EXPANSAO)]
-    r = cand.iloc[0] if not cand.empty else None
-    d = {"gene": GENE_EXPANSAO, "variante": (r.nome_curto if r is not None else "expansão GGGGCC"), "rs": (r.rs if r is not None else None),
-         "tipo": "repeticao", "heranca": (r.heranca if r is not None and isinstance(r.heranca, str) else parametros.genes[GENE_EXPANSAO].heranca),
+    # a patogenicidade da expansão vem da linha de repetição da tabela de anotação (clnsig, estrelas, citação); o artefato
+    # não a assume por conta própria (TCC 4.2.2): sem a linha, ou com classificação que não sustenta risco, falha com motivo
+    if cand.empty:
+        raise ValueError(f"a tabela de anotação não tem a linha de repetição do {GENE_EXPANSAO} (tipo = repeticao, com clnsig, estrelas e "
+                         "citação): sem ela o laudo não pode ser classificado e o artefato não assume patogenicidade por conta própria (TCC 4.2.2)")
+    r = cand.iloc[0]
+    if anotacao.classificar_clnsig(r.clnsig) != "risco":
+        raise ValueError(f"a linha de repetição do {GENE_EXPANSAO} na tabela de anotação está classificada como {r.clnsig!r}, que não sustenta risco "
+                         "(TCC 4.2.2); o laudo não pode virar lócus de risco sem fonte que o classifique como patogênico")
+    d = {"gene": GENE_EXPANSAO, "variante": (r.nome_curto if isinstance(r.nome_curto, str) else "expansão GGGGCC"),
+         "rs": (r.rs if isinstance(r.rs, str) else None), "tipo": "repeticao",
+         "heranca": (r.heranca if isinstance(r.heranca, str) else parametros.genes[GENE_EXPANSAO].heranca),
          "dosagem_mae": 0, "dosagem_pai": 0, "repeticoes_mae": None, "repeticoes_pai": None,
-         "clnsig": (r.clnsig if r is not None else "Pathogenic"), "estrelas": (int(r.estrelas) if r is not None else 0),
-         "fonte": "laudo", "observacao": ""}
+         "clnsig": r.clnsig, "estrelas": int(r.estrelas), "fonte": "laudo", "observacao": ""}
     classes = []
     for lado in ("mae", "pai"):
         valor = laudo.get(lado)
@@ -76,12 +84,24 @@ def _locus_laudo_c9orf72(laudo: dict, parametros: Parametros, tabela: pd.DataFra
     return None
 
 
+def _sem_genotipo(df: pd.DataFrame) -> pd.Series:
+    """Registros cujo genótipo não foi determinado no VCF (GT ausente ou './.', marcados `genotipo_ausente` na ingestão)."""
+    sem = df["dosagem"].isna() if "dosagem" in df else pd.Series(False, index=df.index)
+    if "motivo_reprovacao" in df:
+        sem = sem | df["motivo_reprovacao"].fillna("").astype(str).str.contains("genotipo_ausente")
+    return sem.fillna(False).astype(bool)
+
+
 def vetor_dosagem(anotadas_mae: pd.DataFrame, anotadas_pai: pd.DataFrame, parametros: Parametros,
                   laudo_c9orf72: dict | None = None, tabela: pd.DataFrame | None = None) -> pd.DataFrame:
     """Uma linha por lócus de risco (classe "risco", aprovado no filtro) presente em pelo menos um genitor.
 
-    Colunas: gene, variante, rs, heranca, tipo, repeticoes_mae/pai, dosagem_mae, dosagem_pai, fonte, p_portador_exato, observacao.
+    Colunas: gene, variante, rs, heranca, tipo, repeticoes_mae/pai, dosagem_mae, dosagem_pai, fonte, p_portador_exato, descartado, observacao.
     A herança vem da anotação (ex.: SOD1 p.D91A recessiva) e, na falta dela, do gene no YAML.
+
+    Sítio de risco com genótipo não determinado (GT ausente ou './.') em qualquer genitor: o lócus inteiro é descartado do
+    cálculo (TCC 4.3) — nunca vale como dosagem 0 — e permanece na tabela com `descartado = True`, a dosagem desconhecida
+    vazia e o motivo em `observacao`; `monte_carlo.loci_de_vetor` ignora essas linhas.
 
     `laudo_c9orf72`: {"mae": <repetições>, "pai": <repetições>} vindo do laudo laboratorial (TCC 4.2.1); cada valor
     pode ser um inteiro (maior alelo) ou um par de inteiros. Genitor ausente do dicionário = sem laudo. O laudo prevalece
@@ -129,15 +149,42 @@ def vetor_dosagem(anotadas_mae: pd.DataFrame, anotadas_pai: pd.DataFrame, parame
                 loci[CHAVE_EXPANSAO] = do_vcf
             else:
                 warnings.warn("laudo do C9orf72 sem expansão, mas o VCF trazia uma; prevalece o laudo (lócus descartado)", stacklevel=2)
+    # TCC 4.3: sítio com genótipo não determinado em qualquer genitor → o lócus inteiro é descartado do cálculo e fica
+    # registrado (dosagem desconhecida vazia, `descartado = True`, motivo em `observacao`); nunca vale como dosagem 0
+    rotulo_lado = {"mae": "mãe", "pai": "pai"}
+    for lado, df_lado in (("mae", anotadas_mae), ("pai", anotadas_pai)):
+        sel = df_lado[_sem_genotipo(df_lado) & (df_lado.classe == "risco") & df_lado.gene.notna()]
+        for _, v in sel.iterrows():
+            k = _chave(v)
+            if k == CHAVE_EXPANSAO and lado in laudo:      # a expansão desse genitor é determinada pelo laudo (D16)
+                continue
+            d = loci.get(k)
+            if d is None:
+                d = loci[k] = {"gene": v.gene, "variante": v.nome_curto or k, "rs": v.rs_tabela or v.id, "tipo": v.tipo,
+                               "heranca": v.heranca if isinstance(v.heranca, str) else parametros.genes[v.gene].heranca,
+                               "dosagem_mae": 0, "dosagem_pai": 0, "repeticoes_mae": None, "repeticoes_pai": None,
+                               "estrelas": int(v.estrelas) if pd.notna(v.estrelas) else 0, "clnsig": v.clnsig, "fonte": "vcf", "observacao": ""}
+            d[f"dosagem_{lado}"] = None
+            lados = d.setdefault("lados_indeterminados", [])
+            if rotulo_lado[lado] not in lados:
+                lados.append(rotulo_lado[lado])
+    for d in loci.values():
+        lados = d.pop("lados_indeterminados", None)
+        d["descartado"] = bool(lados)
+        if lados:
+            msg = f"genótipo não determinado no VCF ({' e '.join(lados)}); lócus descartado do cálculo, sem atribuir dosagem 0 (TCC 4.3)"
+            d["observacao"] = (d["observacao"] + "; " if d["observacao"] else "") + msg
+            warnings.warn(f"{d['gene']} {d['variante']}: {msg}", stacklevel=2)
     # dosagem 0 em ambos (ex.: variante de risco registrada como 0/0 nos dois) não é lócus informativo
-    linhas = [d for d in loci.values() if d["dosagem_mae"] + d["dosagem_pai"] > 0]
+    linhas = [d for d in loci.values() if d["descartado"] or d["dosagem_mae"] + d["dosagem_pai"] > 0]
     for d in linhas:
-        d["p_portador_exato"] = prob_portador(d["dosagem_mae"], d["dosagem_pai"], d["heranca"])
+        d["p_portador_exato"] = np.nan if d["descartado"] else prob_portador(d["dosagem_mae"], d["dosagem_pai"], d["heranca"])
     cols = ["gene", "variante", "rs", "tipo", "heranca", "dosagem_mae", "dosagem_pai", "repeticoes_mae", "repeticoes_pai",
-            "clnsig", "estrelas", "fonte", "p_portador_exato", "observacao"]
+            "clnsig", "estrelas", "fonte", "p_portador_exato", "descartado", "observacao"]
     df = pd.DataFrame(linhas, columns=cols)
-    # dois lóci de risco no mesmo gene: tratados como independentes (limitação registrada no relatório)
-    dup = df.gene.duplicated(keep=False)
+    df["descartado"] = df["descartado"].astype(bool)
+    # dois lóci de risco no mesmo gene (entre os que entram no cálculo): tratados como independentes (limitação registrada no relatório)
+    dup = (~df.descartado) & df.gene.where(~df.descartado).duplicated(keep=False)
     df.loc[dup, "observacao"] = (df.loc[dup, "observacao"] + "; " if df.loc[dup, "observacao"].ne("").any() else "") + "mais de um lócus de risco no gene, tratados como independentes"
     return df.reset_index(drop=True)
 

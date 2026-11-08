@@ -122,7 +122,11 @@ def figura_curvas_inicio(parametros: Parametros, caminho: Path, legenda: str = "
     for ax, (nome, g), cor in zip(axes.ravel(), parametros.genes.items(), CORES):
         ax.plot(t, g.inicio.cdf(t), color=cor, lw=2, label=f"{g.inicio.tipo} ajustada (mediana {g.inicio.mediana:.1f} anos)")
         pts = np.array(g.inicio_pontos, float)
-        ax.scatter(pts[:, 0], pts[:, 1], color="black", zorder=5, label="pontos da literatura" + (" (provisórios)" if g.inicio_confirmar else ""))
+        if pts.size:
+            ax.scatter(pts[:, 0], pts[:, 1], color="black", zorder=5, label="pontos da literatura" + (" (provisórios)" if g.inicio_confirmar else ""))
+        elif g.inicio_estatisticas:    # G(t) em forma fechada a partir de estatísticas publicadas (sem pontos de curva)
+            ax.axvline(g.inicio.mediana, color="black", ls=":", lw=1,
+                       label="estatísticas publicadas: " + ", ".join(f"{k} {v:g}" for k, v in g.inicio_estatisticas.items()) + (" (provisórias)" if g.inicio_confirmar else ""))
         if nome in ex:
             d = DistribuicaoInicio("weibull", k=ex[nome]["weibull_k"], lam=ex[nome]["weibull_lam"])
             ax.plot(t, d.cdf(t), color="gray", ls="--", lw=1.2, label="Weibull do exemplo do orientador")

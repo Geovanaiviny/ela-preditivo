@@ -11,6 +11,8 @@ Quando as duas fontes classificam a mesma variante de forma diferente, prevalece
 """
 from __future__ import annotations
 
+import gzip
+import hashlib
 import re
 import warnings
 from pathlib import Path
@@ -21,7 +23,7 @@ import pandas as pd
 from . import DIR_DADOS, DIR_DADOS_BRUTOS, GENES
 
 CAMINHO_TABELA = DIR_DADOS / "variantes_curadas.csv"
-CLASSES = ("risco", "vus", "benigna", "nao_anotada", "intermediaria", "normal", "nao_classificada")
+CLASSES = ("risco", "vus", "conflitante", "benigna", "nao_anotada", "intermediaria", "normal", "nao_classificada")
 LIMIAR_PADRAO = {"patogenico": 30, "intermediario": 24}
 # Nomes de arquivo reconhecidos em DIR_DADOS_BRUTOS, em ordem de preferência
 ARQUIVOS_BASE_REAL = ("base_consolidada_ela.csv", "clinvar_ela_4genes.csv", "variant_summary.txt", "clinvar_ela_4genes.vcf")
@@ -31,17 +33,23 @@ COLUNAS_TABELA = ["gene", "cromossomo", "posicao_grch38", "ref", "alt", "rs", "v
 
 
 def classificar_clnsig(clnsig) -> str:
-    """Mapa CLNSIG → classe de risco (TCC 4.2: P/LP sustentam risco; VUS e conflitantes não)."""
-    if clnsig is None or (isinstance(clnsig, float) and np.isnan(clnsig)) or str(clnsig).strip() == "":
+    """Mapa CLNSIG → classe (TCC 4.2.2): só Pathogenic/Likely pathogenic sustentam risco; significado incerto ("vus") e
+    classificação conflitante ("conflitante") não sustentam e são contadas em separado (Quadro 15 do TCC).
+
+    Ordem dos testes: vazio → "conflicting" ou patogênico e benigno misturados no mesmo valor → patogênico → benigno →
+    incerto (Uncertain significance, VUS, VUS-high, Uncertain risk allele) → demais valores (not provided, risk factor...).
+    """
+    if clnsig is None or (isinstance(clnsig, float) and np.isnan(clnsig)) or str(clnsig).strip() in ("", "-"):
         return "nao_classificada"
     s = str(clnsig).lower().replace(" ", "_")
-    if "conflicting" in s:
-        return "vus"
-    if "pathogenic" in s and "benign" not in s:
+    patogenico, benigno = "pathogenic" in s, "benign" in s
+    if "conflicting" in s or (patogenico and benigno):
+        return "conflitante"
+    if patogenico:
         return "risco"
-    if "benign" in s:
+    if benigno:
         return "benigna"
-    if "uncertain" in s:
+    if "uncertain" in s or "vus" in s:
         return "vus"
     return "nao_classificada"
 
@@ -73,9 +81,20 @@ def _completar_colunas(t: pd.DataFrame, fonte: str) -> pd.DataFrame:
 
 
 def carregar_tabela_curada(caminho: str | Path | None = None) -> pd.DataFrame:
-    """Tabela curada (`data/variantes_curadas.csv`): poucas variantes públicas com herança e citação conferidas à mão."""
-    t = pd.read_csv(caminho or CAMINHO_TABELA, dtype={"cromossomo": str, "rs": str, "variation_id_clinvar": str})
-    return _completar_colunas(t, "tabela_curada").reset_index(drop=True)
+    """Tabela curada (`data/variantes_curadas.csv`): poucas variantes públicas com herança e citação conferidas à mão.
+    O caminho lido fica em `attrs["caminho"]` (metadados da execução)."""
+    caminho = Path(caminho) if caminho else CAMINHO_TABELA
+    t = pd.read_csv(caminho, dtype={"cromossomo": str, "rs": str, "variation_id_clinvar": str})
+    t = _completar_colunas(t, "tabela_curada").reset_index(drop=True)
+    t.attrs["caminho"] = str(caminho)
+    return t
+
+
+def _descrever_curada(curada) -> str:
+    """Identificação da tabela curada para os metadados: o caminho, ou o registrado em `attrs` quando é um DataFrame."""
+    if isinstance(curada, pd.DataFrame):
+        return str(curada.attrs.get("caminho", "DataFrame em memória"))
+    return str(curada or CAMINHO_TABELA)
 
 
 def limiar_patogenico_repeticao(tabela: pd.DataFrame, gene: str, limiar: dict | None = None) -> int:
@@ -166,7 +185,7 @@ def resumo_anotacao(anotadas: pd.DataFrame) -> pd.DataFrame:
 def indicadores_qualidade(anotadas: pd.DataFrame) -> dict:
     """Indicadores da verificação de qualidade (TCC 4.2.3): taxa de variantes aprovadas nos filtros, quantas das
     aprovadas foram encontradas na base de anotação e com que estado de revisão (estrelas), proporção de significado
-    incerto entre as anotadas e coerência da montagem declarada no VCF."""
+    incerto e de classificação conflitante (contadas à parte) entre as anotadas e coerência da montagem declarada no VCF."""
     n = int(len(anotadas))
     ap = anotadas[anotadas.aprovado]
     anot = ap[ap.anotada.fillna(False).astype(bool)]
@@ -181,8 +200,9 @@ def indicadores_qualidade(anotadas: pd.DataFrame) -> dict:
         "anotadas": int(len(anot)), "taxa_anotacao": (float(len(anot)) / len(ap) if len(ap) else float("nan")),
         "por_estrelas": {int(k): int(v) for k, v in anot.estrelas.fillna(0).astype(int).value_counts().sort_index().items()},
         "por_classe": {str(k): int(v) for k, v in por_classe.items()},
-        "n_risco": int(por_classe.get("risco", 0)), "n_vus": int(por_classe.get("vus", 0)),
+        "n_risco": int(por_classe.get("risco", 0)), "n_vus": int(por_classe.get("vus", 0)), "n_conflitante": int(por_classe.get("conflitante", 0)),
         "proporcao_vus": (float(por_classe.get("vus", 0)) / len(anot) if len(anot) else float("nan")),
+        "proporcao_conflitante": (float(por_classe.get("conflitante", 0)) / len(anot) if len(anot) else float("nan")),
         "montagem": meta.get("montagem") or (str(anotadas.montagem.iloc[0]) if "montagem" in anotadas and n else None),
         "montagem_coerente": (meta.get("montagem") == meta.get("montagem_esperada")) if meta.get("montagem_esperada") else None,
     }
@@ -203,6 +223,37 @@ def localizar_base_real(diretorio: str | Path | None = None) -> Path | None:
     for p in sorted(d.glob("clinvar*.vcf")) + sorted(d.glob("clinvar*.vcf.gz")):
         return p
     return None
+
+
+def _normalizar_data(texto) -> str | None:
+    """'20260928' ou '2026-09-28' (em qualquer texto) → '2026-09-28'; None se não houver data."""
+    m = re.search(r"(20\d{2})-?(\d{2})-?(\d{2})", str(texto or ""))
+    return f"{m.group(1)}-{m.group(2)}-{m.group(3)}" if m else None
+
+
+def identificar_base(caminho: str | Path) -> dict:
+    """Identidade de um arquivo de base, para a rastreabilidade das versões (TCC 4.2; `atualizacao.py`): nome, tamanho,
+    sha256 e release do ClinVar, lida do cabeçalho `##fileDate` (VCF) ou de uma data no nome do arquivo
+    (`clinvar_20260928.vcf`); None quando não identificável (ex.: `base_consolidada_ela.csv`)."""
+    caminho = Path(caminho)
+    h = hashlib.sha256()
+    with open(caminho, "rb") as f:
+        for bloco in iter(lambda: f.read(1 << 20), b""):
+            h.update(bloco)
+    release, fonte = None, None
+    if ".vcf" in caminho.suffixes or caminho.suffix == ".gz":
+        abrir = gzip.open if caminho.suffix == ".gz" else open
+        with abrir(caminho, "rt", encoding="utf-8", errors="replace") as f:
+            for linha in f:
+                if not linha.startswith("##"):
+                    break
+                if linha.startswith("##fileDate="):
+                    release, fonte = _normalizar_data(linha.split("=", 1)[1]), "##fileDate"
+                    break
+    if release is None and _normalizar_data(caminho.name):
+        release, fonte = _normalizar_data(caminho.name), "nome do arquivo"
+    return {"arquivo": caminho.name, "caminho": str(caminho), "tamanho_bytes": int(caminho.stat().st_size), "sha256": h.hexdigest(),
+            "release": release, "release_fonte": fonte}
 
 
 def _gene_alvo(simbolo: str, genes=GENES) -> str | None:
@@ -314,9 +365,9 @@ def carregar_base_real(caminho: str | Path | None = None, genes=GENES) -> pd.Dat
     caminho = Path(caminho) if caminho else localizar_base_real()
     if caminho is None:
         return None
-    if ".vcf" in caminho.suffixes or caminho.suffix == ".gz":
-        return carregar_clinvar_vcf(caminho, genes)
-    return carregar_variant_summary(caminho, genes)
+    df = carregar_clinvar_vcf(caminho, genes) if (".vcf" in caminho.suffixes or caminho.suffix == ".gz") else carregar_variant_summary(caminho, genes)
+    df.attrs["base"] = identificar_base(caminho)       # rastreabilidade da versão usada (TCC 4.2; atualizacao.py)
+    return df
 
 
 def tabela_anotacao(base_real: str | Path | pd.DataFrame | None | bool = None, curada: str | Path | pd.DataFrame | None = None) -> pd.DataFrame:
@@ -333,7 +384,7 @@ def tabela_anotacao(base_real: str | Path | pd.DataFrame | None | bool = None, c
     if real is None:
         t = cur.copy()
         t["clnsig_curada"], t["divergencia_curada"] = None, None
-        t.attrs["fontes"] = {"base_real": None, "curada": str(curada or CAMINHO_TABELA)}
+        t.attrs["fontes"] = {"base_real": None, "curada": _descrever_curada(curada)}
         return t
     chave = ["cromossomo", "posicao_grch38", "ref", "alt"]
     real = real.copy(); real["clnsig_curada"], real["divergencia_curada"] = None, None
@@ -360,8 +411,10 @@ def tabela_anotacao(base_real: str | Path | pd.DataFrame | None | bool = None, c
         t = pd.concat([real, extra[real.columns].dropna(axis=1, how="all")], ignore_index=True)[real.columns]
     else:
         extra, t = cur.iloc[0:0], real.reset_index(drop=True)
-    t.attrs["fontes"] = {"base_real": str(real.fonte.iloc[0]) if len(real) else None, "curada": str(curada or CAMINHO_TABELA),
-                         "n_real": int(len(real)), "n_curada_extra": int(len(extra))}
+    base = real.attrs.get("base", {})
+    t.attrs["fontes"] = {"base_real": str(real.fonte.iloc[0]) if len(real) else None, "curada": _descrever_curada(curada),
+                         "n_real": int(len(real)), "n_curada_extra": int(len(extra)),
+                         "arquivo_base_real": base.get("arquivo"), "release_base_real": base.get("release"), "sha256_base_real": base.get("sha256")}
     return t
 
 

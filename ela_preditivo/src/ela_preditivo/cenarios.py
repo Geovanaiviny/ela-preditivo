@@ -12,14 +12,16 @@ disponível para testar o caminho secundário (VCF no estilo ExpansionHunter).
 """
 from __future__ import annotations
 
-import datetime as _dt
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
+import yaml
 
 from . import __version__, anotacao
+from .calibracao import CAMINHO_PADRAO
 from .exato import prob_portador
 
 ORDEM_CONTIGS = ["1", "9", "16", "17", "21"]
@@ -132,11 +134,21 @@ def _gt(dosagem: int, alt: str) -> str:
     return {0: "0/0", 1: "0/1", 2: "1/1"}[dosagem]
 
 
-def _cabecalho(amostra: str, descricao: str, contagens_str: set[int]) -> list[str]:
-    hoje = _dt.date.today().strftime("%Y%m%d")
+def data_fixa_vcf(config: str | Path | None = None) -> str:
+    """`fileDate` dos VCFs sintéticos (AAAAMMDD): a data de versão (`data`) do YAML de parâmetros, e não a data de hoje,
+    para que a mesma semente produza o mesmo arquivo byte a byte em qualquer dia (reprodutibilidade, TCC 3.4 e 4.5)."""
+    caminho = Path(config) if config else CAMINHO_PADRAO
+    with open(caminho, encoding="utf-8") as f:
+        data = str(yaml.safe_load(f).get("data", "")).strip()
+    if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", data):
+        raise ValueError(f"{caminho}: o YAML precisa de `data: AAAA-MM-DD` para fixar o fileDate dos VCFs sintéticos")
+    return data.replace("-", "")
+
+
+def _cabecalho(amostra: str, descricao: str, contagens_str: set[int], data_arquivo: str) -> list[str]:
     linhas = [
         "##fileformat=VCFv4.2",
-        f"##fileDate={hoje}",
+        f"##fileDate={data_arquivo}",
         f"##source=ela_preditivo v{__version__} (DADOS SINTETICOS: {descricao})",
         "##reference=GRCh38",
     ]
@@ -162,9 +174,11 @@ def _cabecalho(amostra: str, descricao: str, contagens_str: set[int]) -> list[st
 
 
 def escrever_vcf(caminho: str | Path, amostra: str, variantes: list[VarianteSintetica], rng: np.random.Generator,
-                 descricao: str = "", incluir_ruido: bool = True) -> Path:
+                 descricao: str = "", incluir_ruido: bool = True, data_arquivo: str | None = None) -> Path:
+    """Escreve um VCF 4.2 sintético. `data_arquivo` (AAAAMMDD) é o `##fileDate`; padrão: `data_fixa_vcf()`."""
     caminho = Path(caminho)
     caminho.parent.mkdir(parents=True, exist_ok=True)
+    data_arquivo = data_arquivo or data_fixa_vcf()
     todas = list(variantes) + (list(RUIDO) if incluir_ruido else [])
     contagens_str = {v.repeticoes for v in todas if v.repeticoes}
     registros = []
@@ -188,18 +202,20 @@ def escrever_vcf(caminho: str | Path, amostra: str, variantes: list[VarianteSint
                           f"chr{v.cromossomo}\t{v.posicao}\t{v.rs or '.'}\t{v.ref}\t{v.alt}\t{qual}\t{filtro}\t{info}\t{formato}\t{dados}"))
     registros.sort()
     with open(caminho, "w", encoding="utf-8") as f:
-        f.write("\n".join(_cabecalho(amostra, descricao, contagens_str) + [r[2] for r in registros]) + "\n")
+        f.write("\n".join(_cabecalho(amostra, descricao, contagens_str, data_arquivo) + [r[2] for r in registros]) + "\n")
     return caminho
 
 
-def gerar_cenarios(dir_saida: str | Path, seed: int = 2026, incluir_ruido: bool = True) -> pd.DataFrame:
+def gerar_cenarios(dir_saida: str | Path, seed: int = 2026, incluir_ruido: bool = True, config: str | Path | None = None) -> pd.DataFrame:
     """Gera os VCFs materno e paterno de cada cenário. Cada genitor recebe os lóci de risco do outro com GT 0/0.
 
     O índice `cenarios.csv` traz também `c9orf72_mae` e `c9orf72_pai` (repetições do laudo; vazio = sem laudo),
-    que devem ser passados a `pipeline.executar(..., laudo_c9orf72=...)`.
+    que devem ser passados a `pipeline.executar(..., laudo_c9orf72=...)`. O `##fileDate` dos arquivos é fixo
+    (`data_fixa_vcf(config)`), de modo que a mesma semente gera os mesmos bytes em qualquer dia.
     """
     dir_saida = Path(dir_saida)
     rng = np.random.default_rng(seed)
+    data_arquivo = data_fixa_vcf(config)
     linhas = []
     for c in CENARIOS:
         loci = {v.rotulo: v for v in c.pai + c.mae}
@@ -208,7 +224,7 @@ def gerar_cenarios(dir_saida: str | Path, seed: int = 2026, incluir_ruido: bool 
             proprias = {v.rotulo: v for v in lista}
             registros = [proprias.get(r, loci[r].com_dosagem(0)) for r in loci]
             caminho = escrever_vcf(dir_saida / f"cenario_{c.numero}_{lado}.vcf", lado.upper(), registros, rng,
-                                   descricao=f"cenario {c.numero}, {lado}: {c.descricao}", incluir_ruido=incluir_ruido)
+                                   descricao=f"cenario {c.numero}, {lado}: {c.descricao}", incluir_ruido=incluir_ruido, data_arquivo=data_arquivo)
             por_lado[lado] = caminho
         linhas.append({"numero": c.numero, "nome": c.nome, "descricao": c.descricao,
                        "vcf_mae": str(por_lado["mae"]), "vcf_pai": str(por_lado["pai"]),

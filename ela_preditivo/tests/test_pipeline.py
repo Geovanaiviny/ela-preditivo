@@ -48,3 +48,9 @@ def test_avaliar_reduzido(dir_cenarios, tmp_path):
     assert set(r["estabilidade"].n) == {500, 1000} and r["pulados"] == []
     assert {"tabela_05_estabilidade", "tabela_06_calibracao", "tabela_07_coerencia", "tabela_08_tempos", "tabela_09_sensibilidade"} <= {t["nome"] for t in r["tabelas"]}
     assert len(r["figuras"]) == 3
+    # item B7: a faixa 60–75 só é comparada com o risco combinado, e o relatório diz que não é critério de aprovação
+    assert "pico_em_60_75" not in r["coerencia"].columns and (r["coerencia"].variante == "qualquer lócus").sum() == 1
+    texto = (tmp_path / "av" / "relatorio.md").read_text(encoding="utf-8")
+    assert "não critério de aprovação" in texto and "pico_combinado_na_faixa_60_75" in texto
+    # item A5: metadados registram a limpeza da pasta
+    assert "saida_limpa" in json.loads((tmp_path / "av" / "metadados.json").read_text(encoding="utf-8"))

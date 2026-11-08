@@ -63,6 +63,8 @@ def loci_de_vetor(vetor: pd.DataFrame, parametros: Parametros, sexo: str | None 
     """
     loci = []
     for _, v in vetor.iterrows():
+        if bool(v.get("descartado", False)):       # genótipo não determinado num genitor: lócus fora do cálculo (TCC 4.3)
+            continue
         g = parametros.genes[v.gene]
         dist = (distribuicoes or {}).get(v.gene, g.inicio).deslocar(g.delta_sexo.get(sexo, 0.0) if sexo else 0.0)
         loci.append(Locus(gene=v.gene, rotulo=f"{v.gene} {v.variante}", dosagem_mae=int(v.dosagem_mae), dosagem_pai=int(v.dosagem_pai),
@@ -121,12 +123,19 @@ class ResultadoSimulacao:
             })
         return pd.DataFrame(linhas)
 
+    def risco_combinado_por_sorteio(self) -> np.ndarray:
+        """P(manifestação de ≥ 1 lócus) em cada sorteio de π: 1 − ∏_j (1 − P(C_j)·π_ij). É a mesma propagação usada por
+        `sobrevivencia.curvas_analiticas` (em t → ∞), de modo que a banda da Tabela 3 e a da Figura 4 coincidem."""
+        pp = np.array([l.p_portador_exato for l in self.loci], float)
+        return 1 - np.prod(1 - pp[None, :] * self.penetrancia, axis=1)
+
     def resumo_combinado(self) -> dict:
-        """Risco combinado (qualquer lócus) sob independência: exato, simulado e idade do primeiro início."""
+        """Risco combinado (qualquer lócus) sob independência: exato, simulado, banda de 95 % pelo percentil dos sorteios
+        de π (não pela combinação dos quantis de cada lócus, que alarga a banda) e idade do primeiro início."""
         pq = self.manifesta_qualquer.mean()
         idades = self.idade_qualquer[self.manifesta_qualquer]
-        qlo = combinar_independentes(l.p_portador_exato * l.quantis_penetrancia()[0] for l in self.loci)
-        qhi = combinar_independentes(l.p_portador_exato * l.quantis_penetrancia()[1] for l in self.loci)
+        f_any = self.risco_combinado_por_sorteio()
+        qlo, qhi = (float(np.percentile(f_any, 2.5)), float(np.percentile(f_any, 97.5))) if f_any.size else (np.nan, np.nan)
         return {"motor": self.motor, "n": self.n, "seed": self.seed, "sexo": self.sexo, "n_loci": len(self.loci),
                 "p_portador_qualquer_mc": float(self.portador.any(axis=1).mean()),
                 "p_portador_qualquer_exato": combinar_independentes(l.p_portador_exato for l in self.loci),

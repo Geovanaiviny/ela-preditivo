@@ -24,7 +24,7 @@ from Bio.Seq import Seq
 from . import DIR_CONFIG
 
 CAMINHO_REGIOES = DIR_CONFIG / "regioes_genes_grch38.yaml"
-FILTRO_PADRAO = {"dp_minimo": 10, "gq_minimo": 20, "exigir_pass": True}
+FILTRO_PADRAO = {"dp_minimo": 20, "gq_minimo": 30, "exigir_pass": True}   # TCC 4.3; o pipeline passa `filtro_qualidade` do YAML
 MONTAGEM_ESPERADA = "GRCh38"
 RE_STR = re.compile(r"^<STR(\d+)>$", re.IGNORECASE)
 MOTIVO_C9ORF72 = "GGGGCC"

@@ -8,8 +8,8 @@ from ela_preditivo import anotacao, cenarios, genotipo, ingestao
 def test_classificacao_clnsig():
     f = anotacao.classificar_clnsig
     assert f("Pathogenic") == "risco" and f("Likely_pathogenic") == "risco" and f("Pathogenic/Likely_pathogenic") == "risco"
-    assert f("Uncertain_significance") == "vus" and f("Conflicting_classifications_of_pathogenicity") == "vus"
-    assert f("Conflicting classifications of pathogenicity") == "vus"       # grafia do variant_summary (com espaços)
+    assert f("Uncertain_significance") == "vus" and f("Conflicting_classifications_of_pathogenicity") == "conflitante"
+    assert f("Conflicting classifications of pathogenicity") == "conflitante"       # grafia do variant_summary (com espaços); classe própria (Quadro 15)
     assert f("Benign") == "benigna" and f("Likely_benign") == "benigna" and f("Benign/Likely_benign") == "benigna"
     assert f(None) == "nao_classificada" and f("") == "nao_classificada" and f("-") == "nao_classificada"
 
@@ -117,9 +117,9 @@ def test_tabela_anotacao_mescla_clinvar_e_curada(variant_summary_falso):
     # expansão do C9orf72 (sem posição em VCF no ClinVar) vem da tabela curada; variantes curadas ausentes do ClinVar falso também
     assert (t[t.tipo == "repeticao"].fonte == "tabela_curada").all()
     assert set(t[t.fonte == "tabela_curada"].nome_curto) >= {"M337V", "R521C"}
-    # D91A: ClinVar conflitante prevalece (classe vus); herança recessiva e divergência registradas
+    # D91A: ClinVar conflitante prevalece (classe conflitante); herança recessiva e divergência registradas
     d = t[(t.posicao_grch38 == 31667290)].iloc[0]
-    assert d.classe == "vus" and d.heranca == "recessiva" and d.clnsig_curada == "Pathogenic" and "prevalece o ClinVar" in d.divergencia_curada
+    assert d.classe == "conflitante" and d.heranca == "recessiva" and d.clnsig_curada == "Pathogenic" and "prevalece o ClinVar" in d.divergencia_curada
     # A5V: concordante, sem divergência, herança vinda da curada
     a = t[(t.posicao_grch38 == 31659783)].iloc[0]
     assert a.classe == "risco" and a.heranca == "dominante" and pd.isna(a.divergencia_curada) and a.fonte == "clinvar_variant_summary"

@@ -25,13 +25,12 @@ def test_gera_dez_vcfs_e_csv(dir_cenarios):
 
 
 def test_vcfs_sao_reproduziveis(tmp_path):
+    """Mesma semente ⇒ mesmos bytes, inclusive o ##fileDate (fixo, vindo do YAML; antes era a data de hoje)."""
     cenarios.gerar_cenarios(tmp_path / "a", seed=7)
     cenarios.gerar_cenarios(tmp_path / "b", seed=7)
     for n in range(1, 6):
         for lado in ("mae", "pai"):
-            la = [l for l in (tmp_path / "a" / f"cenario_{n}_{lado}.vcf").read_text().splitlines() if not l.startswith("##fileDate")]
-            lb = [l for l in (tmp_path / "b" / f"cenario_{n}_{lado}.vcf").read_text().splitlines() if not l.startswith("##fileDate")]
-            assert la == lb
+            assert (tmp_path / "a" / f"cenario_{n}_{lado}.vcf").read_bytes() == (tmp_path / "b" / f"cenario_{n}_{lado}.vcf").read_bytes()
 
 
 def test_normalizacao_cromossomo_e_regioes():

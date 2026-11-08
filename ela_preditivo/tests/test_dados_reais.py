@@ -13,6 +13,7 @@ def base(base_real):
 
 def test_base_real_carrega_os_quatro_genes(base, base_real):
     assert set(base.gene) == {"SOD1", "C9orf72", "TARDBP", "FUS"} and len(base) > 1000
+    assert (base.classe == "conflitante").sum() > 0 and base.attrs["base"]["sha256"]       # conflitantes contadas à parte; versão identificada
     assert base.fonte.iloc[0] in {"clinvar_base_consolidada", "clinvar_variant_summary", "clinvar_vcf"}
     assert not base.duplicated(["cromossomo", "posicao_grch38", "ref", "alt"]).any()
     assert base.classe.isin(anotacao.CLASSES).all() and (base.classe == "risco").sum() > 100
@@ -31,7 +32,7 @@ def test_variantes_curadas_batem_com_o_clinvar(base):
     assert b.loc[("1", 11022418, "A", "G")].classe == "risco"           # TARDBP p.Met337Val
     assert b.loc[("16", 31191418, "C", "T")].classe == "risco"          # FUS p.Arg521Cys
     assert b.loc[("21", 31659509, "G", "T")].classe == "benigna"        # rs17883296 (exemplo do TCC)
-    assert b.loc[("21", 31667290, "A", "C")].classe == "vus"            # SOD1 p.Asp91Ala: conflitante no ClinVar
+    assert b.loc[("21", 31667290, "A", "C")].classe == "conflitante"    # SOD1 p.Asp91Ala: conflitante no ClinVar (classe própria, Quadro 15)
     # um rs, três alelos no FUS: a chave de coordenadas distingue
     assert len(base[base.rs == "rs121909668"]) >= 2
 
@@ -41,7 +42,7 @@ def test_tabela_mesclada_e_divergencia_d91a(base_real):
         t = anotacao.tabela_anotacao(base_real=base_real)
     assert t.attrs["fontes"]["n_curada_extra"] == 1          # só a expansão do C9orf72 vem da curada
     d = t[(t.posicao_grch38 == 31667290) & (t.alt == "C")].iloc[0]
-    assert d.classe == "vus" and d.heranca == "recessiva" and d.clnsig_curada == "Pathogenic"
+    assert d.classe == "conflitante" and d.heranca == "recessiva" and d.clnsig_curada == "Pathogenic"
     assert t[t.posicao_grch38 == 31659783].iloc[0].heranca == "dominante"
 
 
@@ -55,7 +56,7 @@ def test_cenarios_sinteticos_contra_base_real(dir_cenarios, parametros, base_rea
         e = c.esperado
         if c.numero == 4:
             assert v.empty                                     # D91A conflitante no ClinVar → não sustenta risco (TCC 4.2.2)
-            assert (mae[mae.posicao == 31667290].classe == "vus").all()
+            assert (mae[mae.posicao == 31667290].classe == "conflitante").all()
             continue
         assert set(v.gene) == set(e.gene)
         assert (mae.loc[mae.anotada.fillna(False) & (mae.tipo != "repeticao"), "fonte_anotacao"].str.startswith(esperado_fonte)).all()

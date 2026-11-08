@@ -14,10 +14,10 @@ calibracao_beta:
   citacao: "Os IC de DOUGLAS; BARALLE (2024) são simétricos em escala logarítmica; a Beta não reproduz ponto e IC simultaneamente"
 
 filtro_qualidade:
-  dp_minimo: 10
-  gq_minimo: 20
+  dp_minimo: 20        # profundidade de leitura (FORMAT DP) a partir de 20
+  gq_minimo: 30        # qualidade da chamada de genótipo (FORMAT GQ) a partir de 30; QUAL é qualidade do sítio e não entra como limiar
   exigir_pass: true
-  citacao: "TCC 4.3 (filtro de qualidade de leitura); limiares usuais de boas práticas (VAN DER AUWERA; O'CONNOR, 2020)"
+  citacao: "TCC 4.3 (ingestão e validação): registros com qualidade da chamada (GQ) a partir de 30, profundidade (DP) a partir de 20 e FILTER = PASS"
   confirmar: true
 
 limiar_repeticoes_c9orf72:
