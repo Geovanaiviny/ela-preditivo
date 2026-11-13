@@ -9,6 +9,7 @@ Fontes da base de anotação, em ordem de preferência:
    expansão do C9orf72 (sem posição em VCF no ClinVar) e que, sozinha, mantém o protótipo funcional sem os dados reais.
 Quando as duas fontes classificam a mesma variante de forma diferente, prevalece o ClinVar e a divergência fica registrada.
 """
+
 from __future__ import annotations
 
 import gzip
@@ -26,10 +27,40 @@ CAMINHO_TABELA = DIR_DADOS / "variantes_curadas.csv"
 CLASSES = ("risco", "vus", "conflitante", "benigna", "nao_anotada", "intermediaria", "normal", "nao_classificada")
 LIMIAR_PADRAO = {"patogenico": 30, "intermediario": 24}
 # Nomes de arquivo reconhecidos em DIR_DADOS_BRUTOS, em ordem de preferência
-ARQUIVOS_BASE_REAL = ("base_consolidada_ela.csv", "clinvar_ela_4genes.csv", "variant_summary.txt", "clinvar_ela_4genes.vcf")
-COLUNAS_TABELA = ["gene", "cromossomo", "posicao_grch38", "ref", "alt", "rs", "variation_id_clinvar", "allele_id", "hgvs_c", "hgvs_p",
-                  "nome_curto", "clnsig", "estrelas", "revstat", "n_submissores", "conflito", "heranca", "tipo", "repeticoes_min",
-                  "consequencia", "freq_alfa", "rs_dbsnp_casado", "metodo_dbsnp", "citacao", "conferido_em", "fonte"]
+ARQUIVOS_BASE_REAL = (
+    "base_consolidada_ela.csv",
+    "clinvar_ela_4genes.csv",
+    "variant_summary.txt",
+    "clinvar_ela_4genes.vcf",
+)
+COLUNAS_TABELA = [
+    "gene",
+    "cromossomo",
+    "posicao_grch38",
+    "ref",
+    "alt",
+    "rs",
+    "variation_id_clinvar",
+    "allele_id",
+    "hgvs_c",
+    "hgvs_p",
+    "nome_curto",
+    "clnsig",
+    "estrelas",
+    "revstat",
+    "n_submissores",
+    "conflito",
+    "heranca",
+    "tipo",
+    "repeticoes_min",
+    "consequencia",
+    "freq_alfa",
+    "rs_dbsnp_casado",
+    "metodo_dbsnp",
+    "citacao",
+    "conferido_em",
+    "fonte",
+]
 
 
 def classificar_clnsig(clnsig) -> str:
@@ -123,15 +154,26 @@ def _anotar_repeticao(linha: pd.Series, tabela: pd.DataFrame, limiar: dict) -> d
     base = {"anotada": not cand.empty, "fonte_anotacao": "tabela_curada" if not cand.empty else None}
     if not cand.empty:
         r = cand.iloc[0]
-        base.update({"clnsig": r.clnsig, "estrelas": int(r.estrelas), "heranca": r.heranca, "nome_curto": r.nome_curto,
-                     "hgvs_p": r.hgvs_p, "rs_tabela": r.rs, "citacao": r.citacao})
+        base.update(
+            {
+                "clnsig": r.clnsig,
+                "estrelas": int(r.estrelas),
+                "heranca": r.heranca,
+                "nome_curto": r.nome_curto,
+                "hgvs_p": r.hgvs_p,
+                "rs_tabela": r.rs,
+                "citacao": r.citacao,
+            }
+        )
     pat = limiar_patogenico_repeticao(tabela, linha.gene, limiar)
     base["classe"] = classe_por_repeticoes(linha.repeticoes, pat, int(limiar.get("intermediario", 24)))
     base["limiar_patogenico"] = pat
     return base
 
 
-def anotar(variantes: pd.DataFrame, tabela: pd.DataFrame | None = None, limiar_repeticoes: dict | None = None) -> pd.DataFrame:
+def anotar(
+    variantes: pd.DataFrame, tabela: pd.DataFrame | None = None, limiar_repeticoes: dict | None = None
+) -> pd.DataFrame:
     """Cruza as variantes ingeridas com a tabela de anotação.
 
     Ordem das chaves: (cromossomo, posição, ref, alt) → identificador rs (coluna ID do VCF) → para repetições,
@@ -139,11 +181,30 @@ def anotar(variantes: pd.DataFrame, tabela: pd.DataFrame | None = None, limiar_r
     """
     tabela = tabela_anotacao() if tabela is None else tabela
     limiar = {**LIMIAR_PADRAO, **(limiar_repeticoes or {})}
-    cols = ["clnsig", "estrelas", "revstat", "n_submissores", "conflito", "heranca", "nome_curto", "hgvs_p", "rs_tabela", "allele_id",
-            "freq_alfa", "citacao", "classe", "anotada", "fonte_anotacao", "limiar_patogenico"]
+    cols = [
+        "clnsig",
+        "estrelas",
+        "revstat",
+        "n_submissores",
+        "conflito",
+        "heranca",
+        "nome_curto",
+        "hgvs_p",
+        "rs_tabela",
+        "allele_id",
+        "freq_alfa",
+        "citacao",
+        "classe",
+        "anotada",
+        "fonte_anotacao",
+        "limiar_patogenico",
+    ]
     saida = []
     snv = tabela[tabela.tipo != "repeticao"]
-    por_chave = {(str(r.cromossomo), int(r.posicao_grch38), str(r.ref).upper(), str(r.alt).upper()): r for r in snv.itertuples(index=False)}
+    por_chave = {
+        (str(r.cromossomo), int(r.posicao_grch38), str(r.ref).upper(), str(r.alt).upper()): r
+        for r in snv.itertuples(index=False)
+    }
     por_rs: dict[str, list] = {}
     for r in snv.itertuples(index=False):
         if isinstance(r.rs, str) and r.rs.startswith("rs"):
@@ -158,53 +219,87 @@ def anotar(variantes: pd.DataFrame, tabela: pd.DataFrame | None = None, limiar_r
             chave = "posicao_alelos"
             if r is None and isinstance(v.id, str) and v.id.startswith("rs"):
                 cands = por_rs.get(v.id, [])
-                if len(cands) == 1:          # o rs só é chave complementar (TCC 4.2.2): um rs pode cobrir vários alelos
+                if len(cands) == 1:  # o rs só é chave complementar (TCC 4.2.2): um rs pode cobrir vários alelos
                     r, chave = cands[0], "rs"
                 elif len(cands) > 1:
                     a["fonte_anotacao"] = f"rs_ambiguo:{len(cands)}_alelos"
             if r is not None:
-                a.update({"anotada": True, "fonte_anotacao": f"{r.fonte}:{chave}", "clnsig": r.clnsig,
-                          "estrelas": int(r.estrelas), "revstat": r.revstat, "n_submissores": r.n_submissores, "conflito": r.conflito,
-                          "heranca": r.heranca if isinstance(r.heranca, str) else None,
-                          "nome_curto": r.nome_curto if isinstance(r.nome_curto, str) else None, "hgvs_p": r.hgvs_p, "rs_tabela": r.rs,
-                          "allele_id": r.allele_id, "freq_alfa": r.freq_alfa, "citacao": r.citacao, "classe": classificar_clnsig(r.clnsig)})
+                a.update(
+                    {
+                        "anotada": True,
+                        "fonte_anotacao": f"{r.fonte}:{chave}",
+                        "clnsig": r.clnsig,
+                        "estrelas": int(r.estrelas),
+                        "revstat": r.revstat,
+                        "n_submissores": r.n_submissores,
+                        "conflito": r.conflito,
+                        "heranca": r.heranca if isinstance(r.heranca, str) else None,
+                        "nome_curto": r.nome_curto if isinstance(r.nome_curto, str) else None,
+                        "hgvs_p": r.hgvs_p,
+                        "rs_tabela": r.rs,
+                        "allele_id": r.allele_id,
+                        "freq_alfa": r.freq_alfa,
+                        "citacao": r.citacao,
+                        "classe": classificar_clnsig(r.clnsig),
+                    }
+                )
         saida.append(a)
     extra = pd.DataFrame(saida, index=variantes.index)
     out = pd.concat([variantes, extra], axis=1)
-    out.attrs = dict(variantes.attrs)      # metadados do cabeçalho do VCF (montagem etc.) seguem para o relatório
+    out.attrs = dict(variantes.attrs)  # metadados do cabeçalho do VCF (montagem etc.) seguem para o relatório
     return out
 
 
 def resumo_anotacao(anotadas: pd.DataFrame) -> pd.DataFrame:
     """Tabela 1 do relatório: perfil de variantes por amostra, gene e classe (apenas aprovadas no filtro)."""
     ap = anotadas[anotadas.aprovado]
-    return (ap.groupby(["amostra", "gene", "classe"]).size().rename("n").reset_index()
-            .pivot_table(index=["amostra", "gene"], columns="classe", values="n", fill_value=0).reset_index())
+    return (
+        ap.groupby(["amostra", "gene", "classe"])
+        .size()
+        .rename("n")
+        .reset_index()
+        .pivot_table(index=["amostra", "gene"], columns="classe", values="n", fill_value=0)
+        .reset_index()
+    )
 
 
 def indicadores_qualidade(anotadas: pd.DataFrame) -> dict:
     """Indicadores da verificação de qualidade (TCC 4.2.3): taxa de variantes aprovadas nos filtros, quantas das
     aprovadas foram encontradas na base de anotação e com que estado de revisão (estrelas), proporção de significado
-    incerto e de classificação conflitante (contadas à parte) entre as anotadas e coerência da montagem declarada no VCF."""
+    incerto e de classificação conflitante (contadas à parte) entre as anotadas e coerência da montagem declarada no VCF.
+    """
     n = int(len(anotadas))
     ap = anotadas[anotadas.aprovado]
     anot = ap[ap.anotada.fillna(False).astype(bool)]
     por_classe = ap.classe.value_counts().to_dict()
     meta = anotadas.attrs.get("vcf", {})
     # coerência frequência × classificação (TCC 4.2.2): variante de risco com frequência populacional > 1% é suspeita
-    freq = pd.to_numeric(anot.get("freq_alfa", pd.Series(dtype=float)), errors="coerce") if len(anot) else pd.Series(dtype=float)
+    freq = (
+        pd.to_numeric(anot.get("freq_alfa", pd.Series(dtype=float)), errors="coerce")
+        if len(anot)
+        else pd.Series(dtype=float)
+    )
     incoerentes = int(((anot.classe == "risco") & (freq > 0.01)).sum()) if len(anot) else 0
     return {
         "risco_com_frequencia_acima_1pct": incoerentes,
-        "registros": n, "aprovados": int(len(ap)), "taxa_aprovacao": (float(len(ap)) / n if n else float("nan")),
-        "anotadas": int(len(anot)), "taxa_anotacao": (float(len(anot)) / len(ap) if len(ap) else float("nan")),
-        "por_estrelas": {int(k): int(v) for k, v in anot.estrelas.fillna(0).astype(int).value_counts().sort_index().items()},
+        "registros": n,
+        "aprovados": int(len(ap)),
+        "taxa_aprovacao": (float(len(ap)) / n if n else float("nan")),
+        "anotadas": int(len(anot)),
+        "taxa_anotacao": (float(len(anot)) / len(ap) if len(ap) else float("nan")),
+        "por_estrelas": {
+            int(k): int(v) for k, v in anot.estrelas.fillna(0).astype(int).value_counts().sort_index().items()
+        },
         "por_classe": {str(k): int(v) for k, v in por_classe.items()},
-        "n_risco": int(por_classe.get("risco", 0)), "n_vus": int(por_classe.get("vus", 0)), "n_conflitante": int(por_classe.get("conflitante", 0)),
+        "n_risco": int(por_classe.get("risco", 0)),
+        "n_vus": int(por_classe.get("vus", 0)),
+        "n_conflitante": int(por_classe.get("conflitante", 0)),
         "proporcao_vus": (float(por_classe.get("vus", 0)) / len(anot) if len(anot) else float("nan")),
         "proporcao_conflitante": (float(por_classe.get("conflitante", 0)) / len(anot) if len(anot) else float("nan")),
         "montagem": meta.get("montagem") or (str(anotadas.montagem.iloc[0]) if "montagem" in anotadas and n else None),
-        "montagem_coerente": (meta.get("montagem") == meta.get("montagem_esperada")) if meta.get("montagem_esperada") else None,
+        "montagem_coerente": (
+            (meta.get("montagem") == meta.get("montagem_esperada")) if meta.get("montagem_esperada") else None
+        ),
     }
 
 
@@ -252,8 +347,14 @@ def identificar_base(caminho: str | Path) -> dict:
                     break
     if release is None and _normalizar_data(caminho.name):
         release, fonte = _normalizar_data(caminho.name), "nome do arquivo"
-    return {"arquivo": caminho.name, "caminho": str(caminho), "tamanho_bytes": int(caminho.stat().st_size), "sha256": h.hexdigest(),
-            "release": release, "release_fonte": fonte}
+    return {
+        "arquivo": caminho.name,
+        "caminho": str(caminho),
+        "tamanho_bytes": int(caminho.stat().st_size),
+        "sha256": h.hexdigest(),
+        "release": release,
+        "release_fonte": fonte,
+    }
 
 
 def _gene_alvo(simbolo: str, genes=GENES) -> str | None:
@@ -287,7 +388,8 @@ def carregar_variant_summary(caminho: str | Path, genes=GENES, montagem: str = "
     """Converte `variant_summary.txt` (TSV do ClinVar), `clinvar_ela_4genes.csv` (o mesmo, filtrado) ou
     `base_consolidada_ela.csv` (o mesmo + colunas do VCF e do casamento com o dbSNP, TCC 4.2.2) para o formato da
     tabela de anotação, filtrando pelos genes-alvo e pela montagem. Registros sem posição em VCF (ex.: microssatélites
-    do C9orf72) ficam de fora e são cobertos pela tabela curada. Chaves duplicadas ficam com o maior número de estrelas."""
+    do C9orf72) ficam de fora e são cobertos pela tabela curada. Chaves duplicadas ficam com o maior número de estrelas.
+    """
     caminho = Path(caminho)
     sep = "\t" if caminho.suffix.lower() in (".txt", ".tsv") else ","
     df = pd.read_csv(caminho, sep=sep, dtype=str, keep_default_na=False, encoding="utf-8-sig", low_memory=False)
@@ -300,24 +402,50 @@ def carregar_variant_summary(caminho: str | Path, genes=GENES, montagem: str = "
     df = df[pos.notna() & (pos > 0)].copy()
     ref, alt = df[col["referenceallelevcf"]].str.upper(), df[col["alternateallelevcf"]].str.upper()
     consolidada = "dbsnp_rsid_casado" in col
-    out = pd.DataFrame({
-        "gene": df["_gene"], "cromossomo": df[col["chromosome"]].astype(str),
-        "posicao_grch38": pd.to_numeric(df[col["positionvcf"]]).astype(int), "ref": ref, "alt": alt,
-        "rs": df[col["rs# (dbsnp)"]].map(lambda x: f"rs{x}" if str(x) not in ("-1", "", "-", "nan") else None),
-        "variation_id_clinvar": df[col["variationid"]], "allele_id": df[col["alleleid"]],
-        "hgvs_c": df[col["name"]], "hgvs_p": df[col["name"]].str.extract(r"\((p\.[^)]+)\)")[0],
-        "nome_curto": _nome_curto_de(df[col["name"]]),
-        "clnsig": df[sig].replace({"-": None, "": None}), "estrelas": df[rev].map(estrelas_de_revstat), "revstat": df[rev],
-        "n_submissores": pd.to_numeric(df[col.get("numbersubmitters", col["name"])], errors="coerce") if "numbersubmitters" in col else None,
-        "conflito": (df[col["classificacaoconflitante"]].replace("", None) if "classificacaoconflitante" in col else None),
-        "heranca": None, "tipo": np.where((ref.str.len() == 1) & (alt.str.len() == 1), "snv", "indel"), "repeticoes_min": None,
-        "consequencia": (df[col["molecularconsequence"]].replace("", None) if "molecularconsequence" in col else None),
-        "freq_alfa": (df[col["freq_alfa"]].map(_freq_alelo) if "freq_alfa" in col else (df[col["af_tgp"]].map(_freq_alelo) if "af_tgp" in col else None)),
-        "rs_dbsnp_casado": (df[col["dbsnp_rsid_casado"]].replace("", None) if consolidada else None),
-        "metodo_dbsnp": (df[col["dbsnp_metodo_casamento"]].replace("", None) if consolidada else None),
-        "citacao": f"ClinVar {caminho.name} (release 2026-09-28, GRCh38; TCC 4.2.2)", "conferido_em": None,
-    })
-    out = out.sort_values("estrelas", ascending=False).drop_duplicates(["cromossomo", "posicao_grch38", "ref", "alt"], keep="first")
+    out = pd.DataFrame(
+        {
+            "gene": df["_gene"],
+            "cromossomo": df[col["chromosome"]].astype(str),
+            "posicao_grch38": pd.to_numeric(df[col["positionvcf"]]).astype(int),
+            "ref": ref,
+            "alt": alt,
+            "rs": df[col["rs# (dbsnp)"]].map(lambda x: f"rs{x}" if str(x) not in ("-1", "", "-", "nan") else None),
+            "variation_id_clinvar": df[col["variationid"]],
+            "allele_id": df[col["alleleid"]],
+            "hgvs_c": df[col["name"]],
+            "hgvs_p": df[col["name"]].str.extract(r"\((p\.[^)]+)\)")[0],
+            "nome_curto": _nome_curto_de(df[col["name"]]),
+            "clnsig": df[sig].replace({"-": None, "": None}),
+            "estrelas": df[rev].map(estrelas_de_revstat),
+            "revstat": df[rev],
+            "n_submissores": (
+                pd.to_numeric(df[col.get("numbersubmitters", col["name"])], errors="coerce")
+                if "numbersubmitters" in col
+                else None
+            ),
+            "conflito": (
+                df[col["classificacaoconflitante"]].replace("", None) if "classificacaoconflitante" in col else None
+            ),
+            "heranca": None,
+            "tipo": np.where((ref.str.len() == 1) & (alt.str.len() == 1), "snv", "indel"),
+            "repeticoes_min": None,
+            "consequencia": (
+                df[col["molecularconsequence"]].replace("", None) if "molecularconsequence" in col else None
+            ),
+            "freq_alfa": (
+                df[col["freq_alfa"]].map(_freq_alelo)
+                if "freq_alfa" in col
+                else (df[col["af_tgp"]].map(_freq_alelo) if "af_tgp" in col else None)
+            ),
+            "rs_dbsnp_casado": (df[col["dbsnp_rsid_casado"]].replace("", None) if consolidada else None),
+            "metodo_dbsnp": (df[col["dbsnp_metodo_casamento"]].replace("", None) if consolidada else None),
+            "citacao": f"ClinVar {caminho.name} (release 2026-09-28, GRCh38; TCC 4.2.2)",
+            "conferido_em": None,
+        }
+    )
+    out = out.sort_values("estrelas", ascending=False).drop_duplicates(
+        ["cromossomo", "posicao_grch38", "ref", "alt"], keep="first"
+    )
     out = _completar_colunas(out, "clinvar_base_consolidada" if consolidada else "clinvar_variant_summary")
     return out.sort_values(["cromossomo", "posicao_grch38", "alt"]).reset_index(drop=True)
 
@@ -344,18 +472,38 @@ def carregar_clinvar_vcf(caminho: str | Path, genes=GENES) -> pd.DataFrame:
             if gene is None:
                 continue
             ref, alt = c[3].upper(), c[4].upper()
-            linhas.append({
-                "gene": gene, "cromossomo": c[0].replace("chr", ""), "posicao_grch38": int(c[1]), "ref": ref, "alt": alt,
-                "rs": (f"rs{info['RS']}" if info.get("RS") else None), "variation_id_clinvar": c[2], "allele_id": info.get("ALLELEID"),
-                "hgvs_c": info.get("CLNHGVS"), "hgvs_p": None, "nome_curto": info.get("CLNHGVS"),
-                "clnsig": info.get("CLNSIG"), "estrelas": estrelas_de_revstat(info.get("CLNREVSTAT")), "revstat": info.get("CLNREVSTAT"),
-                "n_submissores": (len(str(info.get("CLNSIGSCV", "")).split("|")) if info.get("CLNSIGSCV") else None),
-                "conflito": info.get("CLNSIGCONF"), "heranca": None, "tipo": ("snv" if len(ref) == 1 and len(alt) == 1 else "indel"),
-                "repeticoes_min": None, "consequencia": info.get("MC"), "freq_alfa": _freq_alelo(info.get("AF_TGP")),
-                "citacao": f"ClinVar {caminho.name} (VCF {montagem or 'GRCh38'}, release 2026-09-28; TCC 4.2.2)",
-            })
+            linhas.append(
+                {
+                    "gene": gene,
+                    "cromossomo": c[0].replace("chr", ""),
+                    "posicao_grch38": int(c[1]),
+                    "ref": ref,
+                    "alt": alt,
+                    "rs": (f"rs{info['RS']}" if info.get("RS") else None),
+                    "variation_id_clinvar": c[2],
+                    "allele_id": info.get("ALLELEID"),
+                    "hgvs_c": info.get("CLNHGVS"),
+                    "hgvs_p": None,
+                    "nome_curto": info.get("CLNHGVS"),
+                    "clnsig": info.get("CLNSIG"),
+                    "estrelas": estrelas_de_revstat(info.get("CLNREVSTAT")),
+                    "revstat": info.get("CLNREVSTAT"),
+                    "n_submissores": (
+                        len(str(info.get("CLNSIGSCV", "")).split("|")) if info.get("CLNSIGSCV") else None
+                    ),
+                    "conflito": info.get("CLNSIGCONF"),
+                    "heranca": None,
+                    "tipo": ("snv" if len(ref) == 1 and len(alt) == 1 else "indel"),
+                    "repeticoes_min": None,
+                    "consequencia": info.get("MC"),
+                    "freq_alfa": _freq_alelo(info.get("AF_TGP")),
+                    "citacao": f"ClinVar {caminho.name} (VCF {montagem or 'GRCh38'}, release 2026-09-28; TCC 4.2.2)",
+                }
+            )
     out = pd.DataFrame(linhas)
-    out = out.sort_values("estrelas", ascending=False).drop_duplicates(["cromossomo", "posicao_grch38", "ref", "alt"], keep="first")
+    out = out.sort_values("estrelas", ascending=False).drop_duplicates(
+        ["cromossomo", "posicao_grch38", "ref", "alt"], keep="first"
+    )
     out = _completar_colunas(out, "clinvar_vcf")
     return out.sort_values(["cromossomo", "posicao_grch38", "alt"]).reset_index(drop=True)
 
@@ -365,12 +513,18 @@ def carregar_base_real(caminho: str | Path | None = None, genes=GENES) -> pd.Dat
     caminho = Path(caminho) if caminho else localizar_base_real()
     if caminho is None:
         return None
-    df = carregar_clinvar_vcf(caminho, genes) if (".vcf" in caminho.suffixes or caminho.suffix == ".gz") else carregar_variant_summary(caminho, genes)
-    df.attrs["base"] = identificar_base(caminho)       # rastreabilidade da versão usada (TCC 4.2; atualizacao.py)
+    df = (
+        carregar_clinvar_vcf(caminho, genes)
+        if (".vcf" in caminho.suffixes or caminho.suffix == ".gz")
+        else carregar_variant_summary(caminho, genes)
+    )
+    df.attrs["base"] = identificar_base(caminho)  # rastreabilidade da versão usada (TCC 4.2; atualizacao.py)
     return df
 
 
-def tabela_anotacao(base_real: str | Path | pd.DataFrame | None | bool = None, curada: str | Path | pd.DataFrame | None = None) -> pd.DataFrame:
+def tabela_anotacao(
+    base_real: str | Path | pd.DataFrame | None | bool = None, curada: str | Path | pd.DataFrame | None = None
+) -> pd.DataFrame:
     """Tabela de anotação usada pelo pipeline: ClinVar real (se disponível) + tabela curada.
 
     - `base_real`: caminho, DataFrame, `None` (procura em `DIR_DADOS_BRUTOS`) ou `False` (só a tabela curada).
@@ -380,14 +534,19 @@ def tabela_anotacao(base_real: str | Path | pd.DataFrame | None | bool = None, c
     - Linhas só da tabela curada (ex.: expansão do C9orf72) entram como estão.
     """
     cur = curada if isinstance(curada, pd.DataFrame) else carregar_tabela_curada(curada)
-    real = None if base_real is False else (base_real if isinstance(base_real, pd.DataFrame) else carregar_base_real(base_real))
+    real = (
+        None
+        if base_real is False
+        else (base_real if isinstance(base_real, pd.DataFrame) else carregar_base_real(base_real))
+    )
     if real is None:
         t = cur.copy()
         t["clnsig_curada"], t["divergencia_curada"] = None, None
         t.attrs["fontes"] = {"base_real": None, "curada": _descrever_curada(curada)}
         return t
     chave = ["cromossomo", "posicao_grch38", "ref", "alt"]
-    real = real.copy(); real["clnsig_curada"], real["divergencia_curada"] = None, None
+    real = real.copy()
+    real["clnsig_curada"], real["divergencia_curada"] = None, None
     idx = {tuple(k): i for i, k in enumerate(real[chave].itertuples(index=False))}
     so_curada = []
     for _, r in cur.iterrows():
@@ -403,18 +562,39 @@ def tabela_anotacao(base_real: str | Path | pd.DataFrame | None | bool = None, c
         real.loc[i, "citacao"] = f"{real.loc[i, 'citacao']}; tabela curada: {r.citacao}"
         if classificar_clnsig(r.clnsig) != classificar_clnsig(real.loc[i, "clnsig"]):
             real.loc[i, "clnsig_curada"] = r.clnsig
-            real.loc[i, "divergencia_curada"] = f"tabela curada: {r.clnsig} ({classificar_clnsig(r.clnsig)}); ClinVar: {real.loc[i, 'clnsig']} ({classificar_clnsig(real.loc[i, 'clnsig'])}); prevalece o ClinVar"
+            real.loc[i, "divergencia_curada"] = (
+                f"tabela curada: {r.clnsig} ({classificar_clnsig(r.clnsig)}); ClinVar: {real.loc[i, 'clnsig']} ({classificar_clnsig(real.loc[i, 'clnsig'])}); prevalece o ClinVar"
+            )
             warnings.warn(f"{r.gene} {r.nome_curto}: {real.loc[i, 'divergencia_curada']}", stacklevel=2)
     if so_curada:
         extra = pd.DataFrame(so_curada, columns=cur.columns).assign(clnsig_curada=None, divergencia_curada=None)
-        # colunas totalmente vazias saem antes do concat (evita o FutureWarning do pandas) e voltam como NaN
-        t = pd.concat([real, extra[real.columns].dropna(axis=1, how="all")], ignore_index=True)[real.columns]
+        # as linhas que vêm só da tabela curada são reindexadas às colunas do ClinVar e têm o dtype alinhado coluna a
+        # coluna: sem isso o pandas precisa inferir o tipo a partir de colunas totalmente vazias e emite FutureWarning
+        extra = extra.reindex(columns=real.columns)
+        for coluna in real.columns:
+            if extra[coluna].isna().all():
+                try:
+                    extra[coluna] = extra[coluna].astype(real[coluna].dtype)
+                except (TypeError, ValueError):
+                    pass
+        # o pandas 2 avisa que vai mudar como infere dtype quando um dos quadros traz coluna totalmente vazia; aqui o
+        # dtype já foi fixado acima e o resultado é reindexado às colunas do ClinVar, então a mudança anunciada não
+        # altera o que sai. O aviso é silenciado neste ponto para não poluir a saída da linha de comando.
+        with warnings.catch_warnings():
+            warnings.filterwarnings("ignore", category=FutureWarning, message=".*empty or all-NA entries.*")
+            t = pd.concat([real, extra], ignore_index=True)[real.columns]
     else:
         extra, t = cur.iloc[0:0], real.reset_index(drop=True)
     base = real.attrs.get("base", {})
-    t.attrs["fontes"] = {"base_real": str(real.fonte.iloc[0]) if len(real) else None, "curada": _descrever_curada(curada),
-                         "n_real": int(len(real)), "n_curada_extra": int(len(extra)),
-                         "arquivo_base_real": base.get("arquivo"), "release_base_real": base.get("release"), "sha256_base_real": base.get("sha256")}
+    t.attrs["fontes"] = {
+        "base_real": str(real.fonte.iloc[0]) if len(real) else None,
+        "curada": _descrever_curada(curada),
+        "n_real": int(len(real)),
+        "n_curada_extra": int(len(extra)),
+        "arquivo_base_real": base.get("arquivo"),
+        "release_base_real": base.get("release"),
+        "sha256_base_real": base.get("sha256"),
+    }
     return t
 
 
@@ -424,7 +604,14 @@ def desdobrar_frequencias(frequency: str) -> list[dict]:
     for bloco in re.split(r"[|;,]\s*", str(frequency or "")):
         partes = bloco.split(":")
         if len(partes) >= 4:
-            itens.append({"alelo": partes[0], "frequencia": float(partes[1]), "contagem": int(float(partes[2])), "estudo": partes[3]})
+            itens.append(
+                {
+                    "alelo": partes[0],
+                    "frequencia": float(partes[1]),
+                    "contagem": int(float(partes[2])),
+                    "estudo": partes[3],
+                }
+            )
     return itens
 
 

@@ -7,6 +7,7 @@ S(t) = 1 − π·(1 − exp(−(t/λ)^ρ)), cuja recuperação dos parâmetros d
 coerência interna do artefato. As curvas analíticas F(t) = P(C)·π·G(t) recebem bandas de credibilidade
 a partir dos sorteios de π (prior Beta).
 """
+
 from __future__ import annotations
 
 import warnings
@@ -33,7 +34,7 @@ class MisturaCuraWeibullFitter(ParametricUnivariateFitter):
     _bounds = [(0.001, 0.999), (1.0, None), (0.1, None)]
 
     def _create_initial_point(self, Ts, E, *args):
-        T = np.asarray(Ts[0] if isinstance(Ts, (tuple, list)) else Ts, dtype=float)   # Lifelines passa (T, None)
+        T = np.asarray(Ts[0] if isinstance(Ts, (tuple, list)) else Ts, dtype=float)  # Lifelines passa (T, None)
         E = np.asarray(E, dtype=bool)
         pi0 = float(np.clip(E.mean() * 1.1 + 0.01, 0.02, 0.95))
         lam0 = float(np.median(T[E])) if E.any() else 60.0
@@ -41,7 +42,7 @@ class MisturaCuraWeibullFitter(ParametricUnivariateFitter):
 
     def _cumulative_hazard(self, params, times):
         pi, lam, rho = params
-        return -anp.log1p(-pi * (1 - anp.exp(-(times / lam) ** rho)))
+        return -anp.log1p(-pi * (1 - anp.exp(-((times / lam) ** rho))))
 
 
 # ---------------------------------------------------------------------------
@@ -98,11 +99,15 @@ def tabela_km(res: ResultadoSimulacao, horizonte: float = 90.0, idades=(40, 50, 
         km = ajustar_km(c, unidade)
         s = km.survival_function_at_times(idades).values
         ci = km.confidence_interval_
-        linha = {"unidade": unidade, "n": len(c), "eventos": int(c.evento.sum()),
-                 "risco_vitalicio_km": float(1 - km.survival_function_at_times([horizonte]).values[0])}
+        linha = {
+            "unidade": unidade,
+            "n": len(c),
+            "eventos": int(c.evento.sum()),
+            "risco_vitalicio_km": float(1 - km.survival_function_at_times([horizonte]).values[0]),
+        }
         for idade, sv in zip(idades, s):
             idx = ci.index[ci.index <= idade]
-            lo, hi = (ci.loc[idx[-1]].values if len(idx) else (np.nan, np.nan))
+            lo, hi = ci.loc[idx[-1]].values if len(idx) else (np.nan, np.nan)
             linha[f"S({idade})"] = float(sv)
             linha[f"IC95 S({idade})"] = f"{lo:.3f}–{hi:.3f}"
         med = km.median_survival_time_
@@ -120,21 +125,36 @@ def recuperacao_parametros(res: ResultadoSimulacao, horizonte: float = 90.0) -> 
     linhas = []
     for j, l in enumerate(res.loci):
         c = coorte[coorte.unidade == l.rotulo]
-        linha = {"variante": l.rotulo, "n_portadores": len(c), "eventos": int(c.evento.sum()),
-                 "pi_entrada": l.pen_media, "lambda_entrada": l.dist.params.get("lam", np.nan), "rho_entrada": l.dist.params.get("k", np.nan),
-                 "delta_sexo": l.dist.delta}
+        linha = {
+            "variante": l.rotulo,
+            "n_portadores": len(c),
+            "eventos": int(c.evento.sum()),
+            "pi_entrada": l.pen_media,
+            "lambda_entrada": l.dist.params.get("lam", np.nan),
+            "rho_entrada": l.dist.params.get("k", np.nan),
+            "delta_sexo": l.dist.delta,
+        }
         mc = ajustar_mistura_cura(c)
         if mc is not None:
-            linha.update({"pi_lifelines": float(mc.pi_), "lambda_lifelines": float(mc.lambda_), "rho_lifelines": float(mc.rho_)})
+            linha.update(
+                {"pi_lifelines": float(mc.pi_), "lambda_lifelines": float(mc.lambda_), "rho_lifelines": float(mc.rho_)}
+            )
             linha["erro_rel_pi"] = abs(linha["pi_lifelines"] - l.pen_media) / l.pen_media
             if l.dist.tipo == "weibull":
                 # a escala recuperada inclui o deslocamento do sexo, por isso comparar com λ + δ aproximadamente
-                linha["erro_rel_lambda"] = abs(linha["lambda_lifelines"] - (l.dist.params["lam"] + l.dist.delta)) / l.dist.params["lam"]
+                linha["erro_rel_lambda"] = (
+                    abs(linha["lambda_lifelines"] - (l.dist.params["lam"] + l.dist.delta)) / l.dist.params["lam"]
+                )
                 linha["erro_rel_rho"] = abs(linha["rho_lifelines"] - l.dist.params["k"]) / l.dist.params["k"]
         wf = ajustar_weibull_manifestantes(c)
         if wf is not None:
-            linha.update({"weibull_lambda_manifestantes": float(wf.lambda_), "weibull_rho_manifestantes": float(wf.rho_),
-                          "mediana_weibull_manifestantes": float(wf.median_survival_time_)})
+            linha.update(
+                {
+                    "weibull_lambda_manifestantes": float(wf.lambda_),
+                    "weibull_rho_manifestantes": float(wf.rho_),
+                    "mediana_weibull_manifestantes": float(wf.median_survival_time_),
+                }
+            )
         linhas.append(linha)
     return pd.DataFrame(linhas)
 
@@ -148,25 +168,49 @@ def curvas_analiticas(res: ResultadoSimulacao, t_max: float = 90.0, passo: float
     linhas = []
     f_por_locus = []
     for j, l in enumerate(res.loci):
-        pen = res.penetrancia[:, j][:, None]                      # (n, 1)
-        f = l.p_portador_exato * pen * l.dist.cdf(t)[None, :]     # (n, T)
+        pen = res.penetrancia[:, j][:, None]  # (n, 1)
+        f = l.p_portador_exato * pen * l.dist.cdf(t)[None, :]  # (n, T)
         f_por_locus.append(f)
         q = np.percentile(f, [2.5, 50, 97.5], axis=0)
-        linhas.append(pd.DataFrame({"unidade": l.rotulo, "t": t, "F": f_acumulada(t, l.p_portador_exato, l.pen_media, l.dist),
-                                    "F_q025": q[0], "F_mediana": q[1], "F_q975": q[2],
-                                    "h": hazard(t, l.p_portador_exato, l.pen_media, l.dist)}))
+        linhas.append(
+            pd.DataFrame(
+                {
+                    "unidade": l.rotulo,
+                    "t": t,
+                    "F": f_acumulada(t, l.p_portador_exato, l.pen_media, l.dist),
+                    "F_q025": q[0],
+                    "F_mediana": q[1],
+                    "F_q975": q[2],
+                    "h": hazard(t, l.p_portador_exato, l.pen_media, l.dist),
+                }
+            )
+        )
     f_any = 1 - np.prod([1 - f for f in f_por_locus], axis=0)
     q = np.percentile(f_any, [2.5, 50, 97.5], axis=0)
     f_any_media = 1 - np.prod([1 - f_acumulada(t, l.p_portador_exato, l.pen_media, l.dist) for l in res.loci], axis=0)
     s = 1 - f_any_media
     h_any = np.gradient(f_any_media, t) / np.clip(s, 1e-12, None)
-    linhas.append(pd.DataFrame({"unidade": QUALQUER, "t": t, "F": f_any_media, "F_q025": q[0], "F_mediana": q[1], "F_q975": q[2], "h": h_any}))
+    linhas.append(
+        pd.DataFrame(
+            {
+                "unidade": QUALQUER,
+                "t": t,
+                "F": f_any_media,
+                "F_q025": q[0],
+                "F_mediana": q[1],
+                "F_q975": q[2],
+                "h": h_any,
+            }
+        )
+    )
     df = pd.concat(linhas, ignore_index=True)
     df["S"] = 1 - df["F"]
     return df
 
 
-def tabela_risco_condicional(res: ResultadoSimulacao, idades_atuais=(0, 20, 30, 40, 50, 60, 70), janelas=(10, 20), horizonte: float = 90.0) -> pd.DataFrame:
+def tabela_risco_condicional(
+    res: ResultadoSimulacao, idades_atuais=(0, 20, 30, 40, 50, 60, 70), janelas=(10, 20), horizonte: float = 90.0
+) -> pd.DataFrame:
     """Tabela 4: para cada idade atual sem sintomas, P(portador | assintomático), risco nos próximos 10/20 anos
     e risco vitalício residual, por lócus e combinado, com banda de 95 % pela incerteza de π."""
     linhas = []
@@ -175,8 +219,11 @@ def tabela_risco_condicional(res: ResultadoSimulacao, idades_atuais=(0, 20, 30, 
         por_locus_media, por_locus_draws = [], []
         for j, l in enumerate(res.loci):
             pen = pen_draws[:, j]
-            linha = {"unidade": l.rotulo, "idade_atual": a,
-                     "p_portador_condicional": prob_portador_condicional(a, l.p_portador_exato, l.pen_media, l.dist)}
+            linha = {
+                "unidade": l.rotulo,
+                "idade_atual": a,
+                "p_portador_condicional": prob_portador_condicional(a, l.p_portador_exato, l.pen_media, l.dist),
+            }
             fa = l.p_portador_exato * pen * float(l.dist.cdf(a))
             riscos = {}
             for jan in list(janelas) + [None]:
@@ -190,7 +237,8 @@ def tabela_risco_condicional(res: ResultadoSimulacao, idades_atuais=(0, 20, 30, 
                 linha[f"risco_{nome}_q025"] = riscos[nome][1]
                 linha[f"risco_{nome}_q975"] = riscos[nome][2]
             linhas.append(linha)
-            por_locus_media.append(l); por_locus_draws.append(pen)
+            por_locus_media.append(l)
+            por_locus_draws.append(pen)
         if len(res.loci) > 1:
             linha = {"unidade": QUALQUER, "idade_atual": a, "p_portador_condicional": np.nan}
             fa_all = [l.p_portador_exato * pen * float(l.dist.cdf(a)) for l, pen in zip(res.loci, por_locus_draws)]
@@ -204,12 +252,15 @@ def tabela_risco_condicional(res: ResultadoSimulacao, idades_atuais=(0, 20, 30, 
                 rd = np.clip((ft_any - fa_any) / (1 - fa_any), 0, 1)
                 nome = "vitalicio" if jan is None else f"{jan}_anos"
                 linha[f"risco_{nome}"] = float(np.clip((ft_med - fa_med) / (1 - fa_med), 0, 1))
-                linha[f"risco_{nome}_q025"] = float(np.percentile(rd, 2.5)); linha[f"risco_{nome}_q975"] = float(np.percentile(rd, 97.5))
+                linha[f"risco_{nome}_q025"] = float(np.percentile(rd, 2.5))
+                linha[f"risco_{nome}_q975"] = float(np.percentile(rd, 97.5))
             linhas.append(linha)
     return pd.DataFrame(linhas)
 
 
-def risco_condicional_km(res: ResultadoSimulacao, idade_atual: float, horizonte: float = 90.0, idades=(10, 20)) -> pd.DataFrame:
+def risco_condicional_km(
+    res: ResultadoSimulacao, idade_atual: float, horizonte: float = 90.0, idades=(10, 20)
+) -> pd.DataFrame:
     """Versão não paramétrica do risco condicional: 1 − S_KM(t)/S_KM(a), por unidade (verificação da Tabela 4)."""
     coorte = coorte_sintetica(res, horizonte)
     linhas = []

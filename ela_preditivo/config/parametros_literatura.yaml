@@ -1,5 +1,8 @@
 # Parâmetros epidemiológicos do artefato. Todo valor tem `citacao` e `confirmar`.
 # confirmar: true  => valor provisório, que a autora precisa validar na literatura antes da versão final.
+# A distribuição de idade de início de cada gene aceita `pontos` ([[idade, fração acumulada], ...], de curva de
+# Kaplan-Meier, faixas etárias ou quartis publicados) OU `estatisticas` ({media, dp} ou {mediana, iqr}, resolvidas
+# em forma fechada) — exatamente uma das duas.
 # Os pontos de `inicio` descrevem a fração acumulada, entre os que manifestam, que já iniciou sintomas na idade t;
 # o nível (penetrância vitalícia) vem de `penetrancia`, nunca dos pontos (ver docs/02_modelo_matematico.md, §2).
 versao: 1
@@ -43,13 +46,12 @@ genes:
     cromossomo: "21"
     heranca: dominante
     tipo_variante: snv
-    penetrancia: {valor: 0.54, ic95: [0.327, 0.886], citacao: "DOUGLAS; BARALLE, 2024, p. 294", confirmar: false}
+    penetrancia: {valor: 0.54, ic95: [0.327, 0.886], citacao: "DOUGLAS; BARALLE, 2024, p. 295, Tabela 1", confirmar: false}
     inicio:
       distribuicao: weibull
-      tipo_pontos: faixas_etarias
-      pontos: [[40, 0.20], [50, 0.50], [60, 0.80], [70, 0.95]]
-      citacao: "PLACEHOLDER: substituir pelas faixas etárias de RICHARD et al., 2026; mediana ~50 anos coerente com FELDMAN et al., 2022"
-      confirmar: true
+      estatisticas: {media: 50.2, dp: 10.6}
+      citacao: "BERDYŃSKI et al., 2022, Tabela 1: idade de início dos 64 portadores de mutação no SOD1 (média 50,2 ± 10,6 anos; faixa 21–75). Weibull resolvida pelos momentos; a mediana implicada (50,9) reproduz a mediana publicada (51,0), que não entrou no ajuste. Corroboram McFARLANE et al., 2025 (mediana 54,19; n = 149) e OPIE-MARTIN et al., 2022 (média 48,9 ± 12,8; n = 1.383). Curva por gene, não por variante: a p.Ala5Val tem início mais precoce (RICHARD et al., 2026)"
+      confirmar: false
     delta_sexo: {M: 0.0, F: 0.0, citacao: "sem evidência específica citada no TCC", confirmar: true}
 
   C9orf72:
@@ -58,12 +60,12 @@ genes:
     tipo_variante: repeticao
     motivo_repeticao: GGGGCC
     intervalo_repeticao_grch38: [27573529, 27573534]
-    penetrancia: {valor: 0.33, ic95: [0.209, 0.532], citacao: "DOUGLAS; BARALLE, 2024, p. 294", confirmar: false}
+    penetrancia: {valor: 0.33, ic95: [0.209, 0.532], citacao: "DOUGLAS; BARALLE, 2024, p. 295, Tabela 1", confirmar: false}
     inicio:
       distribuicao: weibull
       tipo_pontos: kaplan_meier
       pontos: [[35, 0.0], [45, 0.10], [58, 0.50], [70, 0.90], [80, 0.98]]
-      citacao: "MURPHY et al., 2017: 35, 58 e 80 anos vêm do resumo (0%, 50%, quase completa); 45 e 70 anos são leituras aproximadas da curva, a digitalizar da figura"
+      citacao: "MURPHY et al., 2017: 35, 58 e 80 anos vêm do resumo (0%, 50%, quase completa); 45 e 70 anos são leituras aproximadas da curva, a digitalizar da figura. A mediana ajustada (58,3) é compatível com McFARLANE et al., 2025 (59,58), GRASSANO et al., 2022, Figura 1 (62,9) e YAMASHITA; ANDO, 2015, Tabela 1 (média 57)"
       confirmar: true
     delta_sexo: {M: -1.0, F: 1.0, citacao: "GOUTMAN et al., 2022 (homens manifestam ~2 anos mais cedo)", confirmar: false}
 
@@ -71,12 +73,11 @@ genes:
     cromossomo: "1"
     heranca: dominante
     tipo_variante: snv
-    penetrancia: {valor: 0.38, ic95: [0.211, 0.698], citacao: "DOUGLAS; BARALLE, 2024, p. 294", confirmar: false}
+    penetrancia: {valor: 0.38, ic95: [0.211, 0.698], citacao: "DOUGLAS; BARALLE, 2024, p. 295, Tabela 1", confirmar: false}
     inicio:
       distribuicao: weibull
-      tipo_pontos: faixas_etarias
-      pontos: [[40, 0.15], [54, 0.50], [65, 0.80], [75, 0.95]]
-      citacao: "PLACEHOLDER: substituir pelas faixas etárias de RICHARD et al., 2026"
+      estatisticas: {mediana: 58.30, iqr: 16.23}
+      citacao: "McFARLANE et al., 2025 (PRECISION-ALS): mediana da idade de início de 58,30 anos e IQR de 16,23 entre 64 portadores de variante no TARDBP. Weibull resolvida pelo casamento de quantis. Corroboram YAMASHITA; ANDO, 2015, Tabela 1 (média 54; faixa 20–77) e GRASSANO et al., 2022, Figura 1 (mediana 66,6, em coorte de perfil etário mais alto). A CONFERIR: mediana e IQR na Figura 2 do artigo antes da versão final"
       confirmar: true
     delta_sexo: {M: 0.0, F: 0.0, citacao: "sem evidência específica citada no TCC", confirmar: true}
 
@@ -84,11 +85,11 @@ genes:
     cromossomo: "16"
     heranca: dominante
     tipo_variante: snv
-    penetrancia: {valor: 0.19, ic95: [0.130, 0.284], citacao: "DOUGLAS; BARALLE, 2024, p. 294", confirmar: false}
+    penetrancia: {valor: 0.19, ic95: [0.130, 0.284], citacao: "DOUGLAS; BARALLE, 2024, p. 295, Tabela 1", confirmar: false}
     inicio:
       distribuicao: weibull
-      tipo_pontos: faixas_etarias
-      pontos: [[25, 0.15], [44, 0.50], [55, 0.80], [65, 0.95]]
-      citacao: "PLACEHOLDER: substituir pelas faixas etárias de RICHARD et al., 2026; início mais precoce (FELDMAN et al., 2022)"
-      confirmar: true
+      tipo_pontos: quartis_publicados
+      pontos: [[31.0, 0.25], [48.0, 0.50], [62.0, 0.75]]
+      citacao: "GRASSANO et al., 2022, Figura 1 (distribuição acumulada da idade de início): mediana 48,00 anos, primeiro quartil 31,0 e terceiro quartil 62,0 entre os portadores de variante no FUS. Quartis publicados, usados sem derivação. Limitação: a distribuição é bimodal, com picos entre 30–40 e entre 60–70 anos (McFARLANE et al., 2025), e uma Weibull única a descreve de forma aproximada"
+      confirmar: false
     delta_sexo: {M: 0.0, F: 0.0, citacao: "sem evidência específica citada no TCC", confirmar: true}

@@ -3,6 +3,7 @@
 Camadas (TCC, seções 4.3 a 4.6): ingestão e anotação de VCFs parentais; núcleo estocástico
 (Rede Bayesiana + Monte Carlo); análise de sobrevivência; relatório.
 """
+
 from __future__ import annotations
 
 import os

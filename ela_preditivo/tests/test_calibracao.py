@@ -17,11 +17,11 @@ def test_beta_reproduz_ponto_e_ic(gene):
     ponto, ic = PUBLICADOS[gene]
     r = calibracao.ajustar_beta(ponto, ic, peso_ponto=1.0)
     assert r["alpha"] > 0 and r["beta"] > 0
-    assert r["erro_ponto"] < 0.01, r          # mediana = ponto publicado
-    assert r["q025"] == pytest.approx(ic[0], abs=0.01)   # limite inferior reproduzido
-    assert r["erro_ic"] < 0.15, r             # limite superior aproximado (IC publicado é log-simétrico)
+    assert r["erro_ponto"] < 0.01, r  # mediana = ponto publicado
+    assert r["q025"] == pytest.approx(ic[0], abs=0.01)  # limite inferior reproduzido
+    assert r["erro_ic"] < 0.15, r  # limite superior aproximado (IC publicado é log-simétrico)
     r0 = calibracao.ajustar_beta(ponto, ic, peso_ponto=0.0)
-    assert r0["erro_ic"] < 0.005, r0          # com peso 0 a Beta reproduz o IC exatamente
+    assert r0["erro_ic"] < 0.005, r0  # com peso 0 a Beta reproduz o IC exatamente
 
 
 def test_beta_rejeita_ic_inconsistente():
@@ -45,7 +45,7 @@ def test_weibull_murphy_mediana_58():
     assert d.mediana == pytest.approx(58, abs=1.5)
     assert float(d.cdf(80)) >= 0.95
     assert float(d.cdf(35)) < 0.06
-    assert 3 < r["k"] < 12   # curva em S plausível, não degenerada
+    assert 3 < r["k"] < 12  # curva em S plausível, não degenerada
 
 
 def test_lognormal_recupera_parametros_conhecidos():
@@ -70,7 +70,15 @@ def test_carregar_parametros_yaml_padrao():
     assert c9.delta_sexo == {"M": -1.0, "F": 1.0}
     assert c9.distribuicao_sexo("M").mediana == pytest.approx(c9.inicio.mediana - 1.0)
     assert c9.distribuicao_sexo("F").mediana == pytest.approx(c9.inicio.mediana + 1.0)
-    assert p.genes["SOD1"].inicio_confirmar is True  # placeholder até RICHARD et al., 2026
+    # estado da calibração de G(t): SOD1 pelas estatísticas de Berdyński (2022) e FUS pelos quartis publicados de
+    # Grassano (2022) já estão fechados; C9orf72 (dois pontos lidos da figura de Murphy) e TARDBP (mediana e IQR a
+    # conferir no artigo) seguem marcados para confirmação
+    sod1, fus = p.genes["SOD1"], p.genes["FUS"]
+    assert sod1.inicio_estatisticas == {"media": 50.2, "dp": 10.6} and sod1.inicio_confirmar is False
+    assert sod1.inicio.mediana == pytest.approx(50.9, abs=0.2)  # mediana publicada: 51,0
+    assert fus.inicio_confirmar is False and fus.inicio.mediana == pytest.approx(48.0, abs=1.5)
+    assert p.genes["TARDBP"].inicio_estatisticas == {"mediana": 58.30, "iqr": 16.23}
+    assert p.genes["TARDBP"].inicio_confirmar is True and c9.inicio_confirmar is True
     tab = p.tabela_calibracao()
     assert len(tab) == 4 and "valor_provisorio" in tab.columns
     assert p.limiar_repeticoes["patogenico"] == 30

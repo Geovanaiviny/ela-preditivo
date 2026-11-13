@@ -1,5 +1,5 @@
 ##fileformat=VCFv4.2
-##fileDate=20261103
+##fileDate=20261024
 ##source=ela_preditivo v0.1.0 (DADOS SINTETICOS: cenario 3, mae: Pai heterozigoto SOD1 p.Ala5Val × mãe com expansão C9orf72 (45 repetições, laudo; exemplo literal do TCC, 4.5))
 ##reference=GRCh38
 ##contig=<ID=chr1,length=248956422,assembly=GRCh38>

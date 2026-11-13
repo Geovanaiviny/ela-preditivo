@@ -7,7 +7,17 @@ from ela_preditivo import anotacao, cenarios, exato, genotipo, monte_carlo, rede
 
 def _loci(anotados, parametros, numero, sexo=None):
     mae, pai = anotados[numero]
-    return monte_carlo.loci_de_vetor(genotipo.vetor_dosagem(mae, pai, parametros, laudo_c9orf72=cenarios.cenario_por_numero(numero).laudo_c9orf72, tabela=anotacao.tabela_anotacao(base_real=False)), parametros, sexo=sexo)
+    return monte_carlo.loci_de_vetor(
+        genotipo.vetor_dosagem(
+            mae,
+            pai,
+            parametros,
+            laudo_c9orf72=cenarios.cenario_por_numero(numero).laudo_c9orf72,
+            tabela=anotacao.tabela_anotacao(base_real=False),
+        ),
+        parametros,
+        sexo=sexo,
+    )
 
 
 @pytest.mark.parametrize("numero", [1, 2, 3, 4, 5])
@@ -22,7 +32,9 @@ def test_numpy_adere_ao_exato(anotados, parametros, numero):
     fg = res.frequencias_genotipo()
     assert (fg.valor_p > 0.001).all()
     comb = res.resumo_combinado()
-    assert abs(comb["p_manifesta_qualquer_mc"] - comb["p_manifesta_qualquer_exato"]) < 4 * max(comb["ep_manifesta_qualquer"], 1e-3)
+    assert abs(comb["p_manifesta_qualquer_mc"] - comb["p_manifesta_qualquer_exato"]) < 4 * max(
+        comb["ep_manifesta_qualquer"], 1e-3
+    )
 
 
 def test_recessiva_so_homozigoto_manifesta(anotados, parametros):
@@ -34,7 +46,8 @@ def test_recessiva_so_homozigoto_manifesta(anotados, parametros):
 
 def test_reprodutibilidade_por_seed(anotados, parametros):
     loci = _loci(anotados, parametros, 3)
-    a = monte_carlo.simular_numpy(loci, n=2000, seed=11); b = monte_carlo.simular_numpy(loci, n=2000, seed=11)
+    a = monte_carlo.simular_numpy(loci, n=2000, seed=11)
+    b = monte_carlo.simular_numpy(loci, n=2000, seed=11)
     c = monte_carlo.simular_numpy(loci, n=2000, seed=12)
     assert np.array_equal(a.dose, b.dose) and np.allclose(a.idade, b.idade, equal_nan=True)
     assert not np.array_equal(a.dose, c.dose)
@@ -61,7 +74,13 @@ def test_condicionar_idade(anotados, parametros):
 
 def test_penetrancia_fixa_e_sensibilidade(anotados, parametros):
     mae, pai = anotados[1]
-    vetor = genotipo.vetor_dosagem(mae, pai, parametros, laudo_c9orf72=cenarios.cenario_por_numero(1).laudo_c9orf72, tabela=anotacao.tabela_anotacao(base_real=False))
+    vetor = genotipo.vetor_dosagem(
+        mae,
+        pai,
+        parametros,
+        laudo_c9orf72=cenarios.cenario_por_numero(1).laudo_c9orf72,
+        tabela=anotacao.tabela_anotacao(base_real=False),
+    )
     loci = monte_carlo.loci_de_vetor(vetor, parametros, penetrancia_fixa={"SOD1": 0.9})
     res = monte_carlo.simular_numpy(loci, n=20_000, seed=2)
     assert np.all(res.penetrancia == 0.9)

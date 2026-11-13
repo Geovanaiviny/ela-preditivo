@@ -8,7 +8,17 @@ from ela_preditivo.exato import DistribuicaoInicio
 
 def _res(anotados, parametros, numero, n=20_000, sexo=None, seed=4):
     mae, pai = anotados[numero]
-    loci = monte_carlo.loci_de_vetor(genotipo.vetor_dosagem(mae, pai, parametros, laudo_c9orf72=cenarios.cenario_por_numero(numero).laudo_c9orf72, tabela=anotacao.tabela_anotacao(base_real=False)), parametros, sexo=sexo)
+    loci = monte_carlo.loci_de_vetor(
+        genotipo.vetor_dosagem(
+            mae,
+            pai,
+            parametros,
+            laudo_c9orf72=cenarios.cenario_por_numero(numero).laudo_c9orf72,
+            tabela=anotacao.tabela_anotacao(base_real=False),
+        ),
+        parametros,
+        sexo=sexo,
+    )
     return monte_carlo.simular_numpy(loci, n=n, seed=seed)
 
 
@@ -25,8 +35,10 @@ def test_km_risco_vitalicio_bate_com_exato(anotados, parametros):
     t = sobrevivencia.tabela_km(res).set_index("unidade")
     for l in res.loci:
         assert t.loc[l.rotulo, "risco_vitalicio_km"] == pytest.approx(l.p_manifesta_exato, abs=0.02)
-        assert t.loc[l.rotulo, "mediana_sobrevivencia"] == "não atingida"   # risco vitalício < 50 %
-    assert t.loc[sobrevivencia.QUALQUER, "risco_vitalicio_km"] == pytest.approx(res.resumo_combinado()["p_manifesta_qualquer_exato"], abs=0.02)
+        assert t.loc[l.rotulo, "mediana_sobrevivencia"] == "não atingida"  # risco vitalício < 50 %
+    assert t.loc[sobrevivencia.QUALQUER, "risco_vitalicio_km"] == pytest.approx(
+        res.resumo_combinado()["p_manifesta_qualquer_exato"], abs=0.02
+    )
     assert 40 < t.loc[res.loci[0].rotulo, "idade_90pct_do_risco"] < 85
 
 
@@ -70,10 +82,14 @@ def test_tabela_risco_condicional(anotados, parametros):
     t = sobrevivencia.tabela_risco_condicional(res, idades_atuais=(0, 40, 70))
     l0 = t[(t.unidade == res.loci[0].rotulo)].set_index("idade_atual")
     # em t = 0 o risco vitalício condicional é o incondicional; cai com a idade
-    assert l0.loc[0, "risco_vitalicio"] == pytest.approx(res.loci[0].p_manifesta_exato, abs=1e-4)   # quadratura numérica da Weibull
+    assert l0.loc[0, "risco_vitalicio"] == pytest.approx(
+        res.loci[0].p_manifesta_exato, abs=1e-4
+    )  # quadratura numérica da Weibull
     assert l0.loc[70, "risco_vitalicio"] < l0.loc[40, "risco_vitalicio"] < l0.loc[0, "risco_vitalicio"]
     assert l0.loc[0, "p_portador_condicional"] == pytest.approx(0.5)
-    assert (t.risco_vitalicio_q025 <= t.risco_vitalicio + 1e-9).all() and (t.risco_vitalicio <= t.risco_vitalicio_q975 + 1e-9).all()
+    assert (t.risco_vitalicio_q025 <= t.risco_vitalicio + 1e-9).all() and (
+        t.risco_vitalicio <= t.risco_vitalicio_q975 + 1e-9
+    ).all()
     assert sobrevivencia.QUALQUER in set(t.unidade)
 
 

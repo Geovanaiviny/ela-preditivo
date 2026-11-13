@@ -8,8 +8,8 @@ VCF materno: `cenario_4_mae.vcf` (amostra MAE); VCF paterno: `cenario_4_pai.vcf`
 
 ## Qualidade dos dados (TCC 4.2.3)
 
-- Mãe: montagem GRCh38 (coerente); 5/7 registros aprovados (71%); 2 aprovados encontrados na base de anotação (40%; estado de revisão 1★: 1, 2★: 1); classes {'nao_anotada': 3, 'benigna': 1, 'vus': 1}; significado incerto/conflitante: 1 (50% das anotadas); risco com frequência > 1%: 0.
-- Pai: montagem GRCh38 (coerente); 5/7 registros aprovados (71%); 2 aprovados encontrados na base de anotação (40%; estado de revisão 1★: 1, 2★: 1); classes {'nao_anotada': 3, 'benigna': 1, 'vus': 1}; significado incerto/conflitante: 1 (50% das anotadas); risco com frequência > 1%: 0.
+- Mãe: montagem GRCh38 (coerente); 5/7 registros aprovados (71%); 2 aprovados encontrados na base de anotação (40%; estado de revisão 1★: 1, 2★: 1); classes {'nao_anotada': 3, 'benigna': 1, 'conflitante': 1}; significado incerto: 0 (0% das anotadas); classificação conflitante: 1 (50%); risco com frequência > 1%: 0.
+- Pai: montagem GRCh38 (coerente); 5/7 registros aprovados (71%); 2 aprovados encontrados na base de anotação (40%; estado de revisão 1★: 1, 2★: 1); classes {'nao_anotada': 3, 'benigna': 1, 'conflitante': 1}; significado incerto: 0 (0% das anotadas); classificação conflitante: 1 (50%); risco com frequência > 1%: 0.
 - Base de anotação: clinvar_base_consolidada; regra de classe: só Pathogenic/Likely pathogenic sustentam risco; significado incerto e classificações conflitantes não (TCC 4.2.2).
 
 ## Resultado
@@ -26,12 +26,12 @@ Nenhum lócus de risco (classe patogênica/provavelmente patogênica) foi encont
 | MAE | TARDBP | 1 | 11020000 | G | T |  | snv | 1 |  | nao_anotada |  |  |  |  |  |
 | MAE | FUS | 16 | 31185000 | A | G |  | snv | 1 |  | nao_anotada |  |  |  |  |  |
 | MAE | SOD1 | 21 | 31659509 | G | T | rs17883296 | snv | 1 |  | benigna | Likely benign | 2 | rs17883296 |  | clinvar_base_consolidada:posicao_alelos |
-| MAE | SOD1 | 21 | 31667290 | A | C | rs80265967 | snv | 1 |  | vus | Conflicting classifications of pathogenicity | 1 | p.Asp91Ala | recessiva | clinvar_base_consolidada:posicao_alelos |
+| MAE | SOD1 | 21 | 31667290 | A | C | rs80265967 | snv | 1 |  | conflitante | Conflicting classifications of pathogenicity | 1 | p.Asp91Ala | recessiva | clinvar_base_consolidada:posicao_alelos |
 | PAI | TARDBP | 1 | 11020000 | G | A |  | snv | 0 |  | nao_anotada |  |  |  |  |  |
 | PAI | TARDBP | 1 | 11020000 | G | T |  | snv | 1 |  | nao_anotada |  |  |  |  |  |
 | PAI | FUS | 16 | 31185000 | A | G |  | snv | 1 |  | nao_anotada |  |  |  |  |  |
 | PAI | SOD1 | 21 | 31659509 | G | T | rs17883296 | snv | 1 |  | benigna | Likely benign | 2 | rs17883296 |  | clinvar_base_consolidada:posicao_alelos |
-| PAI | SOD1 | 21 | 31667290 | A | C | rs80265967 | snv | 1 |  | vus | Conflicting classifications of pathogenicity | 1 | p.Asp91Ala | recessiva | clinvar_base_consolidada:posicao_alelos |
+| PAI | SOD1 | 21 | 31667290 | A | C | rs80265967 | snv | 1 |  | conflitante | Conflicting classifications of pathogenicity | 1 | p.Asp91Ala | recessiva | clinvar_base_consolidada:posicao_alelos |
 
 *Fonte: elaborado pela autora (2026), a partir do artefato ela_preditivo.*
 

@@ -1,26 +1,26 @@
 cenario,conjunto_de_parametros,variante,penetrancia_media,p_manifesta_exato,p_manifesta_mc,idade_mediana_exata,idade_mediana_mc
-cenário 1,literatura (Douglas & Baralle 2024; Murphy 2017),SOD1 p.Ala5Val,0.5387262992281477,0.26936314961407387,0.2724,50.2576339311135,50.109506737796735
-cenário 1,literatura (Douglas & Baralle 2024; Murphy 2017),qualquer lócus,,0.2693631496140738,0.2724,,50.109506737796735
+cenário 1,literatura (Douglas & Baralle 2024; Murphy 2017),SOD1 p.Ala5Val,0.5387262992281477,0.26936314961407387,0.2724,50.86727434356483,50.7377985490877
+cenário 1,literatura (Douglas & Baralle 2024; Murphy 2017),qualquer lócus,,0.2693631496140738,0.2724,,50.7377985490877
 cenário 1,exemplo do orientador (penetrance_max e Weibull fixos),SOD1 p.Ala5Val,0.9,0.45,0.4474,46.08906359948552,46.26693603555155
 cenário 1,exemplo do orientador (penetrance_max e Weibull fixos),qualquer lócus,,0.44999999999999996,0.4474,,46.26693603555155
-cenário 2,literatura (Douglas & Baralle 2024; Murphy 2017),C9orf72 expansão GGGGCC,0.3327123135671058,0.1663561567835529,0.1749,59.304461999152245,58.80799287071545
-cenário 2,literatura (Douglas & Baralle 2024; Murphy 2017),qualquer lócus,,0.16635615678355287,0.1749,,58.80799287071545
+cenário 2,literatura (Douglas & Baralle 2024; Murphy 2017),C9orf72 expansão GGGGCC,0.3327123135469123,0.16635615677345614,0.1749,59.3044619993133,58.807992871267594
+cenário 2,literatura (Douglas & Baralle 2024; Murphy 2017),qualquer lócus,,0.16635615677345617,0.1749,,58.807992871267594
 cenário 2,exemplo do orientador (penetrance_max e Weibull fixos),C9orf72 expansão GGGGCC,0.6,0.3,0.3002,58.617814588159526,58.68679278310859
 cenário 2,exemplo do orientador (penetrance_max e Weibull fixos),qualquer lócus,,0.30000000000000004,0.3002,,58.68679278310859
-cenário 2,C9orf72 com penetrância de coorte familiar (Murphy 2017),C9orf72 expansão GGGGCC,0.9,0.45,0.4457,59.304461999152245,59.42907198472991
-cenário 2,C9orf72 com penetrância de coorte familiar (Murphy 2017),qualquer lócus,,0.44999999999999996,0.4457,,59.42907198472991
-cenário 3,literatura (Douglas & Baralle 2024; Murphy 2017),SOD1 p.Ala5Val,0.5387262992281477,0.26936314961407387,0.2739,50.2576339311135,50.25983671959749
-cenário 3,literatura (Douglas & Baralle 2024; Murphy 2017),C9orf72 expansão GGGGCC,0.3327123135671058,0.1663561567835529,0.1717,59.304461999152245,58.88903150947884
-cenário 3,literatura (Douglas & Baralle 2024; Murphy 2017),qualquer lócus,,0.39090908804871616,0.3983,,52.754037825780735
+cenário 2,C9orf72 com penetrância de coorte familiar (Murphy 2017),C9orf72 expansão GGGGCC,0.9,0.45,0.4457,59.3044619993133,59.429071984792266
+cenário 2,C9orf72 com penetrância de coorte familiar (Murphy 2017),qualquer lócus,,0.44999999999999996,0.4457,,59.429071984792266
+cenário 3,literatura (Douglas & Baralle 2024; Murphy 2017),SOD1 p.Ala5Val,0.5387262992281477,0.26936314961407387,0.2739,50.86727434356483,50.869199374666046
+cenário 3,literatura (Douglas & Baralle 2024; Murphy 2017),C9orf72 expansão GGGGCC,0.3327123135469123,0.16635615677345614,0.1717,59.3044619993133,58.889031509967374
+cenário 3,literatura (Douglas & Baralle 2024; Murphy 2017),qualquer lócus,,0.39090908804133917,0.3983,,52.935505669689775
 cenário 3,exemplo do orientador (penetrance_max e Weibull fixos),SOD1 p.Ala5Val,0.9,0.45,0.4526,46.08906359948552,45.93279506728967
 cenário 3,exemplo do orientador (penetrance_max e Weibull fixos),C9orf72 expansão GGGGCC,0.6,0.3,0.2994,58.617814588159526,57.92443813253644
 cenário 3,exemplo do orientador (penetrance_max e Weibull fixos),qualquer lócus,,0.615,0.6131,,47.871204676063385
-cenário 3,C9orf72 com penetrância de coorte familiar (Murphy 2017),SOD1 p.Ala5Val,0.5387262992281477,0.26936314961407387,0.2719,50.2576339311135,50.500273006087646
-cenário 3,C9orf72 com penetrância de coorte familiar (Murphy 2017),C9orf72 expansão GGGGCC,0.9,0.45,0.4528,59.304461999152245,59.1519827195036
-cenário 3,C9orf72 com penetrância de coorte familiar (Murphy 2017),qualquer lócus,,0.5981497322877405,0.6021,,54.90069603079151
-cenário 5,literatura (Douglas & Baralle 2024; Murphy 2017),TARDBP p.Met337Val,0.38313173817517326,0.19156586908758663,0.1997,54.177600931429765,54.18815696543226
-cenário 5,literatura (Douglas & Baralle 2024; Murphy 2017),FUS p.Arg521Cys,0.1919120830612622,0.0959560415306311,0.0951,42.82688144024636,43.008634166844175
-cenário 5,literatura (Douglas & Baralle 2024; Murphy 2017),qualquer lócus,,0.2691400081281978,0.2775,,50.01102344347141
+cenário 3,C9orf72 com penetrância de coorte familiar (Murphy 2017),SOD1 p.Ala5Val,0.5387262992281477,0.26936314961407387,0.2719,50.86727434356483,51.07924905970951
+cenário 3,C9orf72 com penetrância de coorte familiar (Murphy 2017),C9orf72 expansão GGGGCC,0.9,0.45,0.4528,59.3044619993133,59.15198271978512
+cenário 3,C9orf72 com penetrância de coorte familiar (Murphy 2017),qualquer lócus,,0.5981497322877405,0.6021,,54.90014602192859
+cenário 5,literatura (Douglas & Baralle 2024; Murphy 2017),TARDBP p.Met337Val,0.38313173817517326,0.19156586908758663,0.1997,58.3,58.309433061956206
+cenário 5,literatura (Douglas & Baralle 2024; Murphy 2017),FUS p.Arg521Cys,0.1919120830612622,0.0959560415306311,0.0951,46.708307281994784,46.98652940731466
+cenário 5,literatura (Douglas & Baralle 2024; Murphy 2017),qualquer lócus,,0.2691400081281978,0.2775,,55.31457787910015
 cenário 5,exemplo do orientador (penetrance_max e Weibull fixos),TARDBP p.Met337Val,0.8,0.4,0.4058,52.23675086579846,52.16167880647761
 cenário 5,exemplo do orientador (penetrance_max e Weibull fixos),FUS p.Arg521Cys,0.45,0.225,0.2257,39.95440245817349,39.513347233193954
 cenário 5,exemplo do orientador (penetrance_max e Weibull fixos),qualquer lócus,,0.535,0.5355,,45.50944337092113

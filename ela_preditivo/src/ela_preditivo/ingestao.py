@@ -9,6 +9,7 @@ A expansão de hexanucleotídeos do C9orf72 entra no modelo como parâmetro do l
 `genotipo.vetor_dosagem(..., laudo_c9orf72=...)`. A detecção no próprio VCF (ALT <STRn>, FORMAT REPCN ou contagem
 do motivo com Biopython) é mantida apenas como caminho secundário, para arquivos que a tragam.
 """
+
 from __future__ import annotations
 
 import re
@@ -24,19 +25,67 @@ from Bio.Seq import Seq
 from . import DIR_CONFIG
 
 CAMINHO_REGIOES = DIR_CONFIG / "regioes_genes_grch38.yaml"
-FILTRO_PADRAO = {"dp_minimo": 20, "gq_minimo": 30, "exigir_pass": True}   # TCC 4.3; o pipeline passa `filtro_qualidade` do YAML
+FILTRO_PADRAO = {
+    "dp_minimo": 20,
+    "gq_minimo": 30,
+    "exigir_pass": True,
+}  # TCC 4.3; o pipeline passa `filtro_qualidade` do YAML
 MONTAGEM_ESPERADA = "GRCh38"
 RE_STR = re.compile(r"^<STR(\d+)>$", re.IGNORECASE)
 MOTIVO_C9ORF72 = "GGGGCC"
-COLUNAS = ["amostra", "cromossomo", "posicao", "id", "ref", "alt", "indice_alt", "n_alt", "tipo", "qual", "filtro",
-           "dp", "gq", "gt", "dosagem", "repeticoes", "motivo_repeticao", "gene", "aprovado", "motivo_reprovacao",
-           "posicao_vcf", "ref_vcf", "alt_vcf", "normalizada", "ac", "an", "no_dbsnp", "montagem", "arquivo"]
+COLUNAS = [
+    "amostra",
+    "cromossomo",
+    "posicao",
+    "id",
+    "ref",
+    "alt",
+    "indice_alt",
+    "n_alt",
+    "tipo",
+    "qual",
+    "filtro",
+    "dp",
+    "gq",
+    "gt",
+    "dosagem",
+    "repeticoes",
+    "motivo_repeticao",
+    "gene",
+    "aprovado",
+    "motivo_reprovacao",
+    "posicao_vcf",
+    "ref_vcf",
+    "alt_vcf",
+    "normalizada",
+    "ac",
+    "an",
+    "no_dbsnp",
+    "montagem",
+    "arquivo",
+]
 
 # Comprimentos de contig que distinguem as montagens (NCBI GRCh38.p14 e GRCh37.p13), usados quando o cabeçalho
 # traz `##contig=<ID=...,length=...>` mas não declara `##reference`.
 COMPRIMENTOS_CONTIG = {
-    "GRCh38": {"1": 248956422, "2": 242193529, "9": 138394717, "16": 90338345, "17": 83257441, "21": 46709983, "X": 156040895},
-    "GRCh37": {"1": 249250621, "2": 243199373, "9": 141213431, "16": 90354753, "17": 81195210, "21": 48129895, "X": 155270560},
+    "GRCh38": {
+        "1": 248956422,
+        "2": 242193529,
+        "9": 138394717,
+        "16": 90338345,
+        "17": 83257441,
+        "21": 46709983,
+        "X": 156040895,
+    },
+    "GRCh37": {
+        "1": 249250621,
+        "2": 243199373,
+        "9": 141213431,
+        "16": 90354753,
+        "17": 81195210,
+        "21": 48129895,
+        "X": 155270560,
+    },
 }
 
 
@@ -51,9 +100,16 @@ def carregar_regioes(caminho: str | Path | None = None) -> pd.DataFrame:
     with open(caminho or CAMINHO_REGIOES, encoding="utf-8") as f:
         cfg = yaml.safe_load(f)
     flanco = int(cfg.get("flanco_pb", 0))
-    linhas = [{"gene": g, "cromossomo": normalizar_cromossomo(str(r["cromossomo"])),
-               "inicio": int(r["inicio"]) - flanco, "fim": int(r["fim"]) + flanco, "fita": r.get("fita")}
-              for g, r in cfg["genes"].items()]
+    linhas = [
+        {
+            "gene": g,
+            "cromossomo": normalizar_cromossomo(str(r["cromossomo"])),
+            "inicio": int(r["inicio"]) - flanco,
+            "fim": int(r["fim"]) + flanco,
+            "fita": r.get("fita"),
+        }
+        for g, r in cfg["genes"].items()
+    ]
     return pd.DataFrame(linhas)
 
 
@@ -115,9 +171,15 @@ def montagem_do_cabecalho(leitor: vcf.Reader) -> dict:
                     break
             if montagem:
                 break
-    return {"montagem": montagem or "desconhecida", "evidencia": evidencia, "referencia": referencia or None,
-            "fileformat": _texto("fileformat") or None, "fonte": fonte or None, "data_arquivo": _texto("fileDate") or None,
-            "amostras": list(leitor.samples)}
+    return {
+        "montagem": montagem or "desconhecida",
+        "evidencia": evidencia,
+        "referencia": referencia or None,
+        "fileformat": _texto("fileformat") or None,
+        "fonte": fonte or None,
+        "data_arquivo": _texto("fileDate") or None,
+        "amostras": list(leitor.samples),
+    }
 
 
 def normalizar_alelos(posicao: int, ref: str, alt: str) -> tuple[int, str, str, bool]:
@@ -210,8 +272,14 @@ def _info_por_alt(info: dict, chave: str, indice_alt: int):
     return v
 
 
-def ler_vcf(caminho: str | Path, regioes: pd.DataFrame | None = None, filtro: dict | None = None,
-            amostra: str | None = None, montagem_esperada: str | None = MONTAGEM_ESPERADA, normalizar: bool = True) -> pd.DataFrame:
+def ler_vcf(
+    caminho: str | Path,
+    regioes: pd.DataFrame | None = None,
+    filtro: dict | None = None,
+    amostra: str | None = None,
+    montagem_esperada: str | None = MONTAGEM_ESPERADA,
+    normalizar: bool = True,
+) -> pd.DataFrame:
     """Lê um VCF (uma amostra) e devolve uma linha por ALT com dosagem, qualidade, gene e situação no filtro.
 
     - `montagem_esperada`: confere o cabeçalho (TCC 4.2.1). Montagem declarada diferente → `MontagemDivergente`;
@@ -232,11 +300,16 @@ def ler_vcf(caminho: str | Path, regioes: pd.DataFrame | None = None, filtro: di
     meta = montagem_do_cabecalho(leitor)
     if montagem_esperada:
         if meta["montagem"] == "desconhecida":
-            warnings.warn(f"{caminho.name}: o cabeçalho não permite identificar a montagem de referência; assumindo {montagem_esperada}. "
-                          "Confira ##reference antes de confiar nas coordenadas (TCC 4.2.1).", stacklevel=2)
+            warnings.warn(
+                f"{caminho.name}: o cabeçalho não permite identificar a montagem de referência; assumindo {montagem_esperada}. "
+                "Confira ##reference antes de confiar nas coordenadas (TCC 4.2.1).",
+                stacklevel=2,
+            )
         elif meta["montagem"] != montagem_esperada:
-            raise MontagemDivergente(f"{caminho.name}: montagem {meta['montagem']} declarada no cabeçalho ({meta['evidencia']}); o artefato "
-                                     f"opera em {montagem_esperada} (TCC 4.2.1). Converta as coordenadas (liftover) antes da ingestão.")
+            raise MontagemDivergente(
+                f"{caminho.name}: montagem {meta['montagem']} declarada no cabeçalho ({meta['evidencia']}); o artefato "
+                f"opera em {montagem_esperada} (TCC 4.2.1). Converta as coordenadas (liftover) antes da ingestão."
+            )
     idx = leitor.samples.index(amostra) if amostra else 0
     nome_amostra = leitor.samples[idx]
     tem_db = "DB" in (leitor.infos or {})
@@ -250,7 +323,9 @@ def ler_vcf(caminho: str | Path, regioes: pd.DataFrame | None = None, filtro: di
         an = rec.INFO.get("AN")
         for i, alt_obj in enumerate(rec.ALT, start=1):
             alt_vcf = str(alt_obj) if alt_obj is not None else "."
-            pos, ref, alt, normalizada = normalizar_alelos(rec.POS, rec.REF, alt_vcf) if normalizar else (int(rec.POS), rec.REF, alt_vcf, False)
+            pos, ref, alt, normalizada = (
+                normalizar_alelos(rec.POS, rec.REF, alt_vcf) if normalizar else (int(rec.POS), rec.REF, alt_vcf, False)
+            )
             gene = gene_da_posicao(crom, pos, regioes)
             tipo = _tipo(ref, alt, rec.INFO, gene)
             dosagem = gt_alelos.count(str(i)) if gt_alelos else np.nan
@@ -265,18 +340,43 @@ def ler_vcf(caminho: str | Path, regioes: pd.DataFrame | None = None, filtro: di
                 motivos.append("dp_baixo")
             if gq is not None and gq < filtro["gq_minimo"]:
                 motivos.append("gq_baixo")
-            linhas.append({
-                "amostra": nome_amostra, "cromossomo": crom, "posicao": pos, "id": rec.ID or None,
-                "ref": ref, "alt": alt, "indice_alt": i, "n_alt": len(rec.ALT), "tipo": tipo,
-                "qual": rec.QUAL, "filtro": filtro_txt, "dp": dp, "gq": gq, "gt": call.data.GT if hasattr(call.data, "GT") else None,
-                "dosagem": dosagem, "repeticoes": _repeticoes(alt_vcf, tipo, rec.INFO, call, gt_alelos, i),
-                "motivo_repeticao": str(rec.INFO.get("RU")) if rec.INFO.get("RU") else (MOTIVO_C9ORF72 if tipo == "repeticao" else None),
-                "gene": gene, "aprovado": len(motivos) == 0, "motivo_reprovacao": ";".join(motivos) or None,
-                "posicao_vcf": int(rec.POS), "ref_vcf": rec.REF, "alt_vcf": alt_vcf, "normalizada": normalizada,
-                "ac": _info_por_alt(rec.INFO, "AC", i), "an": an,
-                "no_dbsnp": bool(rec.INFO.get("DB")) if tem_db else None,
-                "montagem": meta["montagem"], "arquivo": caminho.name,
-            })
+            linhas.append(
+                {
+                    "amostra": nome_amostra,
+                    "cromossomo": crom,
+                    "posicao": pos,
+                    "id": rec.ID or None,
+                    "ref": ref,
+                    "alt": alt,
+                    "indice_alt": i,
+                    "n_alt": len(rec.ALT),
+                    "tipo": tipo,
+                    "qual": rec.QUAL,
+                    "filtro": filtro_txt,
+                    "dp": dp,
+                    "gq": gq,
+                    "gt": call.data.GT if hasattr(call.data, "GT") else None,
+                    "dosagem": dosagem,
+                    "repeticoes": _repeticoes(alt_vcf, tipo, rec.INFO, call, gt_alelos, i),
+                    "motivo_repeticao": (
+                        str(rec.INFO.get("RU"))
+                        if rec.INFO.get("RU")
+                        else (MOTIVO_C9ORF72 if tipo == "repeticao" else None)
+                    ),
+                    "gene": gene,
+                    "aprovado": len(motivos) == 0,
+                    "motivo_reprovacao": ";".join(motivos) or None,
+                    "posicao_vcf": int(rec.POS),
+                    "ref_vcf": rec.REF,
+                    "alt_vcf": alt_vcf,
+                    "normalizada": normalizada,
+                    "ac": _info_por_alt(rec.INFO, "AC", i),
+                    "an": an,
+                    "no_dbsnp": bool(rec.INFO.get("DB")) if tem_db else None,
+                    "montagem": meta["montagem"],
+                    "arquivo": caminho.name,
+                }
+            )
     arquivo = getattr(leitor, "_reader", None)
     if arquivo is not None and hasattr(arquivo, "close"):
         arquivo.close()
@@ -292,12 +392,19 @@ def resumo_ingestao(df: pd.DataFrame) -> dict:
     motivos = df.loc[~df.aprovado, "motivo_reprovacao"].fillna("").str.split(";").explode()
     meta = df.attrs.get("vcf", {})
     n = int(len(df))
-    return {"registros": n, "aprovados": int(df.aprovado.sum()), "reprovados": int((~df.aprovado).sum()),
-            "taxa_aprovacao": (float(df.aprovado.mean()) if n else float("nan")),
-            "por_motivo": motivos[motivos != ""].value_counts().to_dict(),
-            "por_gene": df.loc[df.aprovado, "gene"].value_counts().to_dict(),
-            "normalizadas": int(df.normalizada.sum()) if "normalizada" in df else 0,
-            "no_dbsnp": (int(df.no_dbsnp.fillna(False).sum()) if "no_dbsnp" in df and df.no_dbsnp.notna().any() else None),
-            "montagem": meta.get("montagem") or (df.montagem.iloc[0] if "montagem" in df and n else None),
-            "evidencia_montagem": meta.get("evidencia"), "fileformat": meta.get("fileformat"), "fonte": meta.get("fonte"),
-            "amostra": meta.get("amostra"), "amostras_no_arquivo": meta.get("amostras")}
+    return {
+        "registros": n,
+        "aprovados": int(df.aprovado.sum()),
+        "reprovados": int((~df.aprovado).sum()),
+        "taxa_aprovacao": (float(df.aprovado.mean()) if n else float("nan")),
+        "por_motivo": motivos[motivos != ""].value_counts().to_dict(),
+        "por_gene": df.loc[df.aprovado, "gene"].value_counts().to_dict(),
+        "normalizadas": int(df.normalizada.sum()) if "normalizada" in df else 0,
+        "no_dbsnp": (int(df.no_dbsnp.fillna(False).sum()) if "no_dbsnp" in df and df.no_dbsnp.notna().any() else None),
+        "montagem": meta.get("montagem") or (df.montagem.iloc[0] if "montagem" in df and n else None),
+        "evidencia_montagem": meta.get("evidencia"),
+        "fileformat": meta.get("fileformat"),
+        "fonte": meta.get("fonte"),
+        "amostra": meta.get("amostra"),
+        "amostras_no_arquivo": meta.get("amostras"),
+    }

@@ -1,21 +1,21 @@
 cenario,descricao,sexo,variante,heranca,p_portador,p_manifesta,ic95,idade_mediana
-1,Pai heterozigoto SOD1 p.Ala5Val (alta penetrância) × mãe selvagem,F,SOD1 p.Ala5Val,dominante,0.5,0.26936314961407387,0.163–0.372,50.2576339311135
-1,Pai heterozigoto SOD1 p.Ala5Val (alta penetrância) × mãe selvagem,F,qualquer lócus,independência,0.5,0.2693631496140738,0.163–0.372,50.581446798561714
-1,Pai heterozigoto SOD1 p.Ala5Val (alta penetrância) × mãe selvagem,M,SOD1 p.Ala5Val,dominante,0.5,0.26936314961407387,0.163–0.372,50.2576339311135
-1,Pai heterozigoto SOD1 p.Ala5Val (alta penetrância) × mãe selvagem,M,qualquer lócus,independência,0.5,0.2693631496140738,0.163–0.372,50.581446798561714
-2,"Mãe com expansão de hexanucleotídeos no C9orf72 (45 repetições, laudo) × pai selvagem",F,C9orf72 expansão GGGGCC,dominante,0.5,0.1663561567835529,0.102–0.237,59.304461999152245
-2,"Mãe com expansão de hexanucleotídeos no C9orf72 (45 repetições, laudo) × pai selvagem",F,qualquer lócus,independência,0.5,0.16635615678355287,0.102–0.237,59.07512727432345
-2,"Mãe com expansão de hexanucleotídeos no C9orf72 (45 repetições, laudo) × pai selvagem",M,C9orf72 expansão GGGGCC,dominante,0.5,0.1663561567835529,0.102–0.237,57.304461999152245
-2,"Mãe com expansão de hexanucleotídeos no C9orf72 (45 repetições, laudo) × pai selvagem",M,qualquer lócus,independência,0.5,0.16635615678355287,0.102–0.237,57.07512727432345
-3,"Pai heterozigoto SOD1 p.Ala5Val × mãe com expansão C9orf72 (45 repetições, laudo; exemplo literal do TCC, 4.5)",F,SOD1 p.Ala5Val,dominante,0.5,0.26936314961407387,0.163–0.372,50.2576339311135
-3,"Pai heterozigoto SOD1 p.Ala5Val × mãe com expansão C9orf72 (45 repetições, laudo; exemplo literal do TCC, 4.5)",F,C9orf72 expansão GGGGCC,dominante,0.5,0.1663561567835529,0.102–0.237,59.304461999152245
-3,"Pai heterozigoto SOD1 p.Ala5Val × mãe com expansão C9orf72 (45 repetições, laudo; exemplo literal do TCC, 4.5)",F,qualquer lócus,independência,0.75,0.39090908804871616,0.249–0.521,52.595557501776085
-3,"Pai heterozigoto SOD1 p.Ala5Val × mãe com expansão C9orf72 (45 repetições, laudo; exemplo literal do TCC, 4.5)",M,SOD1 p.Ala5Val,dominante,0.5,0.26936314961407387,0.163–0.372,50.2576339311135
-3,"Pai heterozigoto SOD1 p.Ala5Val × mãe com expansão C9orf72 (45 repetições, laudo; exemplo literal do TCC, 4.5)",M,C9orf72 expansão GGGGCC,dominante,0.5,0.1663561567835529,0.102–0.237,57.304461999152245
-3,"Pai heterozigoto SOD1 p.Ala5Val × mãe com expansão C9orf72 (45 repetições, laudo; exemplo literal do TCC, 4.5)",M,qualquer lócus,independência,0.75,0.39090908804871616,0.249–0.521,51.89393626797118
-5,Pai heterozigoto TARDBP p.Met337Val × mãe heterozigota FUS p.Arg521Cys,F,TARDBP p.Met337Val,dominante,0.5,0.19156586908758663,0.105–0.287,54.177600931429765
-5,Pai heterozigoto TARDBP p.Met337Val × mãe heterozigota FUS p.Arg521Cys,F,FUS p.Arg521Cys,dominante,0.5,0.0959560415306311,0.063–0.133,42.82688144024636
-5,Pai heterozigoto TARDBP p.Met337Val × mãe heterozigota FUS p.Arg521Cys,F,qualquer lócus,independência,0.75,0.2691400081281978,0.162–0.382,50.4904617629023
-5,Pai heterozigoto TARDBP p.Met337Val × mãe heterozigota FUS p.Arg521Cys,M,TARDBP p.Met337Val,dominante,0.5,0.19156586908758663,0.105–0.287,54.177600931429765
-5,Pai heterozigoto TARDBP p.Met337Val × mãe heterozigota FUS p.Arg521Cys,M,FUS p.Arg521Cys,dominante,0.5,0.0959560415306311,0.063–0.133,42.82688144024636
-5,Pai heterozigoto TARDBP p.Met337Val × mãe heterozigota FUS p.Arg521Cys,M,qualquer lócus,independência,0.75,0.2691400081281978,0.162–0.382,50.4904617629023
+1,Pai heterozigoto SOD1 p.Ala5Val (alta penetrância) × mãe selvagem,F,SOD1 p.Ala5Val,dominante,0.5,0.26936314961407387,0.163–0.372,50.86727434356483
+1,Pai heterozigoto SOD1 p.Ala5Val (alta penetrância) × mãe selvagem,F,qualquer lócus,independência,0.5,0.2693631496140738,0.165–0.373,51.15013315469957
+1,Pai heterozigoto SOD1 p.Ala5Val (alta penetrância) × mãe selvagem,M,SOD1 p.Ala5Val,dominante,0.5,0.26936314961407387,0.163–0.372,50.86727434356483
+1,Pai heterozigoto SOD1 p.Ala5Val (alta penetrância) × mãe selvagem,M,qualquer lócus,independência,0.5,0.2693631496140738,0.165–0.373,51.15013315469957
+2,"Mãe com expansão de hexanucleotídeos no C9orf72 (45 repetições, laudo) × pai selvagem",F,C9orf72 expansão GGGGCC,dominante,0.5,0.16635615677345614,0.102–0.237,59.3044619993133
+2,"Mãe com expansão de hexanucleotídeos no C9orf72 (45 repetições, laudo) × pai selvagem",F,qualquer lócus,independência,0.5,0.16635615677345617,0.103–0.237,59.075127274665576
+2,"Mãe com expansão de hexanucleotídeos no C9orf72 (45 repetições, laudo) × pai selvagem",M,C9orf72 expansão GGGGCC,dominante,0.5,0.16635615677345614,0.102–0.237,57.3044619993133
+2,"Mãe com expansão de hexanucleotídeos no C9orf72 (45 repetições, laudo) × pai selvagem",M,qualquer lócus,independência,0.5,0.16635615677345617,0.103–0.237,57.075127274665576
+3,"Pai heterozigoto SOD1 p.Ala5Val × mãe com expansão C9orf72 (45 repetições, laudo; exemplo literal do TCC, 4.5)",F,SOD1 p.Ala5Val,dominante,0.5,0.26936314961407387,0.163–0.372,50.86727434356483
+3,"Pai heterozigoto SOD1 p.Ala5Val × mãe com expansão C9orf72 (45 repetições, laudo; exemplo literal do TCC, 4.5)",F,C9orf72 expansão GGGGCC,dominante,0.5,0.16635615677345614,0.102–0.237,59.3044619993133
+3,"Pai heterozigoto SOD1 p.Ala5Val × mãe com expansão C9orf72 (45 repetições, laudo; exemplo literal do TCC, 4.5)",F,qualquer lócus,independência,0.75,0.39090908804133917,0.288–0.486,52.84506438818517
+3,"Pai heterozigoto SOD1 p.Ala5Val × mãe com expansão C9orf72 (45 repetições, laudo; exemplo literal do TCC, 4.5)",M,SOD1 p.Ala5Val,dominante,0.5,0.26936314961407387,0.163–0.372,50.86727434356483
+3,"Pai heterozigoto SOD1 p.Ala5Val × mãe com expansão C9orf72 (45 repetições, laudo; exemplo literal do TCC, 4.5)",M,C9orf72 expansão GGGGCC,dominante,0.5,0.16635615677345614,0.102–0.237,57.3044619993133
+3,"Pai heterozigoto SOD1 p.Ala5Val × mãe com expansão C9orf72 (45 repetições, laudo; exemplo literal do TCC, 4.5)",M,qualquer lócus,independência,0.75,0.39090908804133917,0.288–0.486,52.17063971626342
+5,Pai heterozigoto TARDBP p.Met337Val × mãe heterozigota FUS p.Arg521Cys,F,TARDBP p.Met337Val,dominante,0.5,0.19156586908758663,0.105–0.287,58.3
+5,Pai heterozigoto TARDBP p.Met337Val × mãe heterozigota FUS p.Arg521Cys,F,FUS p.Arg521Cys,dominante,0.5,0.0959560415306311,0.063–0.133,46.708307281994784
+5,Pai heterozigoto TARDBP p.Met337Val × mãe heterozigota FUS p.Arg521Cys,F,qualquer lócus,independência,0.75,0.2691400081281978,0.185–0.359,55.75050332892641
+5,Pai heterozigoto TARDBP p.Met337Val × mãe heterozigota FUS p.Arg521Cys,M,TARDBP p.Met337Val,dominante,0.5,0.19156586908758663,0.105–0.287,58.3
+5,Pai heterozigoto TARDBP p.Met337Val × mãe heterozigota FUS p.Arg521Cys,M,FUS p.Arg521Cys,dominante,0.5,0.0959560415306311,0.063–0.133,46.708307281994784
+5,Pai heterozigoto TARDBP p.Met337Val × mãe heterozigota FUS p.Arg521Cys,M,qualquer lócus,independência,0.75,0.2691400081281978,0.185–0.359,55.75050332892641

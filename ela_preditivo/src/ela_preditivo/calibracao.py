@@ -7,6 +7,7 @@
   estatísticas publicadas — média e desvio padrão (ex.: BERDYŃSKI et al., 2022) ou mediana e IQR (ex.: McFARLANE et al., 2025).
 - `carregar_parametros`: lê `config/parametros_literatura.yaml` e devolve os parâmetros calibrados.
 """
+
 from __future__ import annotations
 
 import math
@@ -46,14 +47,18 @@ def ajustar_beta(ponto: float, ic95: tuple[float, float], peso_ponto: float = 0.
     m, s = ponto, (hi - lo) / 3.92
     comum = m * (1 - m) / (s * s) - 1
     a0, b0 = max(m * comum, 0.5), max((1 - m) * comum, 0.5)
-    res = optimize.minimize(perda, np.log([a0, b0]), method="Nelder-Mead",
-                            options={"xatol": 1e-9, "fatol": 1e-14, "maxiter": 10000})
+    res = optimize.minimize(
+        perda, np.log([a0, b0]), method="Nelder-Mead", options={"xatol": 1e-9, "fatol": 1e-14, "maxiter": 10000}
+    )
     a, b = np.exp(res.x)
     q025, q975 = stats.beta.ppf([0.025, 0.975], a, b)
     return {
-        "alpha": float(a), "beta": float(b),
-        "media": float(a / (a + b)), "mediana": float(stats.beta.median(a, b)),
-        "q025": float(q025), "q975": float(q975),
+        "alpha": float(a),
+        "beta": float(b),
+        "media": float(a / (a + b)),
+        "mediana": float(stats.beta.median(a, b)),
+        "q025": float(q025),
+        "q975": float(q975),
         "erro_ic": float(max(abs(q025 - lo), abs(q975 - hi))),
         "erro_ponto": float(abs(stats.beta.median(a, b) - ponto)),
     }
@@ -84,15 +89,23 @@ def ajustar_weibull(pontos, plato: float | None = None) -> dict[str, Any]:
         lam0 = float(np.exp(-c0 / k0))
     else:
         k0, lam0 = 5.0, float(np.median(t))
-    k0 = float(np.clip(k0, 0.5, 40)); lam0 = float(np.clip(lam0, 5, 150))
+    k0 = float(np.clip(k0, 0.5, 40))
+    lam0 = float(np.clip(lam0, 5, 150))
 
     def residuos(p):
-        return 1 - np.exp(-(t / p[1]) ** p[0]) - g
+        return 1 - np.exp(-((t / p[1]) ** p[0])) - g
 
     res = optimize.least_squares(residuos, x0=[k0, lam0], bounds=([0.2, 1.0], [60.0, 200.0]))
     k, lam = res.x
-    return {"tipo": "weibull", "k": float(k), "lam": float(lam), "rss": float(np.sum(res.fun ** 2)), "metodo": "pontos",
-            "pontos_t": t.tolist(), "pontos_g": g.tolist()}
+    return {
+        "tipo": "weibull",
+        "k": float(k),
+        "lam": float(lam),
+        "rss": float(np.sum(res.fun**2)),
+        "metodo": "pontos",
+        "pontos_t": t.tolist(),
+        "pontos_g": g.tolist(),
+    }
 
 
 def ajustar_lognormal(pontos, plato: float | None = None) -> dict[str, Any]:
@@ -101,7 +114,8 @@ def ajustar_lognormal(pontos, plato: float | None = None) -> dict[str, Any]:
     uteis = (g > 0.001) & (g < 0.999)
     if uteis.sum() >= 2:
         inv_sigma, c0 = np.polyfit(np.log(t[uteis]), stats.norm.ppf(g[uteis]), 1)
-        sigma0 = 1.0 / max(inv_sigma, 1e-3); mu0 = -c0 * sigma0
+        sigma0 = 1.0 / max(inv_sigma, 1e-3)
+        mu0 = -c0 * sigma0
     else:
         mu0, sigma0 = float(np.log(np.median(t))), 0.3
 
@@ -110,8 +124,15 @@ def ajustar_lognormal(pontos, plato: float | None = None) -> dict[str, Any]:
 
     res = optimize.least_squares(residuos, x0=[mu0, max(sigma0, 0.05)], bounds=([0.0, 0.01], [6.0, 3.0]))
     mu, sigma = res.x
-    return {"tipo": "lognormal", "mu": float(mu), "sigma": float(sigma), "rss": float(np.sum(res.fun ** 2)), "metodo": "pontos",
-            "pontos_t": t.tolist(), "pontos_g": g.tolist()}
+    return {
+        "tipo": "lognormal",
+        "mu": float(mu),
+        "sigma": float(sigma),
+        "rss": float(np.sum(res.fun**2)),
+        "metodo": "pontos",
+        "pontos_t": t.tolist(),
+        "pontos_g": g.tolist(),
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -134,8 +155,16 @@ def weibull_de_momentos(media: float, dp: float) -> dict[str, Any]:
         return math.exp(special.gammaln(1 + 2 / k) - 2 * special.gammaln(1 + 1 / k)) - 1 - cv2
 
     k = float(optimize.brentq(g, 0.1, 500.0, xtol=1e-12))
-    return {"tipo": "weibull", "k": k, "lam": float(media / math.gamma(1 + 1 / k)), "rss": float("nan"), "metodo": "momentos",
-            "estatisticas": {"media": media, "dp": dp}, "pontos_t": [], "pontos_g": []}
+    return {
+        "tipo": "weibull",
+        "k": k,
+        "lam": float(media / math.gamma(1 + 1 / k)),
+        "rss": float("nan"),
+        "metodo": "momentos",
+        "estatisticas": {"media": media, "dp": dp},
+        "pontos_t": [],
+        "pontos_g": [],
+    }
 
 
 def weibull_de_quantis(mediana: float, iqr: float) -> dict[str, Any]:
@@ -154,8 +183,16 @@ def weibull_de_quantis(mediana: float, iqr: float) -> dict[str, Any]:
         return (a ** (1 / k) - b ** (1 / k)) / c ** (1 / k) - razao
 
     k = float(optimize.brentq(g, 0.1, 500.0, xtol=1e-12))
-    return {"tipo": "weibull", "k": k, "lam": float(mediana / c ** (1 / k)), "rss": float("nan"), "metodo": "quantis",
-            "estatisticas": {"mediana": mediana, "iqr": iqr}, "pontos_t": [], "pontos_g": []}
+    return {
+        "tipo": "weibull",
+        "k": k,
+        "lam": float(mediana / c ** (1 / k)),
+        "rss": float("nan"),
+        "metodo": "quantis",
+        "estatisticas": {"mediana": mediana, "iqr": iqr},
+        "pontos_t": [],
+        "pontos_g": [],
+    }
 
 
 def lognormal_de_momentos(media: float, dp: float) -> dict[str, Any]:
@@ -164,8 +201,16 @@ def lognormal_de_momentos(media: float, dp: float) -> dict[str, Any]:
     if media <= 0 or dp <= 0:
         raise ValueError(f"média e desvio padrão devem ser positivos: {media}, {dp}")
     sigma2 = math.log(1 + (dp / media) ** 2)
-    return {"tipo": "lognormal", "mu": math.log(media) - sigma2 / 2, "sigma": math.sqrt(sigma2), "rss": float("nan"), "metodo": "momentos",
-            "estatisticas": {"media": media, "dp": dp}, "pontos_t": [], "pontos_g": []}
+    return {
+        "tipo": "lognormal",
+        "mu": math.log(media) - sigma2 / 2,
+        "sigma": math.sqrt(sigma2),
+        "rss": float("nan"),
+        "metodo": "momentos",
+        "estatisticas": {"media": media, "dp": dp},
+        "pontos_t": [],
+        "pontos_g": [],
+    }
 
 
 def lognormal_de_quantis(mediana: float, iqr: float) -> dict[str, Any]:
@@ -173,8 +218,16 @@ def lognormal_de_quantis(mediana: float, iqr: float) -> dict[str, Any]:
     mediana, iqr = float(mediana), float(iqr)
     if mediana <= 0 or iqr <= 0:
         raise ValueError(f"mediana e IQR devem ser positivos: {mediana}, {iqr}")
-    return {"tipo": "lognormal", "mu": math.log(mediana), "sigma": math.asinh(iqr / (2 * mediana)) / _Z75, "rss": float("nan"), "metodo": "quantis",
-            "estatisticas": {"mediana": mediana, "iqr": iqr}, "pontos_t": [], "pontos_g": []}
+    return {
+        "tipo": "lognormal",
+        "mu": math.log(mediana),
+        "sigma": math.asinh(iqr / (2 * mediana)) / _Z75,
+        "rss": float("nan"),
+        "metodo": "quantis",
+        "estatisticas": {"mediana": mediana, "iqr": iqr},
+        "pontos_t": [],
+        "pontos_g": [],
+    }
 
 
 def ajustar_estatisticas(estatisticas: dict) -> tuple[dict, dict]:
@@ -187,8 +240,9 @@ def ajustar_estatisticas(estatisticas: dict) -> tuple[dict, dict]:
     raise ValueError(f"`estatisticas` deve trazer {{media, dp}} ou {{mediana, iqr}}; recebido: {sorted(e)}")
 
 
-def ajustar_inicio(pontos=None, distribuicao: str = "weibull", plato: float | None = None,
-                   estatisticas: dict | None = None) -> tuple[DistribuicaoInicio, dict]:
+def ajustar_inicio(
+    pontos=None, distribuicao: str = "weibull", plato: float | None = None, estatisticas: dict | None = None
+) -> tuple[DistribuicaoInicio, dict]:
     """Ajusta a distribuição pedida e, para a tabela de calibração, também a alternativa.
 
     Entrada: `pontos` [[idade, fração], ...] (curva de Kaplan-Meier ou faixas etárias; mínimos quadrados) **ou**
@@ -233,7 +287,9 @@ class ParametrosGene:
     delta_sexo: dict[str, float]
     delta_citacao: str
     delta_confirmar: bool
-    inicio_estatisticas: dict = field(default_factory=dict)   # {media, dp} ou {mediana, iqr} quando G(t) vem de estatísticas
+    inicio_estatisticas: dict = field(
+        default_factory=dict
+    )  # {media, dp} ou {mediana, iqr} quando G(t) vem de estatísticas
     extras: dict = field(default_factory=dict)
 
     def distribuicao_sexo(self, sexo: str | None) -> DistribuicaoInicio:
@@ -263,21 +319,36 @@ class Parametros:
         for g in self.genes.values():
             esc = g.inicio_ajuste["escolhido"]
             alt = g.inicio_ajuste["alternativa"]
-            linhas.append({
-                "gene": g.nome, "heranca": g.heranca,
-                "penetrancia_publicada": g.pen_valor, "ic95_publicado": f"{g.pen_ic95[0]:.3f}–{g.pen_ic95[1]:.3f}",
-                "alpha": round(g.alpha, 3), "beta": round(g.beta, 3),
-                "media_beta": round(g.pen_media, 3), "mediana_beta": round(stats.beta.median(g.alpha, g.beta), 3),
-                "ic95_beta": f"{stats.beta.ppf(0.025, g.alpha, g.beta):.3f}–{stats.beta.ppf(0.975, g.alpha, g.beta):.3f}",
-                "distribuicao_inicio": g.inicio.tipo, "metodo_inicio": esc.get("metodo", "pontos"),
-                "parametros_inicio": ", ".join(f"{k}={v:.2f}" for k, v in g.inicio.params.items()),
-                "mediana_inicio_anos": round(g.inicio.mediana, 1),
-                "rss_escolhida": round(esc["rss"], 5), "rss_alternativa": round(alt["rss"], 5),
-                "delta_sexo": f"M {g.delta_sexo.get('M', 0):+.1f} / F {g.delta_sexo.get('F', 0):+.1f}",
-                "erro_ic_beta": round(max(abs(stats.beta.ppf(0.025, g.alpha, g.beta) - g.pen_ic95[0]), abs(stats.beta.ppf(0.975, g.alpha, g.beta) - g.pen_ic95[1])), 3),
-                "valor_provisorio": "sim" if (g.pen_confirmar or g.inicio_confirmar) else "não",
-                "citacao_penetrancia": g.pen_citacao, "citacao_inicio": g.inicio_citacao,
-            })
+            linhas.append(
+                {
+                    "gene": g.nome,
+                    "heranca": g.heranca,
+                    "penetrancia_publicada": g.pen_valor,
+                    "ic95_publicado": f"{g.pen_ic95[0]:.3f}–{g.pen_ic95[1]:.3f}",
+                    "alpha": round(g.alpha, 3),
+                    "beta": round(g.beta, 3),
+                    "media_beta": round(g.pen_media, 3),
+                    "mediana_beta": round(stats.beta.median(g.alpha, g.beta), 3),
+                    "ic95_beta": f"{stats.beta.ppf(0.025, g.alpha, g.beta):.3f}–{stats.beta.ppf(0.975, g.alpha, g.beta):.3f}",
+                    "distribuicao_inicio": g.inicio.tipo,
+                    "metodo_inicio": esc.get("metodo", "pontos"),
+                    "parametros_inicio": ", ".join(f"{k}={v:.2f}" for k, v in g.inicio.params.items()),
+                    "mediana_inicio_anos": round(g.inicio.mediana, 1),
+                    "rss_escolhida": round(esc["rss"], 5),
+                    "rss_alternativa": round(alt["rss"], 5),
+                    "delta_sexo": f"M {g.delta_sexo.get('M', 0):+.1f} / F {g.delta_sexo.get('F', 0):+.1f}",
+                    "erro_ic_beta": round(
+                        max(
+                            abs(stats.beta.ppf(0.025, g.alpha, g.beta) - g.pen_ic95[0]),
+                            abs(stats.beta.ppf(0.975, g.alpha, g.beta) - g.pen_ic95[1]),
+                        ),
+                        3,
+                    ),
+                    "valor_provisorio": "sim" if (g.pen_confirmar or g.inicio_confirmar) else "não",
+                    "citacao_penetrancia": g.pen_citacao,
+                    "citacao_inicio": g.inicio_citacao,
+                }
+            )
         return pd.DataFrame(linhas)
 
 
@@ -291,24 +362,51 @@ def carregar_parametros(caminho: str | Path | None = None) -> Parametros:
         pen = g["penetrancia"]
         beta_fit = ajustar_beta(pen["valor"], tuple(pen["ic95"]), peso_ponto=peso_ponto)
         ini = g["inicio"]
-        dist, ajuste = ajustar_inicio(ini.get("pontos"), ini.get("distribuicao", "weibull"), ini.get("plato"), estatisticas=ini.get("estatisticas"))
+        dist, ajuste = ajustar_inicio(
+            ini.get("pontos"),
+            ini.get("distribuicao", "weibull"),
+            ini.get("plato"),
+            estatisticas=ini.get("estatisticas"),
+        )
         ds = g.get("delta_sexo", {})
-        extras = {k: v for k, v in g.items() if k not in {"cromossomo", "heranca", "tipo_variante", "penetrancia", "inicio", "delta_sexo"}}
+        extras = {
+            k: v
+            for k, v in g.items()
+            if k not in {"cromossomo", "heranca", "tipo_variante", "penetrancia", "inicio", "delta_sexo"}
+        }
         genes[nome] = ParametrosGene(
-            nome=nome, cromossomo=str(g["cromossomo"]), heranca=g["heranca"], tipo_variante=g.get("tipo_variante", "snv"),
-            pen_valor=float(pen["valor"]), pen_ic95=(float(pen["ic95"][0]), float(pen["ic95"][1])),
-            alpha=beta_fit["alpha"], beta=beta_fit["beta"], pen_citacao=pen.get("citacao", ""), pen_confirmar=bool(pen.get("confirmar", True)),
-            inicio=dist, inicio_ajuste=ajuste, inicio_pontos=list(ini.get("pontos") or []), inicio_estatisticas=dict(ini.get("estatisticas") or {}),
-            inicio_citacao=ini.get("citacao", ""), inicio_confirmar=bool(ini.get("confirmar", True)),
-            delta_sexo={"M": float(ds.get("M", 0.0)), "F": float(ds.get("F", 0.0))}, delta_citacao=ds.get("citacao", ""), delta_confirmar=bool(ds.get("confirmar", True)),
+            nome=nome,
+            cromossomo=str(g["cromossomo"]),
+            heranca=g["heranca"],
+            tipo_variante=g.get("tipo_variante", "snv"),
+            pen_valor=float(pen["valor"]),
+            pen_ic95=(float(pen["ic95"][0]), float(pen["ic95"][1])),
+            alpha=beta_fit["alpha"],
+            beta=beta_fit["beta"],
+            pen_citacao=pen.get("citacao", ""),
+            pen_confirmar=bool(pen.get("confirmar", True)),
+            inicio=dist,
+            inicio_ajuste=ajuste,
+            inicio_pontos=list(ini.get("pontos") or []),
+            inicio_estatisticas=dict(ini.get("estatisticas") or {}),
+            inicio_citacao=ini.get("citacao", ""),
+            inicio_confirmar=bool(ini.get("confirmar", True)),
+            delta_sexo={"M": float(ds.get("M", 0.0)), "F": float(ds.get("F", 0.0))},
+            delta_citacao=ds.get("citacao", ""),
+            delta_confirmar=bool(ds.get("confirmar", True)),
             extras=extras,
         )
     faltam = set(GENES) - set(genes)
     if faltam:
         raise ValueError(f"genes ausentes no YAML: {sorted(faltam)}")
     return Parametros(
-        versao=int(cfg.get("versao", 1)), data=str(cfg.get("data", "")), horizonte_anos=float(cfg.get("horizonte_anos", 90)),
+        versao=int(cfg.get("versao", 1)),
+        data=str(cfg.get("data", "")),
+        horizonte_anos=float(cfg.get("horizonte_anos", 90)),
         multiplicador_homozigoto=float(cfg.get("multiplicador_homozigoto", 1.0)),
-        filtro_qualidade=cfg.get("filtro_qualidade", {}), limiar_repeticoes=cfg.get("limiar_repeticoes_c9orf72", {"patogenico": 30, "intermediario": 24}),
-        sensibilidade=cfg.get("sensibilidade", {}), genes=genes, caminho=caminho,
+        filtro_qualidade=cfg.get("filtro_qualidade", {}),
+        limiar_repeticoes=cfg.get("limiar_repeticoes_c9orf72", {"patogenico": 30, "intermediario": 24}),
+        sensibilidade=cfg.get("sensibilidade", {}),
+        genes=genes,
+        caminho=caminho,
     )

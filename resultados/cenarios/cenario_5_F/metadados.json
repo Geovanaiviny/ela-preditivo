@@ -2,28 +2,31 @@
   "pacote": "ela_preditivo",
   "versao": "0.1.0",
   "aviso_legal": "AVISO: instrumento experimental de apoio à decisão no aconselhamento genético preditivo da ELA, construído com dados sintéticos e parâmetros populacionais da literatura. Não constitui diagnóstico, não substitui o julgamento clínico e não deve ser usado isoladamente em decisões sobre pacientes.",
-  "data": "2026-11-03T14:26:55",
+  "data": "2026-11-13T16:47:06",
   "horizonte": 90.0,
-  "tabela_variantes": "/home/paulo.filho/Documentos/paulo-fabiano/geovana/ela_preditivo/data/variantes_curadas.csv",
+  "tabela_variantes": "data/variantes_curadas.csv",
   "loci": [
     "TARDBP p.Met337Val",
     "FUS p.Arg521Cys"
   ],
-  "tempo_total_s": 4.76,
+  "tempo_total_s": 6.46,
   "seed": 42,
   "n": 10000,
   "motor": "pymc",
   "sexo": "F",
   "idade_atual": 30.0,
   "laudo_c9orf72": null,
-  "parametros": "/home/paulo.filho/Documentos/paulo-fabiano/geovana/ela_preditivo/config/parametros_literatura.yaml",
+  "parametros": "config/parametros_literatura.yaml",
   "versao_parametros": 1,
   "data_parametros": "2026-10-24",
   "base_anotacao": {
     "base_real": "clinvar_base_consolidada",
-    "curada": "/home/paulo.filho/Documentos/paulo-fabiano/geovana/ela_preditivo/data/variantes_curadas.csv",
+    "curada": "data/variantes_curadas.csv",
     "n_real": 1458,
-    "n_curada_extra": 1
+    "n_curada_extra": 1,
+    "arquivo_base_real": "base_consolidada_ela.csv",
+    "release_base_real": null,
+    "sha256_base_real": "f4b24b06b46f8440db33b15cd1fa70bcd126c59c74f6e1f6948ad39d88909945"
   },
   "vcf_mae": "resultados/sinteticos/cenario_5_mae.vcf",
   "vcf_pai": "resultados/sinteticos/cenario_5_pai.vcf",
@@ -49,7 +52,9 @@
       },
       "n_risco": 2,
       "n_vus": 0,
+      "n_conflitante": 0,
       "proporcao_vus": 0.0,
+      "proporcao_conflitante": 0.0,
       "montagem": "GRCh38",
       "montagem_coerente": true
     },
@@ -70,9 +75,13 @@
       },
       "n_risco": 2,
       "n_vus": 0,
+      "n_conflitante": 0,
       "proporcao_vus": 0.0,
+      "proporcao_conflitante": 0.0,
       "montagem": "GRCh38",
       "montagem_coerente": true
     }
-  }
+  },
+  "loci_descartados": [],
+  "saida_limpa": []
 }

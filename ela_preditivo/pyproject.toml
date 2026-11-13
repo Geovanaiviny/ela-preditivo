@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=68"]
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -8,7 +8,7 @@ version = "0.1.0"
 description = "Protótipo de apoio ao aconselhamento genético preditivo da ELA: Rede Bayesiana, Monte Carlo e análise de sobrevivência"
 readme = "README.md"
 requires-python = ">=3.11"
-license = {text = "MIT"}
+license = "MIT"
 authors = [{name = "Geovana Íviny Santos Lima"}]
 dependencies = [
   "pymc==5.28.5",
@@ -35,3 +35,7 @@ where = ["src"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 filterwarnings = ["ignore::FutureWarning", "ignore::DeprecationWarning", "ignore::UserWarning"]
+
+[tool.black]
+line-length = 120
+target-version = ["py311"]

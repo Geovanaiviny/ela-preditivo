@@ -8,22 +8,22 @@ VCF materno: `cenario_2_mae.vcf` (amostra MAE); VCF paterno: `cenario_2_pai.vcf`
 
 ## Qualidade dos dados (TCC 4.2.3)
 
-- Mãe: montagem GRCh38 (coerente); 4/6 registros aprovados (67%); 1 aprovados encontrados na base de anotação (25%; estado de revisão 2★: 1); classes {'nao_anotada': 3, 'benigna': 1}; significado incerto/conflitante: 0 (0% das anotadas); risco com frequência > 1%: 0.
-- Pai: montagem GRCh38 (coerente); 4/6 registros aprovados (67%); 1 aprovados encontrados na base de anotação (25%; estado de revisão 2★: 1); classes {'nao_anotada': 3, 'benigna': 1}; significado incerto/conflitante: 0 (0% das anotadas); risco com frequência > 1%: 0.
+- Mãe: montagem GRCh38 (coerente); 4/6 registros aprovados (67%); 1 aprovados encontrados na base de anotação (25%; estado de revisão 2★: 1); classes {'nao_anotada': 3, 'benigna': 1}; significado incerto: 0 (0% das anotadas); classificação conflitante: 0 (0%); risco com frequência > 1%: 0.
+- Pai: montagem GRCh38 (coerente); 4/6 registros aprovados (67%); 1 aprovados encontrados na base de anotação (25%; estado de revisão 2★: 1); classes {'nao_anotada': 3, 'benigna': 1}; significado incerto: 0 (0% das anotadas); classificação conflitante: 0 (0%); risco com frequência > 1%: 0.
 - Base de anotação: clinvar_base_consolidada; regra de classe: só Pathogenic/Likely pathogenic sustentam risco; significado incerto e classificações conflitantes não (TCC 4.2.2).
 
 ## Resultado
 
 - **C9orf72 expansão GGGGCC** (dominante; dosagens mãe/pai 1/0): P(portador) = 50.0% (MC 50.4%); penetrância média 33.3% [20.5%–47.5%]; risco vitalício 16.6% [10.2%–23.7%]; idade mediana de início 57.3 anos (p10–p90 MC: 43–69).
-- **Combinado (qualquer lócus, independência)**: P(portador de ≥ 1) = 50.0%; risco vitalício 16.6% [10.2%–23.7%]; idade mediana do primeiro início 57.1 anos. Condicionando ao descendente assintomático aos 30 anos (rejeição de 17 sorteios), P(portador de ≥ 1 lócus) passa de 50.4% para 50.3% e o risco vitalício residual é 16.7%.
+- **Combinado (qualquer lócus, independência)**: P(portador de ≥ 1) = 50.0%; risco vitalício 16.6% [10.3%–23.7%]; idade mediana do primeiro início 57.1 anos. Condicionando ao descendente assintomático aos 30 anos (rejeição de 17 sorteios), P(portador de ≥ 1 lócus) passa de 50.4% para 50.3% e o risco vitalício residual é 16.7%.
 
 ## Verificações
 
-Aderência: maior desvio entre Monte Carlo e valor exato = 0.44 erros padrão (limite usual: 4). Coerência: risco vitalício por Kaplan-Meier = C9orf72 expansão GGGGCC: 16.8%, qualquer lócus: 16.8%. Recuperação Lifelines: erro relativo máximo em π = 0.1%. Tempo: 3.2 s no total (pymc: 1.51 s; motor cruzado: 0.00 s).
+Aderência: maior desvio entre Monte Carlo e valor exato = 0.44 erros padrão (limite usual: 4). Coerência: risco vitalício por Kaplan-Meier = C9orf72 expansão GGGGCC: 16.8%, qualquer lócus: 16.8%. Recuperação Lifelines: erro relativo máximo em π = 0.1%. Tempo: 4.7 s no total (pymc: 2.44 s; motor cruzado: 0.00 s).
 
 ## Limitações desta execução
 
-Parâmetros provisórios (confirmar: true) em: SOD1, C9orf72, TARDBP, FUS. Independência entre lóci; sem fatores modificadores; penetrância populacional de coortes europeias/norte-americanas; dados sintéticos.
+Parâmetros provisórios (confirmar: true) em: C9orf72, TARDBP. Independência entre lóci; sem fatores modificadores; penetrância populacional de coortes europeias/norte-americanas; dados sintéticos.
 
 ## Tabelas
 
@@ -45,11 +45,11 @@ Parâmetros provisórios (confirmar: true) em: SOD1, C9orf72, TARDBP, FUS. Indep
 Registros lidos/aprovados: mãe 6/4, pai 6/4. Reprovações: mãe {'fora_das_regioes': 1, 'filtro_nao_pass': 1, 'dp_baixo': 1, 'gq_baixo': 1}, pai {'fora_das_regioes': 1, 'filtro_nao_pass': 1, 'dp_baixo': 1, 'gq_baixo': 1}. Base de anotação: clinvar_base_consolidada (1458 variantes do ClinVar + 1 da tabela curada).
 
 
-**Tabela 1b — Vetor genotípico parental: dosagem alélica (0/1/2) por lócus de risco e P(portador) exata**
+**Tabela 1b — Vetor genotípico parental: dosagem alélica (0/1/2) por lócus de risco e P(portador) exata; lócus com genótipo não determinado num genitor fica marcado como descartado e não entra no cálculo (TCC 4.3)**
 
-| gene | variante | rs | tipo | heranca | dosagem_mae | dosagem_pai | repeticoes_mae | repeticoes_pai | clnsig | estrelas | fonte | p_portador_exato | observacao |
-|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| C9orf72 | expansão GGGGCC |  | repeticao | dominante | 1 | 0 | 45 |  | Pathogenic | 1 | laudo | 0.5 |  |
+| gene | variante | rs | tipo | heranca | dosagem_mae | dosagem_pai | repeticoes_mae | repeticoes_pai | clnsig | estrelas | fonte | p_portador_exato | descartado | observacao |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| C9orf72 | expansão GGGGCC |  | repeticao | dominante | 1 | 0 | 45 |  | Pathogenic | 1 | laudo | 0.5 | não |  |
 
 *Fonte: elaborado pela autora (2026), a partir do artefato ela_preditivo.*
 
@@ -69,7 +69,7 @@ Registros lidos/aprovados: mãe 6/4, pai 6/4. Reprovações: mãe {'fora_das_reg
 | gene | variante | heranca | dosagem_mae | dosagem_pai | p_portador_exato | p_portador_mc | penetrancia_media | penetrancia_q025 | penetrancia_q975 | p_manifesta_exato | p_manifesta_mc | p_manifesta_q025 | p_manifesta_q975 | idade_mediana_exata | idade_mediana_mc | idade_p10_mc | idade_p90_mc |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
 | C9orf72 | C9orf72 expansão GGGGCC | dominante | 1 | 0 | 0.5 | 0.5042 | 0.3327 | 0.2048 | 0.4746 | 0.1664 | 0.168 | 0.1024 | 0.2373 | 57.3045 | 57.0751 | 42.6875 | 68.6903 |
-| — | qualquer lócus | independência |  |  | 0.5 | 0.5042 |  |  |  | 0.1664 | 0.168 | 0.1024 | 0.2373 |  | 57.0751 |  |  |
+| — | qualquer lócus | independência |  |  | 0.5 | 0.5042 |  |  |  | 0.1664 | 0.168 | 0.103 | 0.2368 |  | 57.0751 |  |  |
 
 *Fonte: elaborado pela autora (2026), a partir do artefato ela_preditivo.*
 
@@ -120,22 +120,22 @@ Registros lidos/aprovados: mãe 6/4, pai 6/4. Reprovações: mãe {'fora_das_reg
 
 ## Figuras
 
-![Figura 1 — Rede Bayesiana (DAG) do núcleo estocástico](figuras/figura_01_dag.png)
+![Figura 1 — Rede Bayesiana (DAG) do núcleo estocástico](figuras\figura_01_dag.png)
 
 *Figura 1 — Rede Bayesiana (DAG) do núcleo estocástico. Fonte: elaborado pela autora (2026), a partir do artefato ela_preditivo.*
 
-![Figura 4 — Risco acumulado de manifestação F(t) e sobrevivência S(t) do descendente, com banda de credibilidade de 95% e Kaplan-Meier da coorte simulada](figuras/figura_04_risco_temporal.png)
+![Figura 4 — Risco acumulado de manifestação F(t) e sobrevivência S(t) do descendente, com banda de credibilidade de 95% e Kaplan-Meier da coorte simulada](figuras\figura_04_risco_temporal.png)
 
 *Figura 4 — Risco acumulado de manifestação F(t) e sobrevivência S(t) do descendente, com banda de credibilidade de 95% e Kaplan-Meier da coorte simulada. Fonte: elaborado pela autora (2026), a partir do artefato ela_preditivo.*
 
-![Figura 6 — Aderência teórica: probabilidades exatas vs Monte Carlo (PyMC e NumPy), com erro padrão](figuras/figura_06_aderencia.png)
+![Figura 6 — Aderência teórica: probabilidades exatas vs Monte Carlo (PyMC e NumPy), com erro padrão](figuras\figura_06_aderencia.png)
 
 *Figura 6 — Aderência teórica: probabilidades exatas vs Monte Carlo (PyMC e NumPy), com erro padrão. Fonte: elaborado pela autora (2026), a partir do artefato ela_preditivo.*
 
-![Figura 8 — Função de risco instantâneo h(t) por lócus; faixa sombreada = pico de incidência 60–75 anos (Feldman et al., 2022)](figuras/figura_08_hazard.png)
+![Figura 8 — Função de risco instantâneo h(t) por lócus; faixa sombreada = pico de incidência 60–75 anos (Feldman et al., 2022)](figuras\figura_08_hazard.png)
 
 *Figura 8 — Função de risco instantâneo h(t) por lócus; faixa sombreada = pico de incidência 60–75 anos (Feldman et al., 2022). Fonte: elaborado pela autora (2026), a partir do artefato ela_preditivo.*
 
-![Figura 5 — Distribuição simulada da idade de início entre os descendentes que manifestam, por lócus](figuras/figura_05_idade_inicio.png)
+![Figura 5 — Distribuição simulada da idade de início entre os descendentes que manifestam, por lócus](figuras\figura_05_idade_inicio.png)
 
 *Figura 5 — Distribuição simulada da idade de início entre os descendentes que manifestam, por lócus. Fonte: elaborado pela autora (2026), a partir do artefato ela_preditivo.*

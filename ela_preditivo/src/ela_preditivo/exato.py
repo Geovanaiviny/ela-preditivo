@@ -2,6 +2,7 @@
 
 Servem de referência para os testes de aderência do Monte Carlo e para as curvas analíticas.
 """
+
 from __future__ import annotations
 
 import math
@@ -122,7 +123,9 @@ def risco_condicional(t, idade_atual: float, p_portador: float, penetrancia: flo
     return np.clip((ft - fa) / (1.0 - fa), 0.0, 1.0)
 
 
-def prob_portador_condicional(idade_atual: float, p_portador: float, penetrancia: float, dist: DistribuicaoInicio) -> float:
+def prob_portador_condicional(
+    idade_atual: float, p_portador: float, penetrancia: float, dist: DistribuicaoInicio
+) -> float:
     """Atualização bayesiana: P(C = 1 | assintomático na idade a) = q(1 − πG(a)) / (1 − qπG(a))."""
     g = float(dist.cdf(idade_atual))
     return p_portador * (1.0 - penetrancia * g) / (1.0 - p_portador * penetrancia * g)

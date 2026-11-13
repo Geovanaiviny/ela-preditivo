@@ -4,7 +4,7 @@ Artefato computacional do TCC **"Desenvolvimento de Sistema Preditivo de Heranç
 
 > **Aviso.** Instrumento experimental de apoio à decisão no aconselhamento genético preditivo da ELA, construído com dados sintéticos e parâmetros populacionais da literatura. Não constitui diagnóstico, não substitui o julgamento clínico e não deve ser usado isoladamente em decisões sobre pacientes. Nenhum dado genômico real é lido, armazenado ou distribuído por este repositório (Lei 13.709/2018, art. 5º, II; TCC, seção 3.4).
 
-Versão 0.1.0 — 24 de outubro de 2026; revisão de 8 de novembro de 2026 (correções da revisão da autora/orientador: `../docs/04_decisoes.md`, D20 a D29). Documentos de apoio em `../docs/` (análise do TCC, modelo matemático, plano, decisões, ambiente, relação com o exemplo do orientador).
+Versão 0.1.0 — 24 de outubro de 2026; revisão de 8 de novembro de 2026 (correções registradas em `../docs/04_decisoes.md`, D20 a D29). Documentos de apoio em `../docs/`: modelo matemático (02), registro de decisões (04), relação com o exemplo do orientador (06) e texto-base da seção 5 (07).
 
 ---
 
@@ -83,7 +83,20 @@ export PYTENSOR_FLAGS=cxx=          # só se a máquina não tiver g++
 python -c "import pymc, lifelines, vcf, Bio; print(pymc.__version__, lifelines.__version__)"   # 5.28.5 0.30.3
 ```
 
+No Windows, com PowerShell, a partir da raiz do repositório:
+
+```powershell
+py -m venv .venv
+.\.venv\Scripts\python.exe -m pip install --upgrade pip
+.\.venv\Scripts\python.exe -m pip install -e ".\ela_preditivo[dev]"
+.\.venv\Scripts\python.exe -m pytest -q ela_preditivo\tests
+```
+
+Chamar o `python.exe` pelo caminho completo evita a política de execução que costuma bloquear a ativação do ambiente. O aviso `g++ not available` é esperado e não impede a execução.
+
 Dependências pinadas em `pyproject.toml`: pymc 5.28.5, lifelines 0.30.3 (versão citada no TCC), numpy 2.x, pandas 2.x, scipy, matplotlib, seaborn, pyvcf3 1.0.4 (fork mantido do PyVCF, `import vcf`), biopython, pyyaml; pytest para os testes.
+
+> **Sem o subconjunto real do ClinVar.** `dados_reais/` fica fora do versionamento, então quem clona o repositório não a recebe. Sem ela o artefato continua funcionando, anotando apenas pela tabela curada (`data/variantes_curadas.csv`), e o relatório declara isso em "Qualidade dos dados". Duas diferenças aparecem: cinco testes são pulados, e o **cenário 4 passa a produzir resultados**, porque a tabela curada classifica a SOD1 p.Asp91Ala como patogênica de herança recessiva, enquanto o ClinVar real a classifica como conflitante (ver `../docs/04_decisoes.md`, D18). Os números de `resultados/` neste repositório foram gerados **com** a base real. Para reproduzi-los, coloque `base_consolidada_ela.csv` em `dados_reais/` na raiz ou aponte `ELA_DADOS_BRUTOS` para a pasta que a contém.
 
 ## 5. Uso
 
@@ -147,7 +160,7 @@ Todas as legendas saem no padrão "Tabela N — ... / Figura N — ...; Fonte: e
 
 Execução definitiva em 24/10/2026 (`ela-preditivo tudo --saida resultados --seed 42`): 5 cenários × 2 sexos com N = 10.000, avaliação com N ∈ {1.000, 10.000, 100.000} × 30 sementes; 5 min 22 s no total. Índice completo em `../resultados/README.md`; relatório de cada caso em `../resultados/cenarios/cenario_<n>_<sexo>/relatorio.md`; avaliação em `../resultados/avaliacao/relatorio.md`.
 
-> **Nota de 08/11/2026.** Os números desta seção vêm de `resultados/` gerado em 03/11/2026, antes das correções D20 a D29. Ao regenerar (`ela-preditivo tudo`, numa máquina com `dados_reais/`), mudam: o IC do risco combinado, que passa a ser o percentil dos sorteios de π (cenário 3: 39,1 % [28,8–48,6] em vez de [24,9–52,1]; cenário 5: 26,9 % [18,5–35,9] em vez de [16,2–38,2]); a Tabela 7, que ganha a linha do risco combinado e perde a coluna de aprovação por lócus (pico de h(t) do combinado: cenário 1 53,0; cenário 2 62,0; cenário 3 57,5; cenário 5 54,0 anos); o rótulo `conflitante` da SOD1 p.Asp91Ala no cenário 4; e os metadados (release e sha256 da base, lóci descartados, limpeza da pasta). Os valores por lócus não mudam.
+> **Nota de 13/11/2026.** Os números desta seção vêm de `resultados/`, regenerado em 13/11/2026 com o código atual (`ela-preditivo tudo --saida resultados --seed 42 --n 10000 --idade-atual 30`, 837 s numa máquina sem g++) e com a calibração de G(t) pelas estatísticas publicadas (D30). As medianas de idade de início mudaram em relação às execuções anteriores: SOD1 50,9, C9orf72 58,3, TARDBP 58,3 e FUS 46,7 anos. As probabilidades de transmissão e os riscos vitalícios não mudaram, porque a penetrância é a mesma.
 
 ### 7.1 Os cinco cenários (Tabela 3 consolidada)
 
@@ -214,7 +227,7 @@ ela_preditivo/
     atualizacao.py     baixar_clinvar, registrar_versao, comparar_versoes, atualizar (versões da base ClinVar)
     pipeline.py        executar, avaliar, tudo (limpam a pasta de saída no início)
     cli.py             ela-preditivo {gerar-cenarios | executar | avaliar | tudo | atualizar-base}
-  tests/               106 testes (pytest)
+  tests/               111 testes (pytest)
 ```
 
 ## 10. Dicionário de dados (colunas principais)
@@ -243,10 +256,10 @@ ela_preditivo/
 ## 11. Testes
 
 ```bash
-pytest -q ela_preditivo/tests        # 106 testes, ~15 s (5 deles só rodam com dados_reais/ presente)
+pytest -q ela_preditivo/tests        # 111 testes, ~20 s (5 deles só rodam com dados_reais/ presente)
 ```
 
-Cobrem: CPT e fórmulas exatas; calibração (Beta reproduz ponto e limite inferior do IC; Weibull recupera parâmetros conhecidos e a mediana de 58 anos de Murphy); geração e leitura dos VCFs (normalização de cromossomo, regiões, multialélicos, expansão, filtros); anotação (classes, estrelas, cruzamento por posição e por rs, limiar de repetições, carregador de `variant_summary`); vetor de dosagem nos 5 cenários; aderência PyMC ≈ NumPy ≈ exato; recessividade; reprodutibilidade por seed; efeito do sexo; condicionamento por idade; Lifelines (censura, KM = F(∞), cura mista recupera π, λ, ρ; risco condicional KM ≈ analítico); pipeline e CLI de ponta a ponta; correções da revisão de 08/11/2026, um teste por item (`test_correcoes_revisao.py`: genótipo indeterminado, classe conflitante, estatísticas em forma fechada, N pequeno sem ajuste da Lifelines, DataFrame como tabela curada, limpeza da pasta, limiares do TCC 4.3, faixa 60–75 só no combinado, banda combinada, VUS-high e valores mistos, laudo sem linha de repetição, fileDate fixo); atualização de bases (`test_atualizacao.py`: registro, comparação entre releases, download filtrado a partir de um arquivo local e CLI).
+Cobrem: CPT e fórmulas exatas; calibração (Beta reproduz ponto e limite inferior do IC; Weibull recupera parâmetros conhecidos e a mediana de 58 anos de Murphy); geração e leitura dos VCFs (normalização de cromossomo, regiões, multialélicos, expansão, filtros); anotação (classes, estrelas, cruzamento por posição e por rs, limiar de repetições, carregador de `variant_summary`); vetor de dosagem nos 5 cenários; aderência PyMC ≈ NumPy ≈ exato; recessividade; reprodutibilidade por seed; efeito do sexo; condicionamento por idade; Lifelines (censura, KM = F(∞), cura mista recupera π, λ, ρ; risco condicional KM ≈ analítico); pipeline e CLI de ponta a ponta; regras do artefato vindas do texto do TCC e da robustez do pipeline (`test_regras_do_artefato.py`: genótipo indeterminado, classe conflitante, estatísticas em forma fechada, N pequeno sem ajuste da Lifelines, DataFrame como tabela curada, limpeza da pasta, limiares do TCC 4.3, faixa 60–75 só no combinado, banda combinada, VUS-high e valores mistos, laudo sem linha de repetição, fileDate fixo); atualização de bases (`test_atualizacao.py`: registro, comparação entre releases, download filtrado a partir de um arquivo local e CLI).
 
 ## 12. Limitações e pontos a confirmar pela autora
 
@@ -257,7 +270,7 @@ Cobrem: CPT e fórmulas exatas; calibração (Beta reproduz ponto e limite infer
 5. **Efeito do sexo** documentado apenas para o C9orf72 (2 anos).
 6. **Populações de referência** europeias/norte-americanas (TCC, Quadro 6); ausência de coortes brasileiras.
 7. **Dados sintéticos**: o filtro de qualidade e a anotação foram exercitados com ruído controlado; o desempenho com arquivos VCF grandes (requisito não funcional) ainda não foi medido.
-8. **Ferramentas citadas no TCC**: Biopython não lê VCF (aqui normaliza o motivo de repetição); PyVCF é usado pela distribuição mantida `pyvcf3`. Sugere-se ajustar o texto das seções 3.3 e 4.4.D. Ver `../docs/01_analise_tcc.md`, item 9, para os demais pontos (nomenclatura de F(t) e hazard, "segregação alélica", referências ausentes).
+8. **Ferramentas citadas no TCC**: Biopython não lê VCF (aqui normaliza o motivo de repetição); PyVCF é usado pela distribuição mantida `pyvcf3`. Sugere-se ajustar o texto das seções 3.3 e 4.4.D, e revisar a nomenclatura de F(t) e da função de risco instantâneo no texto do TCC.
 
 ## 13. Trabalhos futuros
 

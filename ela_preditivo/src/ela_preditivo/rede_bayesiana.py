@@ -5,6 +5,7 @@ descendente → Portador (segundo a herança) → Manifestação (com penetrânc
 (Weibull ou log-normal, deslocada pelo sexo). A simulação de Monte Carlo é a amostragem preditiva a priori
 (`pm.sample_prior_predictive`), em que cada sorteio é uma fecundação hipotética.
 """
+
 from __future__ import annotations
 
 import logging
@@ -17,7 +18,9 @@ import numpy as np
 import pymc as pm
 import pytensor.tensor as pt
 
-logging.getLogger("pymc").setLevel(logging.WARNING)   # após o import: pymc/__init__ fixa INFO; silencia "Sampling: [...]"
+logging.getLogger("pymc").setLevel(
+    logging.WARNING
+)  # após o import: pymc/__init__ fixa INFO; silencia "Sampling: [...]"
 
 from .monte_carlo import Locus, ResultadoSimulacao
 
@@ -31,7 +34,9 @@ def construir_modelo(loci: list[Locus]) -> pm.Model:
         alelo_m = pm.Bernoulli("alelo_materno", p=dose_m / 2.0, dims="locus")
         alelo_p = pm.Bernoulli("alelo_paterno", p=dose_p / 2.0, dims="locus")
         dose = pm.Deterministic("dose_descendente", alelo_m + alelo_p, dims="locus")
-        portador = pm.Deterministic("portador", pt.switch(pt.eq(recessivo, 1.0), pt.eq(dose, 2), pt.ge(dose, 1)), dims="locus")
+        portador = pm.Deterministic(
+            "portador", pt.switch(pt.eq(recessivo, 1.0), pt.eq(dose, 2), pt.ge(dose, 1)), dims="locus"
+        )
         pens, idades = [], []
         for i, l in enumerate(loci):
             if l.pen_fixa is not None:
@@ -55,24 +60,65 @@ def simular_pymc(loci: list[Locus], n: int = 10_000, seed: int = 42) -> Resultad
     t0 = time.perf_counter()
     modelo = construir_modelo(loci)
     with modelo:
-        idata = pm.sample_prior_predictive(draws=n, random_seed=seed, var_names=[
-            "alelo_materno", "alelo_paterno", "dose_descendente", "portador", "penetrancia", "manifesta", "idade_inicio"])
+        idata = pm.sample_prior_predictive(
+            draws=n,
+            random_seed=seed,
+            var_names=[
+                "alelo_materno",
+                "alelo_paterno",
+                "dose_descendente",
+                "portador",
+                "penetrancia",
+                "manifesta",
+                "idade_inicio",
+            ],
+        )
     pr = idata.prior
     v = lambda nome: np.asarray(pr[nome].values[0])  # noqa: E731  (cadeia única)
     manifesta = v("manifesta").astype(bool)
     idade = np.where(manifesta, v("idade_inicio"), np.nan)
-    return ResultadoSimulacao("pymc", n, seed, None, loci, v("alelo_materno").astype(bool), v("alelo_paterno").astype(bool),
-                              v("dose_descendente").astype(int), v("portador").astype(bool), v("penetrancia").astype(float),
-                              manifesta, idade, tempo_s=time.perf_counter() - t0)
+    return ResultadoSimulacao(
+        "pymc",
+        n,
+        seed,
+        None,
+        loci,
+        v("alelo_materno").astype(bool),
+        v("alelo_paterno").astype(bool),
+        v("dose_descendente").astype(int),
+        v("portador").astype(bool),
+        v("penetrancia").astype(float),
+        manifesta,
+        idade,
+        tempo_s=time.perf_counter() - t0,
+    )
 
 
 def descrever_dag(loci: list[Locus]) -> dict:
     """Nós e arestas do DAG para a Figura 1 e para a documentação."""
-    nos = ["Dose materna (0/1/2)", "Dose paterna (0/1/2)", "Alelo materno", "Alelo paterno", "Dose do descendente",
-           "Herança (dom./rec.)", "Portador", "Penetrância π ~ Beta(α, β)", "Manifesta", "Sexo", "Idade de início G(t)"]
-    arestas = [("Dose materna (0/1/2)", "Alelo materno"), ("Dose paterna (0/1/2)", "Alelo paterno"),
-               ("Alelo materno", "Dose do descendente"), ("Alelo paterno", "Dose do descendente"),
-               ("Dose do descendente", "Portador"), ("Herança (dom./rec.)", "Portador"),
-               ("Portador", "Manifesta"), ("Penetrância π ~ Beta(α, β)", "Manifesta"),
-               ("Manifesta", "Idade de início G(t)"), ("Sexo", "Idade de início G(t)")]
+    nos = [
+        "Dose materna (0/1/2)",
+        "Dose paterna (0/1/2)",
+        "Alelo materno",
+        "Alelo paterno",
+        "Dose do descendente",
+        "Herança (dom./rec.)",
+        "Portador",
+        "Penetrância π ~ Beta(α, β)",
+        "Manifesta",
+        "Sexo",
+        "Idade de início G(t)",
+    ]
+    arestas = [
+        ("Dose materna (0/1/2)", "Alelo materno"),
+        ("Dose paterna (0/1/2)", "Alelo paterno"),
+        ("Alelo materno", "Dose do descendente"),
+        ("Alelo paterno", "Dose do descendente"),
+        ("Dose do descendente", "Portador"),
+        ("Herança (dom./rec.)", "Portador"),
+        ("Portador", "Manifesta"),
+        ("Penetrância π ~ Beta(α, β)", "Manifesta"),
+        ("Manifesta", "Idade de início G(t)"),
+        ("Sexo", "Idade de início G(t)"),
+    ]
     return {"nos": nos, "arestas": arestas, "loci": [l.rotulo for l in loci]}
