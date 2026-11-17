@@ -1,0 +1,25 @@
+# ambiente virtual (local a cada máquina)
+.venv/
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+.ipynb_checkpoints/
+# dados brutos reais (nunca versionar; ver ELA_DADOS_BRUTOS)
+dados_brutos/
+dados_reais/
+*.vcf.gz
+clinvar*.vcf
+variant_summary*.txt
+submission_summary*.txt
+snp_result_*.txt
+# banco da plataforma web (nunca versionar; ver ELA_WEB_BD)
+dados_web/
+*.sqlite3
+# temporários e sistema
+*.tmp
+*.log
+.DS_Store

@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+  <title>EloSense</title>
+  <link rel="icon" href="/static/icone.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+  <a class="pular" href="#conteudo">Pular para o conteúdo</a>
+  <div class="aplicacao">
+    <aside id="lateral" class="lateral" aria-label="Navegação principal">
+      <div class="lateral-topo">
+        <a class="marca" href="#/" aria-label="EloSense, plataforma clínica: início">
+          <span class="marca-linha"><svg viewBox="0 0 48 48" aria-hidden="true" focusable="false"><path d="M31 3C11 10 11 20 24 24s13 14-7 21M17 3c20 7 20 17 7 21s-13 14 7 21" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round"/><path d="M19 10h10M17.5 15.5h13M17.5 32.5h13M19 38h10" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" opacity=".9"/></svg><span class="marca-nome">EloSense</span></span>
+          <span class="marca-sub">Plataforma clínica</span>
+        </a>
+        <button id="fechar-menu" class="botao-icone botao-menu" type="button" aria-label="Fechar menu"><svg class="icone" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
+      </div>
+      <nav id="menu" class="menu" aria-label="Menu principal"></nav>
+      <div id="usuario-atual" class="usuario-atual"></div>
+    </aside>
+    <div id="sobreposicao" class="sobreposicao" hidden></div>
+    <div class="principal">
+      <header class="topo">
+        <button id="botao-menu" class="botao-icone botao-menu" type="button" aria-expanded="false" aria-controls="lateral" aria-label="Abrir menu"><svg class="icone" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 7h16M4 12h16M4 17h16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
+        <a class="marca marca-topo" href="#/" aria-label="EloSense: início">
+          <span class="marca-linha"><svg viewBox="0 0 48 48" aria-hidden="true" focusable="false"><path d="M31 3C11 10 11 20 24 24s13 14-7 21M17 3c20 7 20 17 7 21s-13 14 7 21" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round"/><path d="M19 10h10M17.5 15.5h13M17.5 32.5h13M19 38h10" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" opacity=".9"/></svg><span class="marca-nome">EloSense</span></span>
+        </a>
+        <button id="botao-recolher" class="botao-icone botao-recolher" type="button" aria-pressed="false" aria-label="Recolher menu lateral" title="Recolher menu lateral"><svg class="icone" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M11 6l-6 6 6 6M19 6l-6 6 6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+        <nav id="trilha" class="trilha" aria-label="Você está em"></nav>
+        <div id="topo-acoes" class="topo-acoes"></div>
+      </header>
+      <div id="selo-demo" class="selo" role="note" hidden></div>
+      <div id="avisos" class="avisos" aria-live="polite" aria-atomic="true"></div>
+      <main id="conteudo" class="conteudo" tabindex="-1"></main>
+      <footer class="rodape">
+        <a href="#/privacidade">Privacidade e proteção de dados</a>
+      </footer>
+    </div>
+  </div>
+  <script src="/static/app.js"></script>
+</body>
+</html>

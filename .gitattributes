@@ -1,0 +1,11 @@
+# Fim de linha. O gerador grava os VCFs sintéticos com LF e o teste de reprodutibilidade os compara
+# byte a byte com o que `cenarios.gerar_cenarios` produz. Sem esta regra, o Git do Windows converte
+# para CRLF no checkout e esse teste falha em quem clona o repositório.
+* text=auto eol=lf
+
+# Binários: nunca converter.
+*.png binary
+*.jpg binary
+*.pdf binary
+*.docx binary
+*.xlsx binary

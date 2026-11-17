@@ -1,0 +1,3 @@
+gene,variante,heranca,dosagem_mae,dosagem_pai,p_portador_exato,p_portador_mc,penetrancia_media,penetrancia_q025,penetrancia_q975,p_manifesta_exato,p_manifesta_mc,p_manifesta_q025,p_manifesta_q975,idade_mediana_exata,idade_mediana_mc,idade_p10_mc,idade_p90_mc
+C9orf72,C9orf72 expansão GGGGCC,dominante,1,0,0.5,0.5042,0.3327123135469123,0.20483031666310342,0.47457182512605606,0.16635615677345614,0.168,0.10241515833155171,0.23728591256302803,59.3044619993133,59.075127274665576,44.687521591995605,70.69033497333854
+—,qualquer lócus,independência,,,0.5,0.5042,,,,0.16635615677345617,0.168,0.10301631279824766,0.2367647278817194,,59.075127274665576,,

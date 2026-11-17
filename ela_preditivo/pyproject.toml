@@ -1,0 +1,54 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ela_preditivo"
+version = "0.1.0"
+description = "Protótipo de apoio ao aconselhamento genético preditivo da ELA: Rede Bayesiana, Monte Carlo e análise de sobrevivência"
+readme = "README.md"
+requires-python = ">=3.11"
+license = "MIT"
+authors = [{name = "Geovana Íviny Santos Lima"}]
+dependencies = [
+  "pymc==5.28.5",
+  "lifelines==0.30.3",
+  "numpy>=2,<2.5",
+  "pandas>=2.1,<3",
+  "scipy>=1.11",
+  "matplotlib>=3.8",
+  "seaborn>=0.13",
+  "pyvcf3==1.0.4",
+  "biopython>=1.83",
+  "pyyaml>=6",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8"]
+# Camada web (plataforma): servidor mínimo das telas de acesso, cadastros, RBAC e LGPD.
+web = [
+  "fastapi>=0.115",
+  "uvicorn>=0.30",
+  "sqlalchemy>=2.0",
+  "argon2-cffi>=23",
+  "cryptography>=42",
+  "python-multipart>=0.0.9",
+  "httpx>=0.27",
+]
+
+[project.scripts]
+ela-preditivo = "ela_preditivo.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+ela_preditivo = ["web/static/*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+filterwarnings = ["ignore::FutureWarning", "ignore::DeprecationWarning", "ignore::UserWarning"]
+
+[tool.black]
+line-length = 120
+target-version = ["py311"]
