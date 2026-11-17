@@ -239,6 +239,7 @@ def quem_sou_eu_dict(usuario: Usuario, sessao: Sessao, request: Request) -> dict
         "usuario": usuario_dict(usuario, obter_cifra(request)),
         "permissoes": sorted(permissoes_do_papel(usuario.papel)),
         "verificado": usuario.verificado,
+        "trocar_senha": bool(usuario.trocar_senha),  # senha temporária: a interface leva à troca
         "csrf": sessao.csrf_token,
         "demonstracao": config.demonstracao,
         "sessao_minutos": config.sessao_minutos,
@@ -375,12 +376,19 @@ def login(entrada: LoginEntrada, request: Request, response: Response):
 # Sessão (qualquer situação de conta)
 # ---------------------------------------------------------------------------
 @router.get("/quem-sou-eu")
-def quem_sou_eu(request: Request, usuario: Usuario = Depends(exigir(permitir_nao_verificado=True))):
+def quem_sou_eu(
+    request: Request,
+    usuario: Usuario = Depends(exigir(permitir_nao_verificado=True, permitir_troca_pendente=True)),
+):
     return quem_sou_eu_dict(usuario, request.state.sessao, request)
 
 
 @router.post("/logout")
-def logout(request: Request, response: Response, usuario: Usuario = Depends(exigir(permitir_nao_verificado=True))):
+def logout(
+    request: Request,
+    response: Response,
+    usuario: Usuario = Depends(exigir(permitir_nao_verificado=True, permitir_troca_pendente=True)),
+):
     bd = obter_bd(request)
     sessao: Sessao = request.state.sessao
     sessao.encerrada_em = agora()
@@ -480,15 +488,20 @@ class ErroConflito(HTTPException):
 
 @router.post("/minha/senha")
 def trocar_senha(
-    entrada: TrocaSenha, request: Request, usuario: Usuario = Depends(exigir(CONTA_GERIR, permitir_nao_verificado=True))
+    entrada: TrocaSenha,
+    request: Request,
+    usuario: Usuario = Depends(exigir(CONTA_GERIR, permitir_nao_verificado=True, permitir_troca_pendente=True)),
 ):
     bd, cifra = obter_bd(request), obter_cifra(request)
     if not verificar_senha(usuario.senha_hash, entrada.senha_atual):
         exigir_campos({"senha_atual": "Senha atual incorreta."})
+    if verificar_senha(usuario.senha_hash, entrada.senha_nova):
+        exigir_campos({"senha_nova": "A nova senha precisa ser diferente da atual."})
     erro = validar_senha(entrada.senha_nova, usuario.email, cifra.decifrar(usuario.cpf_cifrado))
     if erro:
         exigir_campos({"senha_nova": erro})
     usuario.senha_hash = hash_senha(entrada.senha_nova)
+    usuario.trocar_senha = False  # a senha temporária não vira a senha de uso
     usuario.atualizado_em = agora()
     atual: Sessao = request.state.sessao
     for s in bd.execute(select(Sessao).where(Sessao.usuario_id == usuario.id, Sessao.encerrada_em.is_(None))).scalars():
@@ -528,8 +541,7 @@ def pedir_encerramento(request: Request, usuario: Usuario = Depends(exigir(CONTA
     if usuario.papel == "ADMIN":
         raise HTTPException(
             403,
-            "Administradores não pedem encerramento pela plataforma: a conta é desativada por outro administrador ou "
-            "por comando no servidor.",
+            "Administradores não pedem encerramento pela plataforma: a conta é desativada por outro administrador.",
         )
     if usuario.encerramento_solicitado_em is None:
         usuario.encerramento_solicitado_em = agora()

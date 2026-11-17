@@ -1,0 +1,10 @@
+.git
+.venv
+.env
+dados_web
+dados_reais
+resultados
+**/__pycache__
+**/*.egg-info
+**/.pytest_cache
+ela_preditivo/tests

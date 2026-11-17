@@ -161,6 +161,9 @@ def test_toda_rota_api_fora_da_lista_publica_devolve_401_sem_sessao(plataforma):
         ("GET", "/api/ajuda"),
         ("POST", "/api/contas/cadastro"),
         ("POST", "/api/contas/login"),
+        # primeiro acesso: só respondem enquanto não há administrador (ver test_primeiro_acesso.py)
+        ("POST", "/api/primeiro-acesso/administrador"),
+        ("POST", "/api/primeiro-acesso/demonstracao"),
     }
     for rota in rotas:
         metodo = sorted(rota.methods)[0]
@@ -188,6 +191,11 @@ MATRIZ_NAO = {
         ("GET", "/api/admin/cadastros/pendentes"),
         ("GET", "/api/admin/usuarios"),
         ("GET", "/api/admin/auditoria"),
+        ("POST", "/api/admin/administradores"),
+        ("POST", "/api/admin/demonstracao"),
+        ("POST", "/api/base/versoes"),
+        ("POST", "/api/base/arquivos"),
+        ("POST", "/api/base/baixar"),
     ],
     "ADMIN": [
         ("GET", "/api/pacientes"),
@@ -195,8 +203,14 @@ MATRIZ_NAO = {
         ("POST", "/api/analises"),
         ("GET", "/api/analises/x/pacote.zip"),
         ("GET", "/api/parametros"),
+        ("GET", "/api/parametros/arquivo"),
+        ("GET", "/api/parametros/tabela-variantes"),
         ("GET", "/api/cenarios"),
         ("GET", "/api/pesquisa/casos"),
+        ("GET", "/api/artefato/comandos"),
+        ("GET", "/api/artefato/tarefas"),
+        ("POST", "/api/artefato/tarefas"),
+        ("GET", "/api/artefato/tarefas/x/pacote.zip"),
     ],
     "MEDICO": [
         ("GET", "/api/admin/cadastros/pendentes"),
@@ -204,6 +218,11 @@ MATRIZ_NAO = {
         ("GET", "/api/admin/usuarios"),
         ("GET", "/api/admin/auditoria"),
         ("GET", "/api/pesquisa/casos"),
+        ("POST", "/api/admin/administradores"),
+        ("GET", "/api/admin/demonstracao"),
+        ("POST", "/api/base/versoes"),
+        ("POST", "/api/base/arquivos"),
+        ("POST", "/api/base/baixar"),
     ],
 }
 
@@ -224,6 +243,9 @@ def test_cada_nao_da_matriz_devolve_403(plataforma, medico, pesquisador, admin):
     assert admin.get("/api/admin/usuarios").status_code == 200 and admin.get("/api/admin/auditoria").status_code == 200
     for c in (medico, pesquisador, admin):
         assert c.get("/api/contas/minha/auditoria").status_code == 200 and c.get("/api/contas/minha").status_code == 200
+        assert c.get("/api/base").status_code == 200  # a base de anotação em uso é visível aos três papéis
+    assert medico.get("/api/artefato/comandos").status_code == 200
+    assert pesquisador.get("/api/artefato/tarefas").status_code == 200
 
 
 def test_quem_sou_eu_devolve_permissoes_da_matriz(medico, pesquisador, admin):
@@ -643,7 +665,9 @@ def test_nenhum_dado_pessoal_em_url_nem_no_armazenamento_do_navegador(plataforma
     # rotas por hash só com ids ou identificador aleatório da análise
     for hash_ in re.findall(r"#/[a-z/-]*\$\{[^}]+\}", app_js):
         assert re.search(
-            r"\$\{(p\.id|pac\.id|id|r\.id|ids\[0\]|pacienteId|a\.paciente_id|u\.id|primeiro|proximo)\}", hash_
+            r"\$\{(p\.id|pac\.id|id|r\.id|ids\[0\]|pacienteId|a\.paciente_id|u\.id|primeiro|proximo"
+            r"|t\.id|ctx\.em_andamento)\}",  # os dois últimos: identificador de uma execução do artefato
+            hash_,
         ), hash_  # só ids e identificadores
     # parâmetros de rota da API são só ids/identificadores; busca por nome vai no corpo (POST)
     for rota in rotas_api(plataforma["app"]):

@@ -15,9 +15,20 @@ A partir do VCF da mãe e do pai (ou do genótipo de parentes, quando um genitor
 | `ela_preditivo/config/` | parâmetros da literatura, com a citação de cada valor |
 | `ela_preditivo/data/sinteticos/` | cenários familiares sintéticos (VCF) |
 | `resultados/` | tabelas, figuras e relatórios gerados pelo artefato |
+| `Dockerfile`, `docker-compose.yml`, `.env.exemplo` | subida da plataforma em um comando |
 | `exemplo_maquina_tcc_ela.py` | exemplo de referência enviado pelo orientador |
 
 ## Como rodar
+
+Com Docker, a plataforma sobe em `http://localhost:8000`:
+
+```bash
+docker compose up --build
+```
+
+Daí em diante tudo acontece no navegador. Na primeira vez a plataforma abre na tela Primeiro acesso, onde se cria o administrador e, em homologação (o padrão), os usuários e registros fictícios, com as senhas mostradas na tela. A base real do ClinVar é enviada pela tela Base de anotação. Análises, envio de VCFs e documentos, resultados, avaliação com as métricas de verificação, reprodução completa e cenários também são feitos pela interface, com permissões por papel (médico, pesquisador e administrador).
+
+Sem Docker:
 
 ```bash
 uv venv --python 3.12 .venv && source .venv/bin/activate

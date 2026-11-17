@@ -16,7 +16,7 @@ from fastapi.staticfiles import StaticFiles
 from sqlalchemy import select
 
 from .. import AVISO_LEGAL, __version__
-from . import admin, analises, auditoria, contas, pacientes, pesquisa, textos
+from . import admin, analises, artefato, auditoria, contas, pacientes, pesquisa, primeiro_acesso, textos
 from .bd import agora, criar_engine, criar_tabelas, fabrica_sessoes
 from .comum import MUTAVEIS, origem
 from .config import Configuracao
@@ -76,6 +76,7 @@ def criar_app(config: Configuracao | None = None) -> FastAPI:
     app.state.cifra = Cifra(config.chave)
     app.state.limite = LimiteTentativas(config.tentativas_login, config.bloqueio_minutos * 60)
     app.state.analises = analises.RegistroAnalises(config)
+    app.state.tarefas = artefato.RegistroTarefas(config)
     config.dir_vcfs.mkdir(parents=True, exist_ok=True)
 
     @app.middleware("http")
@@ -153,9 +154,11 @@ def criar_app(config: Configuracao | None = None) -> FastAPI:
     app.include_router(pacientes.router)
     app.include_router(pesquisa.router)
     app.include_router(analises.router)
+    app.include_router(artefato.router)
+    app.include_router(primeiro_acesso.router)
 
     @app.get("/api/sistema")
-    def sistema():
+    def sistema(request: Request):
         """Informação pública: versão, avisos, selo de demonstração, encarregado e versões dos termos."""
         return {
             "nome": "ela_preditivo",
@@ -176,6 +179,8 @@ def criar_app(config: Configuracao | None = None) -> FastAPI:
             },
             "termo_uso": textos.TERMO_USO,
             "sessao_minutos": config.sessao_minutos,
+            # o que ainda está por configurar: sem administrador, a interface abre no primeiro acesso
+            "primeiro_acesso": primeiro_acesso.situacao(request.state.bd, config),
         }
 
     @app.get("/api/privacidade")
@@ -199,6 +204,7 @@ def criar_app(config: Configuracao | None = None) -> FastAPI:
     @app.on_event("shutdown")
     def _encerrar():
         app.state.analises.encerrar()
+        app.state.tarefas.encerrar()
 
     return app
 

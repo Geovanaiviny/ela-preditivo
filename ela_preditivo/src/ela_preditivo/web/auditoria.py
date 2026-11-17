@@ -56,6 +56,11 @@ DOCUMENTO_REMOVIDO = "documento_removido"
 RESULTADO_ABERTO = "resultado_aberto"
 PARENTE_ADICIONADO = "parente_adicionado"
 PARENTE_REMOVIDO = "parente_removido"
+TAREFA_INICIADA = "tarefa_iniciada"
+TAREFA_CANCELADA = "tarefa_cancelada"
+TAREFA_REMOVIDA = "tarefa_removida"
+BASE_ENVIADA = "base_enviada"
+BASE_REGISTRADA = "base_registrada"
 
 ACOES = (
     CADASTRO,
@@ -99,6 +104,11 @@ ACOES = (
     RESULTADO_ABERTO,
     PARENTE_ADICIONADO,
     PARENTE_REMOVIDO,
+    TAREFA_INICIADA,
+    TAREFA_CANCELADA,
+    TAREFA_REMOVIDA,
+    BASE_ENVIADA,
+    BASE_REGISTRADA,
 )
 HASH_GENESE = "0" * 64
 

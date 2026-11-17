@@ -11,13 +11,13 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import func, select
 
-from . import auditoria
+from . import auditoria, primeiro_acesso
 from .bd import agora
 from .contas import usuario_dict
-from .comum import iso, obter_bd, obter_cifra
+from .comum import exigir_campos, iso, obter_bd, obter_cifra, obter_config
 from .modelos import PAPEIS, SITUACOES, Auditoria, Sessao, Usuario
 from .permissoes import AUDITORIA_VER_TUDO, USUARIOS_GERIR, exigir
-from .seguranca import normalizar_texto
+from .seguranca import normalizar_texto, verificar_senha
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
 
@@ -167,6 +167,58 @@ def reativar(usuario_id: int, request: Request, admin: Usuario = Depends(exigir(
     nova = "VERIFICADO" if u.verificado_em is not None else "PENDENTE"
     u.encerramento_solicitado_em = None
     return _mudar(bd, admin, u, nova, auditoria.USUARIO_REATIVADO)
+
+
+class ContaDeAdministrador(BaseModel):
+    model_config = ConfigDict(extra="ignore", str_strip_whitespace=True)
+    nome: str = Field(max_length=200)
+    cpf: str = Field(max_length=20)
+    email: str = Field(max_length=254)
+    senha_atual: str = Field(max_length=200)
+
+
+@router.post("/administradores", status_code=201)
+def criar_administrador(
+    entrada: ContaDeAdministrador, request: Request, admin: Usuario = Depends(exigir(USUARIOS_GERIR))
+):
+    """Um administrador cria outro, conferindo a própria senha. Quem cria não escolhe nem fica com a senha do
+    colega: o sistema gera uma temporária, devolvida aqui uma única vez, e o novo administrador a troca no primeiro
+    login. Ninguém se cadastra nem é promovido a administrador."""
+    bd, cifra = obter_bd(request), obter_cifra(request)
+    if not verificar_senha(admin.senha_hash, entrada.senha_atual):
+        exigir_campos({"senha_atual": "Senha atual incorreta."})
+    temporaria = primeiro_acesso.senha_temporaria()
+    u = primeiro_acesso.criar_administrador(
+        bd,
+        cifra,
+        entrada,
+        "pela interface, por outro administrador; senha temporária",
+        autor=admin,
+        senha=temporaria,
+        trocar_senha=True,
+    )
+    return {
+        "mensagem": "Administrador criado.",
+        "usuario": _dict_admin(u, cifra),
+        "senha_temporaria": temporaria,
+        "aviso": "Entregue a senha temporária ao novo administrador por um canal seguro. Ela não será mostrada de "
+        "novo e precisa ser trocada no primeiro login.",
+    }
+
+
+@router.get("/demonstracao")
+def situacao_da_demonstracao(request: Request, admin: Usuario = Depends(exigir(USUARIOS_GERIR))):
+    return {"pode_popular": primeiro_acesso.pode_popular_demonstracao(obter_bd(request), obter_config(request))}
+
+
+@router.post("/demonstracao", status_code=201)
+def criar_demonstracao(request: Request, admin: Usuario = Depends(exigir(USUARIOS_GERIR))):
+    """Em homologação, antes de haver médico ou pesquisador: os usuários e registros fictícios de `popular-demo`."""
+    if not primeiro_acesso.pode_popular_demonstracao(obter_bd(request), obter_config(request)):
+        raise HTTPException(
+            409, "A demonstração só pode ser criada em homologação, uma vez, antes de haver médicos ou pesquisadores."
+        )
+    return primeiro_acesso.popular_demonstracao(request)
 
 
 @router.get("/auditoria")

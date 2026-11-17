@@ -31,8 +31,19 @@ def criar_engine(caminho: str | Path) -> Engine:
     return engine
 
 
+# Colunas acrescentadas a tabelas que já existem em bancos criados antes delas. `create_all` não altera tabela
+# existente; o ADD COLUMN mantém esses bancos abrindo.
+COLUNAS_ACRESCENTADAS = {"usuarios": {"trocar_senha": "BOOLEAN NOT NULL DEFAULT 0"}}
+
+
 def criar_tabelas(engine: Engine) -> None:
     Base.metadata.create_all(engine)
+    with engine.begin() as conexao:
+        for tabela, colunas in COLUNAS_ACRESCENTADAS.items():
+            existentes = {linha[1] for linha in conexao.exec_driver_sql(f"PRAGMA table_info({tabela})")}
+            for nome, tipo in colunas.items():
+                if nome not in existentes:
+                    conexao.exec_driver_sql(f"ALTER TABLE {tabela} ADD COLUMN {nome} {tipo}")
 
 
 def fabrica_sessoes(engine: Engine) -> sessionmaker[Session]:

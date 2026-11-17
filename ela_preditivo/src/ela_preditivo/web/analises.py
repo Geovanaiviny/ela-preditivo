@@ -25,12 +25,12 @@ import pandas as pd
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, Response
 
-from .. import AVISO_LEGAL, DIR_DADOS, __version__, cenarios, pipeline, repeticoes
+from .. import AVISO_LEGAL, DIR_DADOS, __version__, anotacao, cenarios, pipeline, repeticoes
 from ..calibracao import carregar_parametros
 from ..ingestao import MontagemDivergente
 from . import arquivos, auditoria, textos, vcfs
 from .bd import agora
-from .comum import exigir_campos, interpretar_laudo, iso, obter_bd, obter_cifra
+from .comum import exigir_campos, interpretar_laudo, iso, obter_bd, obter_cifra, texto_curto
 from .config import Configuracao
 from .modelos import AnalisePaciente, Descendente, Paciente, Usuario
 from .pacientes import descendente_de, do_medico, idades, situacao_do_genitor
@@ -86,6 +86,101 @@ SITUACAO_PARA_O_NUCLEO = {
     "AFETADO": "afetado",
     "DESCONHECIDA": "desconhecido",
 }
+
+
+# Base de anotação escolhida numa execução: a em uso, só a tabela curada ou um arquivo da pasta de bases
+BASE_PADRAO, BASE_SO_CURADA = "padrao", "so_tabela_curada"
+RE_BASE_VCF = re.compile(r"^clinvar[A-Za-z0-9_.-]*\.vcf(\.gz)?$")
+COLUNAS_MINIMAS_DA_TABELA = frozenset(
+    {"gene", "cromossomo", "posicao_grch38", "ref", "alt", "clnsig", "heranca", "tipo"}
+)
+
+
+def nome_de_base_aceito(nome: str) -> bool:
+    """Nomes que o artefato reconhece como base real do ClinVar (os mesmos de `anotacao.localizar_base_real`)."""
+    return nome in anotacao.ARQUIVOS_BASE_REAL or bool(RE_BASE_VCF.match(nome))
+
+
+def nomes_bases(config: Configuracao) -> list[str]:
+    d = Path(config.dir_bases)
+    if not d.is_dir():
+        return []
+    return sorted(p.name for p in d.iterdir() if p.is_file() and nome_de_base_aceito(p.name))
+
+
+def base_padrao(config: Configuracao):
+    """Base em uso: o primeiro arquivo reconhecido na pasta de bases; sem arquivo, só a tabela curada (False)."""
+    p = anotacao.localizar_base_real(config.dir_bases)
+    return p if p is not None else False
+
+
+def base_escolhida(config: Configuracao, texto, campo: str, campos: dict):
+    """Valor do campo `base` → argumento `base_clinvar` do pipeline (caminho, ou False para só a tabela curada)."""
+    t = str(texto or "").strip() or BASE_PADRAO
+    if t == BASE_PADRAO:
+        return base_padrao(config)
+    if t == BASE_SO_CURADA:
+        return False
+    if t not in nomes_bases(config):
+        campos[campo] = "Base de anotação desconhecida."
+        return False
+    return Path(config.dir_bases) / t
+
+
+def guardar_envio(arquivo: UploadFile | None, destino: Path, campo: str, campos: dict, limite: int) -> Path | None:
+    """Grava um arquivo enviado conferindo o tamanho e o arquivo vazio; o conteúdo é conferido por quem chama."""
+    if arquivo is None or not arquivo.filename:
+        return None
+    destino.parent.mkdir(parents=True, exist_ok=True)
+    tamanho = 0
+    with open(destino, "wb") as f:
+        while True:
+            parte = arquivo.file.read(1024 * 1024)
+            if not parte:
+                break
+            tamanho += len(parte)
+            if tamanho > limite:
+                break
+            f.write(parte)
+    if tamanho == 0 or tamanho > limite:
+        campos[campo] = "Arquivo vazio." if tamanho == 0 else f"Arquivo maior que {limite // (1024 * 1024)} MB."
+        destino.unlink(missing_ok=True)
+        return None
+    return destino
+
+
+def guardar_parametros(arquivo: UploadFile | None, destino: Path, campo: str, campos: dict, limite: int) -> Path | None:
+    """YAML de parâmetros alternativos (o `--config` da linha de comando), aceito só se o artefato consegue lê-lo."""
+    p = guardar_envio(arquivo, destino, campo, campos, limite)
+    if p is None:
+        return None
+    try:
+        carregar_parametros(p)
+    except Exception:  # noqa: BLE001
+        campos[campo] = "O arquivo não é um YAML de parâmetros que o artefato consiga ler."
+        p.unlink(missing_ok=True)
+        return None
+    return p
+
+
+def guardar_tabela_variantes(
+    arquivo: UploadFile | None, destino: Path, campo: str, campos: dict, limite: int
+) -> Path | None:
+    """CSV de anotação alternativo (o `--tabela-variantes` da linha de comando), com as colunas da tabela curada."""
+    p = guardar_envio(arquivo, destino, campo, campos, limite)
+    if p is None:
+        return None
+    try:
+        # o carregador completa colunas ausentes; aqui o arquivo precisa trazer as que identificam e classificam
+        if not COLUNAS_MINIMAS_DA_TABELA <= set(pd.read_csv(p, nrows=0).columns):
+            raise ValueError("faltam colunas")
+        if anotacao.carregar_tabela_curada(p).empty:
+            raise ValueError("tabela vazia")
+    except Exception:  # noqa: BLE001
+        campos[campo] = "O arquivo não é uma tabela de variantes com as colunas de variantes_curadas.csv."
+        p.unlink(missing_ok=True)
+        return None
+    return p
 
 
 class RegistroAnalises:
@@ -618,7 +713,12 @@ class Execucao:
         assintomatico: bool = False,
         prior_avos: str = "nao_portador",
         tornado: bool = False,
+        base=None,
+        avancadas: dict | None = None,
     ):
+        # base de anotação da execução (None = a base em uso) e opções avançadas da análise sem registro, com os
+        # nomes dos argumentos do pipeline: config, tabela_variantes, horizonte, figuras, amostra_mae, amostra_pai
+        self.base, self.avancadas = base, dict(avancadas or {})
         self.tornado = bool(tornado)  # sensibilidade tipo tornado do caso (desligada por padrão)
         self.prior_avos = prior_avos  # avô ou avó sem exame: suposto não portador (padrão) ou Hardy-Weinberg
         self.n, self.seed, self.motor, self.cox, self.hipoteses = n, seed, motor, cox, hipoteses
@@ -776,6 +876,10 @@ def _executar(
                 comparar_cox=exec_.cox,
                 parentes=parentes or None,
                 tornado=exec_.tornado,
+                base_clinvar=(
+                    exec_.base if exec_.base is not None else (base_padrao(config) if config is not None else None)
+                ),
+                **exec_.avancadas,
             )
         resultado = serializar_resultado(ident, r, saida, entrada)
         if paciente is not None:
@@ -995,6 +1099,14 @@ def executar_analise(
     assumir_nao_portador: str | None = Form(None),
     confirma_assintomatico: str | None = Form(None),
     prior_avos: str | None = Form(None),
+    base: str | None = Form(None),
+    horizonte: str | None = Form(None),
+    rotulo: str | None = Form(None),
+    sem_figuras: str | None = Form(None),
+    amostra_mae: str | None = Form(None),
+    amostra_pai: str | None = Form(None),
+    arquivo_config: UploadFile | None = File(None, alias="config"),
+    tabela_variantes: UploadFile | None = File(None),
 ):
     bd, config, cifra = obter_bd(request), request.app.state.config, obter_cifra(request)
     registro: RegistroAnalises = request.app.state.analises
@@ -1069,14 +1181,45 @@ def executar_analise(
         v = interpretar_laudo(texto, f"c9orf72_{lado}", campos)
         if v is not None:
             laudo[lado] = v
+    # opções avançadas, as mesmas da linha de comando; só na análise sem registro, que não fica na ficha de ninguém
+    base_ = base_escolhida(config, base, "base", campos)
+    horizonte_ = _decimal(horizonte, "horizonte", campos, 1, 120, None)
+    sem_fig = str(sem_figuras or "").strip().lower() in ("1", "true", "sim", "on")
+    amostras = {"mae": texto_curto(amostra_mae, 100), "pai": texto_curto(amostra_pai, 100)}
     if modo == "vcf":  # presença dos arquivos conferida já aqui, para devolver todos os erros de uma vez
         for lado, arquivo in (("mae", vcf_mae), ("pai", vcf_pai)):
             if arquivo is None or not arquivo.filename:
                 campos[f"vcf_{lado}"] = "Envie o arquivo VCF."
     exigir_campos(campos)
     ident, pasta = registro.criar(usuario.id)
-    rotulo = "caso"
+    yaml_alt = guardar_parametros(
+        arquivo_config, pasta / "parametros.yaml", "config", campos, config.tamanho_maximo_parametros
+    )
+    tabela_alt = guardar_tabela_variantes(
+        tabela_variantes, pasta / "variantes.csv", "tabela_variantes", campos, config.tamanho_maximo_parametros
+    )
+    if campos:
+        registro.descartar(ident)
+        exigir_campos(campos)
+    rotulo_ = texto_curto(rotulo, 120) or "caso"
+    avancadas = {"figuras": not sem_fig}
+    for chave, valor in (
+        ("config", yaml_alt),
+        ("tabela_variantes", tabela_alt),
+        ("horizonte", horizonte_),
+        ("amostra_mae", amostras["mae"]),
+        ("amostra_pai", amostras["pai"]),
+    ):
+        if valor is not None:
+            avancadas[chave] = valor
+    rotulo = rotulo_
     entrada = {
+        "base": ("só a tabela curada" if base_ is False else Path(base_).name),
+        "parametros_alternativos": yaml_alt is not None,
+        "tabela_alternativa": tabela_alt is not None,
+        "horizonte": horizonte_,
+        "sem_figuras": sem_fig,
+        "amostras": {k: v for k, v in amostras.items() if v} or None,
         "modo": modo,
         "cenario": None,
         "laudo_c9orf72": laudo or None,
@@ -1105,7 +1248,8 @@ def executar_analise(
             if not laudo:
                 laudo = dict(c.laudo_c9orf72)
             entrada.update({"cenario": num_cenario, "laudo_c9orf72": laudo or None, "descricao_cenario": c.descricao})
-            rotulo = f"Cenário {num_cenario}: {c.descricao}"
+            if rotulo_ == "caso":
+                rotulo = f"Cenário {num_cenario}: {c.descricao}"
         else:
             caminho_mae = vcfs.guardar_upload(vcf_mae, pasta / "mae.vcf", "vcf_mae", campos, config.tamanho_maximo_vcf)
             caminho_pai = vcfs.guardar_upload(vcf_pai, pasta / "pai.vcf", "vcf_pai", campos, config.tamanho_maximo_vcf)
@@ -1122,6 +1266,8 @@ def executar_analise(
         modo=modo,
         cenario=num_cenario,
         tornado=com_tornado,
+        base=base_,
+        avancadas=avancadas,
     )
     return _executar(
         registro,
@@ -1137,6 +1283,7 @@ def executar_analise(
         exec_=exec_,
         sexo=sexo_,
         idade=idade,
+        config=config,
     )
 
 

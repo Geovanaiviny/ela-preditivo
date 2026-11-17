@@ -8,7 +8,7 @@ from pathlib import Path
 
 from cryptography.fernet import Fernet
 
-from .. import RAIZ_PROJETO
+from .. import DIR_DADOS_BRUTOS, RAIZ_PROJETO
 
 DIR_PADRAO_BD = RAIZ_PROJETO.parent / "dados_web"  # ignorada pelo git (.gitignore)
 MEGABYTE = 1024 * 1024
@@ -38,6 +38,11 @@ class Configuracao:
     dir_vcfs: Path = field(default_factory=lambda: DIR_PADRAO_BD / "vcfs")  # VCFs cifrados (Fernet), fora do banco
     dir_documentos: Path | None = None  # prontuários e laudos cifrados (padrão: ao lado de dir_vcfs)
     dir_analises: Path | None = None  # resultados completos das análises, cifrados (padrão: ao lado de dir_vcfs)
+    dir_tarefas: Path | None = None  # execuções do artefato pela interface (padrão: ao lado de dir_vcfs)
+    dir_bases: Path | None = None  # bases de anotação e registro de versões (padrão: ELA_DADOS_BRUTOS)
+    tarefas_guardadas: int = 12  # execuções do artefato mantidas em disco; as mais antigas saem
+    tamanho_maximo_base: int = 300 * MEGABYTE
+    tamanho_maximo_parametros: int = 2 * MEGABYTE  # YAML de parâmetros e tabela de variantes enviados
     tamanho_maximo_documento: int = 10 * MEGABYTE
     encarregado_nome: str = "(a definir pela instituição)"
     encarregado_contato: str = "(a definir pela instituição)"
@@ -53,6 +58,8 @@ class Configuracao:
             self.dir_documentos = self.dir_vcfs.parent / "documentos"
         if self.dir_analises is None:
             self.dir_analises = self.dir_vcfs.parent / "analises"
+        self.dir_tarefas = Path(self.dir_tarefas) if self.dir_tarefas else self.dir_vcfs.parent / "tarefas"
+        self.dir_bases = Path(self.dir_bases) if self.dir_bases else DIR_DADOS_BRUTOS
         self.ambiente = (self.ambiente or "producao").strip().lower()
         if self.ambiente not in ("producao", "homologacao"):
             raise ConfiguracaoInvalida("ELA_WEB_AMBIENTE deve ser 'producao' ou 'homologacao'")

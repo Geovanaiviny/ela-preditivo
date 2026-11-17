@@ -134,12 +134,16 @@ def construir_parser() -> argparse.ArgumentParser:
     s = sub.add_parser("servir", help="sobe a plataforma web (FastAPI/uvicorn); exige ELA_WEB_CHAVE")
     s.add_argument("--host", default="127.0.0.1")
     s.add_argument("--porta", type=int, default=8000)
-    ca = sub.add_parser("criar-admin", help="cria um administrador (só por comando; nenhuma rota cria ou promove)")
+    ca = sub.add_parser(
+        "criar-admin", help="cria um administrador (na interface: Primeiro acesso ou Usuários › Novo administrador)"
+    )
     ca.add_argument("--nome", required=True)
     ca.add_argument("--cpf", required=True)
     ca.add_argument("--email", required=True)
     ca.add_argument("--senha", default=None, help="se omitida, é pedida no terminal sem eco")
-    sub.add_parser("popular-demo", help="usuários de demonstração e pacientes fictícios (só num banco vazio)")
+    sub.add_parser(
+        "popular-demo", help="usuários de demonstração e pacientes fictícios (antes de haver médico ou pesquisador)"
+    )
     sub.add_parser("verificar-auditoria", help="confere a cadeia de hash da auditoria")
     sub.add_parser("gerar-chave", help="imprime uma chave Fernet nova para ELA_WEB_CHAVE")
     return p

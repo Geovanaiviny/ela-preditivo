@@ -16,6 +16,8 @@ clinvar*.vcf
 variant_summary*.txt
 submission_summary*.txt
 snp_result_*.txt
+# opções locais do docker compose (podem trazer senha e chave)
+.env
 # banco da plataforma web (nunca versionar; ver ELA_WEB_BD)
 dados_web/
 *.sqlite3

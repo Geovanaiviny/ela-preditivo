@@ -62,6 +62,7 @@ def criar_usuario(
     papel: str,
     situacao: str,
     perfil: dict | None = None,
+    trocar_senha: bool = False,
 ) -> Usuario:
     cpf = normalizar_cpf(cpf)
     email = normalizar_email(email)
@@ -86,6 +87,7 @@ def criar_usuario(
         criado_em=hoje,
         atualizado_em=hoje,
         verificado_em=hoje if situacao == "VERIFICADO" else None,
+        trocar_senha=trocar_senha,  # senha temporária: a conta só serve para definir a senha de uso
     )
     perfil = perfil or {}
     if papel == "MEDICO":
@@ -101,12 +103,30 @@ def criar_usuario(
     return u
 
 
-def criar_admin(bd: Session, cifra: Cifra, nome: str, cpf: str, email: str, senha: str) -> Usuario:
-    """Administrador só por comando: nenhuma rota cria ou promove administradores."""
-    u = criar_usuario(bd, cifra, nome=nome, cpf=cpf, email=email, senha=senha, papel="ADMIN", situacao="VERIFICADO")
-    auditoria.registrar(
-        bd, acao=auditoria.ADMIN_CRIADO, usuario=u, alvo_tipo="usuario", alvo_id=u.id, detalhe="via CLI"
+def criar_admin(
+    bd: Session,
+    cifra: Cifra,
+    nome: str,
+    cpf: str,
+    email: str,
+    senha: str,
+    detalhe: str = "via CLI",
+    trocar_senha: bool = False,
+) -> Usuario:
+    """Administrador criado pela linha de comando. Pela interface: primeiro acesso ou outro administrador
+    (`primeiro_acesso.criar_administrador`). Ninguém se cadastra nem é promovido a administrador."""
+    u = criar_usuario(
+        bd,
+        cifra,
+        nome=nome,
+        cpf=cpf,
+        email=email,
+        senha=senha,
+        papel="ADMIN",
+        situacao="VERIFICADO",
+        trocar_senha=trocar_senha,
     )
+    auditoria.registrar(bd, acao=auditoria.ADMIN_CRIADO, usuario=u, alvo_tipo="usuario", alvo_id=u.id, detalhe=detalhe)
     bd.commit()
     return u
 
@@ -422,10 +442,13 @@ def popular(bd: Session, cifra: Cifra, config, analisar: bool = True) -> dict:
     (cinco pessoas, duas famílias e um casal), com VCFs sintéticos, consentimentos e análises. Dois deles têm o pai sem
     exame, inferido por parentes: a avó testada e, numa das famílias, um filho que já fez o teste.
 
-    Recusa rodar se já houver usuários. Devolve as credenciais geradas (impressas pela CLI, nunca gravadas em claro).
+    Recusa rodar se já houver médico ou pesquisador, ou se a demonstração já foi criada; administradores podem
+    existir. Devolve as credenciais geradas (mostradas uma vez pela interface ou pela CLI, nunca gravadas em claro).
     """
-    if bd.execute(select(func.count(Usuario.id))).scalar_one() > 0:
-        raise RuntimeError("o banco já tem usuários; popular-demo só roda num banco vazio")
+    if bd.execute(select(func.count(Usuario.id)).where(Usuario.papel != "ADMIN")).scalar_one() > 0:
+        raise RuntimeError("o banco já tem médicos ou pesquisadores; a demonstração só é criada antes deles")
+    if bd.execute(select(Usuario.id).where(Usuario.email == "admin@demo.local")).first():
+        raise RuntimeError("a demonstração já foi criada neste banco")
     credenciais = []
 
     def _novo(nome, email, papel, situacao, perfil=None, mensagem=None):

@@ -173,6 +173,7 @@
   // ---------------------------------------------------------------------------------------------
   function itensMenu() {
     const itens = [];
+    if (estado.eu && estado.eu.trocar_senha) return [['#/trocar-senha', 'Trocar a senha', 'cadeado']];
     if (estado.eu) {
       if (estado.eu.verificado) {
         itens.push(['#/inicio', 'Início', 'casa']);
@@ -180,6 +181,8 @@
         if (tem('analises.executar')) itens.push(['#/analises', 'Análises', 'frasco']);
         if (tem('pesquisa.casos')) itens.push(['#/pesquisa/casos', 'Registros de pesquisa', 'microscopio']);
         if (tem('modelo.ver')) itens.push(['#/modelo', 'Modelo e parâmetros', 'modelo']);
+        if (tem('artefato.executar')) itens.push(['#/artefato', 'Artefato', 'grafico']);
+        if (tem('base.ver')) itens.push(['#/base', 'Base de anotação', 'dna']);
         if (tem('usuarios.gerir')) { itens.push(['#/admin/pendentes', 'Cadastros pendentes', 'prancheta']); itens.push(['#/admin/usuarios', 'Usuários', 'pacientes']); }
         if (tem('auditoria.ver_tudo')) itens.push(['#/admin/auditoria', 'Auditoria', 'auditoria']);
         itens.push(['divisor']);
@@ -187,6 +190,7 @@
       itens.push(['#/situacao', 'Situação do cadastro', 'prancheta']);
       if (tem('conta.gerir')) itens.push(['#/minha-conta', 'Minha conta', 'pessoa']);
     } else {
+      if (primeiroAcessoPendente()) itens.push(['#/primeiro-acesso', 'Primeiro acesso', 'cadeado']);
       itens.push(['#/entrar', 'Entrar', 'sair'], ['#/criar-conta', 'Criar conta', 'mais'], ['#/ajuda', 'Ajuda', 'ajuda'], ['#/privacidade', 'Privacidade', 'escudo']);
     }
     return itens;
@@ -202,7 +206,7 @@
       if (item[0] === 'divisor') { menu.append(el('div', { class: 'divisor', role: 'separator' })); continue; }
       const [href, rotulo, ic] = item;
       const a = el('a', { href, title: rotulo }, icone(ic), el('span', { text: rotulo }));
-      if (rotaAtual === href || (href === '#/pacientes' && rotaAtual.startsWith('#/pacientes')) || (href === '#/analises' && (rotaAtual.startsWith('#/analise') || rotaAtual.startsWith('#/resultado')))) a.setAttribute('aria-current', 'page');
+      if (rotaAtual === href || (href === '#/pacientes' && rotaAtual.startsWith('#/pacientes')) || (href === '#/analises' && (rotaAtual.startsWith('#/analise') || rotaAtual.startsWith('#/resultado'))) || (href === '#/artefato' && rotaAtual.startsWith('#/artefato/'))) a.setAttribute('aria-current', 'page');
       menu.append(a);
     }
     const atual = limpar(document.getElementById('usuario-atual'));
@@ -517,10 +521,12 @@
   const ROTAS = [
     { re: /^#\/entrar$/, tela: telaEntrar, publica: true, dividida: true },
     { re: /^#\/criar-conta$/, tela: telaCriarConta, publica: true, dividida: true },
+    { re: /^#\/primeiro-acesso$/, tela: telaPrimeiroAcesso, publica: true },
     { re: /^#\/privacidade$/, tela: telaPrivacidade, publica: true },
     { re: /^#\/ajuda$/, tela: telaAjuda, publica: true },
     { re: /^#\/inicio$/, tela: telaInicio },
     { re: /^#\/situacao$/, tela: telaSituacao, sessao: true },
+    { re: /^#\/trocar-senha$/, tela: telaTrocarSenha, sessao: true },
     { re: /^#\/minha-conta$/, tela: telaMinhaConta, sessao: true, permissao: 'conta.gerir' },
     { re: /^#\/pacientes$/, tela: telaPacientes, permissao: 'pacientes.gerir' },
     { re: /^#\/pacientes\/novo$/, tela: telaPacienteFormulario, permissao: 'pacientes.gerir' },
@@ -532,14 +538,19 @@
     { re: /^#\/resultado\/([A-Za-z0-9_-]+)(?:\?par=([A-Za-z0-9_-]+))?$/, tela: telaResultado, permissao: 'analises.executar' },
     { re: /^#\/pesquisa\/casos$/, tela: telaCasos, permissao: 'pesquisa.casos' },
     { re: /^#\/modelo$/, tela: telaModelo, permissao: 'modelo.ver' },
+    { re: /^#\/artefato$/, tela: telaArtefato, permissao: 'artefato.executar' },
+    { re: /^#\/artefato\/([0-9]{14}-[0-9a-f]{6})$/, tela: telaTarefa, permissao: 'artefato.executar' },
+    { re: /^#\/base$/, tela: telaBase, permissao: 'base.ver' },
     { re: /^#\/admin\/pendentes$/, tela: telaPendentes, permissao: 'usuarios.gerir' },
     { re: /^#\/admin\/pendentes\/(\d+)$/, tela: telaPendente, permissao: 'usuarios.gerir' },
     { re: /^#\/admin\/usuarios$/, tela: telaUsuarios, permissao: 'usuarios.gerir' },
     { re: /^#\/admin\/auditoria$/, tela: telaAuditoria, permissao: 'auditoria.ver_tudo' },
   ];
   function navegar(hash) { if (location.hash === hash) aoMudarRota(); else location.hash = hash; }
+  function primeiroAcessoPendente() { const pa = estado.sistema && estado.sistema.primeiro_acesso; return !!(pa && (pa.administrador || pa.demonstracao)); }
   function inicioPorPapel() {
-    if (!estado.eu) return '#/entrar';
+    if (!estado.eu) return primeiroAcessoPendente() ? '#/primeiro-acesso' : '#/entrar';
+    if (estado.eu.trocar_senha) return '#/trocar-senha';
     if (!estado.eu.verificado) return '#/situacao';
     return '#/inicio';
   }
@@ -553,12 +564,13 @@
     document.body.classList.toggle('tela-dividida', !!(rota && rota.dividida && !estado.eu));
     limparAvisos();
     definirTrilha([[areaDoPapel()]]);
-    if (estado.avisoPendente) { avisar(/^(Você saiu|Cadastro|Registro|VCF|Descendente|Filho|Dados|Paciente|Usuário|Conta|Consentimento|\d)/.test(estado.avisoPendente) || /Nova situação/.test(estado.avisoPendente) ? 'sucesso' : 'aviso', estado.avisoPendente); estado.avisoPendente = null; }
+    if (estado.avisoPendente) { avisar(/^(Você saiu|Cadastro|Registro|VCF|Descendente|Filho|Dados|Paciente|Usuário|Conta|Consentimento|Versão registrada|Base enviada|Download concluído|Execução removida|\d)/.test(estado.avisoPendente) || /Nova situação/.test(estado.avisoPendente) ? 'sucesso' : 'aviso', estado.avisoPendente); estado.avisoPendente = null; }
     const area = el('div', { class: 'tela' }); // contêiner próprio por navegação: uma tela anterior ainda carregando não escreve sobre a atual
     limpar(main()).append(area);
     if (!rota) { telaNaoEncontrada(area); return; }
     if (!rota.publica && !estado.eu) { estado.avisoPendente = 'Entre para continuar.'; navegar('#/entrar'); return; }
-    if (rota.publica && estado.eu && (hash === '#/entrar' || hash === '#/criar-conta')) { navegar(inicioPorPapel()); return; }
+    if (!rota.publica && estado.eu.trocar_senha && hash !== '#/trocar-senha') { navegar('#/trocar-senha'); return; }
+    if (rota.publica && estado.eu && (hash === '#/entrar' || hash === '#/criar-conta' || hash === '#/primeiro-acesso')) { navegar(inicioPorPapel()); return; }
     if (!rota.publica && !rota.sessao && !estado.eu.verificado) { navegar('#/situacao'); return; }
     if (rota.permissao && !tem(rota.permissao)) { tela403(area); return; }
     try { await rota.tela(area, m.slice(1)); } catch (e) {
@@ -620,7 +632,8 @@
         navegar(inicioPorPapel());
       } catch (e) { aplicarErros(campos, e.campos, e.message); senha.input.value = ''; }
     } }, email.no, senha.no, el('div', { class: 'acoes' }, botao('Entrar', { tipo: 'submit', classe: 'botao-largo' })),
-      el('p', { class: 'texto-suave centro' }, 'Ainda não tem uma conta? ', el('a', { href: '#/criar-conta', text: 'Criar conta' })));
+      el('p', { class: 'texto-suave centro' }, 'Ainda não tem uma conta? ', el('a', { href: '#/criar-conta', text: 'Criar conta' })),
+      primeiroAcessoPendente() ? el('p', { class: 'texto-suave centro' }, 'Plataforma recém-instalada? ', el('a', { href: '#/primeiro-acesso', text: 'Fazer o primeiro acesso' })) : null);
     area.append(el('div', { class: 'dividida' }, painelNavy('Ciência e cuidado, conectados.', 'Apoio ao aconselhamento genético preditivo.'),
       el('section', { class: 'painel-form', 'aria-label': 'Acesso' }, el('div', { class: 'caixa' }, el('p', { class: 'sobretitulo', text: 'Acesso profissional' }), el('h1', { text: 'Bem-vindo de volta' }), el('p', { class: 'subtitulo', text: 'Entre para acessar a plataforma.' }), form),
         el('p', { class: 'rodape-form' }, el('a', { href: '#/privacidade', text: 'Privacidade e proteção de dados' })))));
@@ -858,13 +871,15 @@
     const porSituacao = {};
     for (const x of usuarios.usuarios) porSituacao[x.situacao] = (porSituacao[x.situacao] || 0) + 1;
     area.append(cabecalhoTela({ titulo: `${saudacao()}, ${u.nome}`, subtitulo: `${hoje.charAt(0).toUpperCase()}${hoje.slice(1)} · administração da plataforma.`, acoes: [linkBotao('Cadastros pendentes', '#/admin/pendentes', { icone: 'prancheta' }), linkBotao('Usuários', '#/admin/usuarios', { classe: 'botao-secundario', icone: 'pacientes' }), linkBotao('Auditoria', '#/admin/auditoria', { classe: 'botao-secundario', icone: 'auditoria' })] }));
+    const demo = await api('GET', '/api/admin/demonstracao');
+    if (demo.pode_popular) area.append(cartaoDemonstracao('/api/admin/demonstracao', 'Este ambiente é de homologação e ainda não tem médicos nem pesquisadores. Crie os usuários e os registros fictícios para testar a plataforma.'));
     area.append(el('div', { class: 'indicadores' },
       indicadorLink({ icone: 'prancheta', rotulo: 'Cadastros pendentes', valor: String(pend.cadastros.length), detalhe: pend.cadastros.length ? 'Verificação manual de CRM, formação e vínculo' : 'Nenhum pedido aguardando', href: '#/admin/pendentes', destaque: true }),
       indicadorLink({ icone: 'pacientes', rotulo: 'Usuários', valor: String(usuarios.total), detalhe: `verificados ${porSituacao.VERIFICADO || 0} · desativados ${porSituacao.DESATIVADO || 0} · reprovados ${porSituacao.REPROVADO || 0}`, href: '#/admin/usuarios' }),
       indicadorLink({ icone: 'escudo', rotulo: 'Auditoria', valor: verif.ok ? 'íntegra' : 'adulterada', detalhe: verif.ok ? `${verif.total} registros encadeados` : `falha a partir da sequência ${verif.primeira_falha}`, href: '#/admin/auditoria' })));
     area.append(el('div', { class: 'grade-painel' },
       el('div', { class: 'cartao' }, el('h2', { text: 'Pedidos aguardando verificação' }), pend.cadastros.length ? el('ul', { class: 'lista-simples' }, pend.cadastros.slice(0, 8).map((x) => el('li', {}, el('div', {}, el('strong', { text: x.nome }), el('div', { class: 'pequeno texto-suave', text: `${x.papel_rotulo} · ${fmtData(x.criado_em)}` })), chipSituacaoConta(x)))) : el('p', { class: 'texto-suave', text: 'Nenhum cadastro pendente.' }), el('p', {}, linkBotao('Analisar pedidos', '#/admin/pendentes', { classe: 'botao-secundario botao-pequeno', icone: 'seta-dir' }))),
-      el('div', { class: 'cartao' }, el('h2', { text: 'O que o administrador faz' }), el('div', { class: 'linhas-info' }, dica('Aprova, reprova ou pede informações nos cadastros; desativa e reativa usuários.'), dica('Consulta a auditoria completa e verifica a cadeia de hash.'), dica('Não acessa registros, dados clínicos, VCFs nem resultados. Administradores são criados só por comando no servidor.')))));
+      el('div', { class: 'cartao' }, el('h2', { text: 'O que o administrador faz' }), el('div', { class: 'linhas-info' }, dica('Aprova, reprova ou pede informações nos cadastros; desativa e reativa usuários.'), dica('Consulta a auditoria completa e verifica a cadeia de hash.'), dica('Não acessa registros, dados clínicos, VCFs nem resultados.'), dica('Cria outros administradores (tela Usuários) e gere a base de anotação.')))));
   }
 
   // ---------------------------------------------------------------------------------------------
@@ -946,7 +961,7 @@
     const lateral = el('div', {}, el('div', { class: 'cartao' }, el('h2', { text: 'Seus dados e sua conta' }),
       el('div', { class: 'acoes' },
         botao('Exportar meus dados (JSON)', { classe: 'botao-secundario', icone: 'baixar', onclick: async () => { try { const d = await api('POST', '/api/contas/minha/exportar'); baixarJson(d, 'minha-conta.json'); avisar('sucesso', 'Exportação gerada.'); } catch (e) { avisar('erro', e.message); } } }),
-        u.papel === 'ADMIN' ? el('p', { class: 'pequeno texto-suave', text: 'Administradores não pedem encerramento pela plataforma: a conta é desativada por outro administrador ou por comando no servidor.' })
+        u.papel === 'ADMIN' ? el('p', { class: 'pequeno texto-suave', text: 'Administradores não pedem encerramento pela plataforma: a conta é desativada por outro administrador.' })
           : u.encerramento_solicitado_em ? chip(`Encerramento pedido em ${fmtData(u.encerramento_solicitado_em)}`, 'chip-aviso')
           : botao('Pedir encerramento da conta', { classe: 'botao-perigo', onclick: async () => { if (!window.confirm('Pedir o encerramento da conta? O administrador a desativará; a auditoria permanece sem dado identificável.')) return; try { const r = await api('POST', '/api/contas/minha/encerramento'); avisar('sucesso', r.mensagem); aoMudarRota(); } catch (e) { avisar('erro', e.message); } } })),
       el('h3', { text: 'Aceites registrados' }),
@@ -1464,7 +1479,7 @@
     const descParam = params[1] || null;
     if (pacienteId) return analiseDoRegistro(area, pacienteId, descParam);
     definirTrilha([['Área clínica'], ['Nova análise (sem registro)']]);
-    const cen = await api('GET', '/api/cenarios');
+    const [cen, bases] = await Promise.all([api('GET', '/api/cenarios'), api('GET', '/api/base')]);
     area.append(cabecalhoTela({ titulo: 'Nova análise sem registro', subtitulo: 'Para uma simulação avulsa, por exemplo um casal que planeja filhos e ainda não tem cadastro. Os VCFs enviados não são guardados e o resultado fica disponível a você por tempo limitado.', chips: [chip('Sem vínculo com paciente', 'chip-neutro')], acoes: [linkBotao('Cadastrar paciente', '#/pacientes/novo', { classe: 'botao-secundario', icone: 'mais' })] }));
     const mVcf = marcacao({ nome: 'modo', tipo: 'radio', valor: 'vcf', rotulo: 'Enviar os VCFs da mãe e do pai (não são guardados)', marcado: true });
     const mCen = marcacao({ nome: 'modo', tipo: 'radio', valor: 'cenario', rotulo: 'Usar um cenário sintético de exemplo (VCFs fictícios do artefato)' });
@@ -1482,7 +1497,17 @@
     const idade = campo({ nome: 'idade_atual', rotulo: 'Idade atual sem sintomas (anos)', tipo: 'number', opcional: true, dica: 'Condiciona o risco ao descendente assintomático nessa idade. Vazio para um futuro filho.', atributos: { min: 0, max: 120, step: 1 } });
     const confirma = marcacao({ nome: 'confirma_assintomatico', rotulo: 'Confirmo que a pessoa analisada não apresenta sintomas de ELA' });
     const sim = camposSimulacao();
-    const campos = { vcf_mae: vcfMae, vcf_pai: vcfPai, cenario, c9orf72_mae: c9m, c9orf72_pai: c9p, sexo, idade_atual: idade, confirma_assintomatico: confirma, ...sim.campos };
+    const base = campo({ nome: 'base', rotulo: 'Base de anotação', tipo: 'select', valor: 'padrao', opcoes: opcoesDeBase({ base_em_uso: bases.em_uso ? bases.em_uso.nome : null, bases: bases.arquivos.map((a) => a.nome) }), dica: 'Linha de comando: --base-clinvar ou --so-tabela-curada.' });
+    const horizonte = campo({ nome: 'horizonte', rotulo: 'Horizonte (anos)', tipo: 'number', opcional: true, dica: 'Vazio = o horizonte dos parâmetros (90 anos). Linha de comando: --horizonte.', atributos: { min: 1, max: 120, step: 1 } });
+    const rotulo = campo({ nome: 'rotulo', rotulo: 'Rótulo do relatório', opcional: true, dica: 'Título do relatório. Não use nome de pessoa. Linha de comando: --rotulo.', atributos: { maxlength: 120 } });
+    const amostraMae = campo({ nome: 'amostra_mae', rotulo: 'Amostra no VCF da mãe', opcional: true, dica: 'Nome da amostra, se o VCF tiver várias. Vazio = a primeira. Linha de comando: --amostra-mae.', atributos: { maxlength: 100 } });
+    const amostraPai = campo({ nome: 'amostra_pai', rotulo: 'Amostra no VCF do pai', opcional: true, dica: 'Linha de comando: --amostra-pai.', atributos: { maxlength: 100 } });
+    const config = campo({ nome: 'config', rotulo: 'Parâmetros alternativos (YAML)', tipo: 'file', opcional: true, dica: 'Vazio = parâmetros do artefato. Linha de comando: --config.', atributos: { accept: '.yaml,.yml' } });
+    const tabelaVar = campo({ nome: 'tabela_variantes', rotulo: 'Tabela de variantes alternativa (CSV)', tipo: 'file', opcional: true, dica: 'Vazio = tabela curada do artefato. Linha de comando: --tabela-variantes.', atributos: { accept: '.csv' } });
+    const semFiguras = marcacao({ nome: 'sem_figuras', rotulo: 'Não gerar as figuras (--sem-figuras)' });
+    const avancadas = el('details', {}, el('summary', { text: 'Opções avançadas (as mesmas da linha de comando)' }), el('p', { class: 'pequeno texto-suave', text: 'Só nesta análise sem registro. Parâmetros ou tabela alternativos ficam declarados no resultado: ele deixa de ser o resultado do artefato com os parâmetros da literatura. Os arquivos em uso podem ser baixados em Modelo e parâmetros.' }),
+      el('div', { class: 'grade-campos grade-campos-3' }, base.no, horizonte.no, rotulo.no, amostraMae.no, amostraPai.no), el('div', { class: 'grade-campos' }, config.no, tabelaVar.no), semFiguras.no);
+    const campos = { vcf_mae: vcfMae, vcf_pai: vcfPai, cenario, c9orf72_mae: c9m, c9orf72_pai: c9p, sexo, idade_atual: idade, confirma_assintomatico: confirma, base, horizonte, rotulo, amostra_mae: amostraMae, amostra_pai: amostraPai, config, tabela_variantes: tabelaVar, ...sim.campos };
     const prog = caixaProgresso();
     const enviar = botao('Executar análise', { tipo: 'submit', icone: 'frasco' });
     const form = el('form', { novalidate: true, onsubmit: async (ev) => {
@@ -1498,6 +1523,9 @@
       for (const c of [c9m, c9p, sexo, idade]) if (String(c.valor()).trim() !== '') fd.append(c.nome, String(c.valor()).trim());
       if (confirma.valor()) fd.append('confirma_assintomatico', '1');
       sim.preencher(fd);
+      for (const c of [base, horizonte, rotulo, amostraMae, amostraPai]) if (String(c.valor()).trim() !== '') fd.append(c.nome, String(c.valor()).trim());
+      for (const c of [config, tabelaVar]) if (c.input.files.length) fd.append(c.nome, c.input.files[0]);
+      if (semFiguras.valor()) fd.append('sem_figuras', '1');
       enviar.disabled = true; prog.mostrar('Executando as três camadas (ingestão e anotação, rede bayesiana e Monte Carlo, sobrevivência)… isso leva alguns segundos.'); form.setAttribute('aria-busy', 'true');
       try {
         const r = await api('POST', '/api/analises', { form: fd });
@@ -1506,7 +1534,7 @@
       } catch (e) { aplicarErros(campos, e.campos, Object.keys(e.campos).length ? null : e.message); }
       finally { enviar.disabled = false; prog.esconder(); form.removeAttribute('aria-busy'); }
     } }, secaoNumerada(1, 'Origem dos dados genéticos', modo, blocoVcf, blocoCen), secaoNumerada(2, 'Laudo laboratorial do C9orf72', el('div', { class: 'grade-campos' }, c9m.no, c9p.no)),
-      secaoNumerada(3, 'Descendente', el('div', { class: 'grade-campos' }, sexo.no, idade.no), confirma.no, dica('Obrigatória quando a idade atual é informada: o condicionamento pela idade só vale para quem não manifestou a doença. Com a idade, os três indicadores valem a partir dela, sem sintomas.')), secaoNumerada(4, 'Simulação', sim.no), prog.caixa, el('div', { class: 'acoes acoes-direita' }, enviar));
+      secaoNumerada(3, 'Descendente', el('div', { class: 'grade-campos' }, sexo.no, idade.no), confirma.no, dica('Obrigatória quando a idade atual é informada: o condicionamento pela idade só vale para quem não manifestou a doença. Com a idade, os três indicadores valem a partir dela, sem sintomas.')), secaoNumerada(4, 'Simulação', sim.no, avancadas), prog.caixa, el('div', { class: 'acoes acoes-direita' }, enviar));
     area.append(duasColunas(el('div', { class: 'cartao' }, form), cartaoApoio('Sobre a análise', ['Use esta tela só para simulações sem registro. Para um atendimento, cadastre o paciente: os VCFs ficam cifrados na ficha e o resumo de cada análise é guardado.', 'Os arquivos enviados aqui são apagados ao fim da execução.', 'O resultado traz as três respostas: se herdou (transmissão), a chance de manifestação por idade com banda de 95 % e a idade provável de início.'])));
   }
   async function analiseDoRegistro(area, pacienteId, descParam) {
@@ -1715,6 +1743,7 @@
     const ent = r.entrada;
     const sup = faixaSuposicao(r);
     if (sup) raiz.append(sup);
+    if (ent.parametros_alternativos || ent.tabela_alternativa) raiz.append(el('div', { class: 'alerta alerta-aviso' }, icone('alerta'), el('p', {}, el('strong', { text: 'Execução com arquivos alternativos. ' }), `Esta análise usou ${[ent.parametros_alternativos ? 'um YAML de parâmetros enviado' : null, ent.tabela_alternativa ? 'uma tabela de variantes enviada' : null].filter(Boolean).join(' e ')} no lugar dos arquivos do artefato. Os números não são os do artefato com os parâmetros da literatura.`)));
     if (r.c9orf72_indeterminado) raiz.append(el('div', { class: 'alerta alerta-aviso' }, icone('alerta'), el('p', {}, el('strong', { text: 'Resultado parcial: o C9orf72 não foi avaliado. ' }), r.texto_c9orf72_indeterminado || 'Falta o laudo do C9orf72 de um genitor; o lócus ficou indeterminado e saiu do cálculo.')));
     const inf = r.parentes && r.parentes.loci_inferidos && r.parentes.loci_inferidos.length ? r.parentes : null;
     if (inf) { // genitor sem exame inferido por parentes: o que entrou e as suposições usadas
@@ -1751,7 +1780,7 @@
       ...(r.limitacoes.parametros_provisorios.length ? [dica(`Parâmetros provisórios (a confirmar pela autora): ${r.limitacoes.parametros_provisorios.join(', ')}.`)] : [])), el('p', { class: 'pequeno texto-suave', text: r.limitacoes.texto }));
     const barra = el('div', { class: 'barra-inferior' },
       el('span', { class: 'item' }, icone('frasco'), `Entrada: ${ent.modo === 'cenario' ? `cenário ${ent.cenario}` : 'VCFs'}; laudo C9orf72: ${ent.laudo_c9orf72 ? Object.entries(ent.laudo_c9orf72).map(([k, v]) => `${k} ${Array.isArray(v) ? v.join(',') : v}`).join('; ') : 'não informado'}`),
-      el('span', { class: 'item' }, icone('modelo'), `N = ${fmtNum(ent.n, 0)} · semente ${ent.semente} · motor ${ent.motor}${ent.hipoteses_c9orf72 ? ' · hipóteses experimentais' : ''}${ent.comparar_cox ? ' · Cox' : ''}${ent.tornado ? ' · tornado' : ''}`),
+      el('span', { class: 'item' }, icone('modelo'), `N = ${fmtNum(ent.n, 0)} · semente ${ent.semente} · motor ${ent.motor}${ent.hipoteses_c9orf72 ? ' · hipóteses experimentais' : ''}${ent.comparar_cox ? ' · Cox' : ''}${ent.tornado ? ' · tornado' : ''}${ent.horizonte ? ` · horizonte ${fmtNum(ent.horizonte, 0)} anos` : ''}${ent.base ? ` · base: ${ent.base}` : ''}`),
       ent.assintomatico_confirmado ? el('span', { class: 'item' }, icone('check'), `Sem sintomas: confirmado pelo profissional${ent.assintomatico_confirmado_em ? ` em ${fmtData(ent.assintomatico_confirmado_em)}` : ''}`) : null,
       el('button', { type: 'button', class: 'botao botao-link', onclick: () => raizAbas.selecionar(5) }, 'Ver metadados e verificações ', icone('seta-dir')));
     const resumoAba = () => {
@@ -1935,7 +1964,9 @@
       el('div', { class: 'cartao' }, el('h2', { text: 'Limiares e filtros' }), el('dl', { class: 'lista-definicao' }, el('dt', { text: 'C9orf72 patogênico' }), el('dd', { text: `≥ ${p.limiar_repeticoes_c9orf72.patogenico} repetições; intermediário a partir de ${p.limiar_repeticoes_c9orf72.intermediario}` }),
         el('dt', { text: 'Filtro de qualidade do VCF' }), el('dd', { text: `DP ≥ ${p.filtro_qualidade.dp_minimo}, GQ ≥ ${p.filtro_qualidade.gq_minimo}, FILTER = PASS${p.filtro_qualidade.exigir_pass ? '' : ' (não exigido)'}` }),
         el('dt', { text: 'Extensões' }), el('dd', { text: `${p.extensoes.repeticoes}; ${p.extensoes.cox}.` }))),
-      el('div', { class: 'cartao' }, el('h2', { text: 'Limitação' }), el('p', { text: p.limitacao_modelo })));
+      el('div', { class: 'cartao' }, el('h2', { text: 'Limitação' }), el('p', { text: p.limitacao_modelo })),
+      el('div', { class: 'cartao' }, el('h2', { text: 'Arquivos em uso' }), el('p', { class: 'pequeno texto-suave', text: 'Os parâmetros e a tabela curada que o artefato lê. Uma cópia editada pode ser enviada como arquivo alternativo numa análise sem registro ou numa execução do artefato (opções --config e --tabela-variantes da linha de comando).' }),
+        el('div', { class: 'acoes' }, el('a', { class: 'botao botao-secundario', href: '/api/parametros/arquivo', download: 'parametros_literatura.yaml' }, icone('baixar'), 'Parâmetros (YAML)'), el('a', { class: 'botao botao-secundario', href: '/api/parametros/tabela-variantes', download: 'variantes_curadas.csv' }, icone('baixar'), 'Tabela curada (CSV)'))));
   }
 
   // ---------------------------------------------------------------------------------------------
@@ -1995,7 +2026,7 @@
     const busca = campo({ nome: 'busca', rotulo: 'Buscar por nome ou e-mail', tipo: 'search', icone: 'lupa', opcional: true });
     const lista = el('div');
     const form = el('form', { novalidate: true, role: 'search', onsubmit: async (ev) => { ev.preventDefault(); await carregar(); } }, el('div', { class: 'grade-campos grade-campos-3' }, papel.no, situacao.no, busca.no), el('div', { class: 'acoes' }, botao('Filtrar', { tipo: 'submit', icone: 'filtro' })));
-    area.append(cabecalhoTela({ titulo: 'Usuários', subtitulo: 'Médicos, aconselhadores, pesquisadores e administradores. Nenhuma rota promove alguém a administrador: isso só acontece por comando no servidor.' }), el('div', { class: 'cartao' }, form), lista);
+    area.append(cabecalhoTela({ titulo: 'Usuários', subtitulo: 'Médicos, aconselhadores, pesquisadores e administradores. Ninguém se cadastra nem é promovido a administrador: um administrador novo só é criado por outro, aqui.' }), el('div', { class: 'cartao' }, form), lista, cartaoNovoAdministrador(() => carregar()));
     async function carregar() {
       limpar(lista);
       let r;
@@ -2040,6 +2071,346 @@
         el('div', { class: 'acoes acoes-compactas' }, botao('Página anterior', { classe: 'botao-secundario botao-pequeno', icone: 'seta-esq', desabilitado: pagina <= 1, onclick: async () => { pagina--; await carregar(); } }), botao('Próxima página', { classe: 'botao-secundario botao-pequeno', icone: 'seta-dir', desabilitado: pagina >= paginas, onclick: async () => { pagina++; await carregar(); } }))), tabelaAuditoria(r.registros)));
     }
     await carregar();
+  }
+
+  // ---------------------------------------------------------------------------------------------
+  // Artefato: os comandos da linha de comando (reprodução, avaliação, cenários) executados pela interface
+  // ---------------------------------------------------------------------------------------------
+  const ESTADO_TAREFA = { executando: ['Em execução', 'chip-azul', 'relogio'], concluida: ['Concluída', 'chip-ok', 'check'], falhou: ['Falhou', 'chip-erro', 'alerta'], cancelada: ['Cancelada', 'chip-neutro', 'fechar'], interrompida: ['Interrompida', 'chip-aviso', 'alerta'] };
+  const PAPEL_CURTO = { MEDICO: 'médico', PESQUISADOR: 'pesquisador', ADMIN: 'administrador' };
+  let contadorAbas = 0;
+  function chipEstadoTarefa(t) { const [rotulo, classe, ic] = ESTADO_TAREFA[t.estado] || [t.estado, 'chip-neutro', 'info']; return chip(rotulo, classe, ic); }
+  function fmtDuracao(segundos) {
+    if (segundos === null || segundos === undefined) return '—';
+    const s = Math.round(Number(segundos));
+    if (s < 60) return `${s} s`;
+    const m = Math.floor(s / 60);
+    return m < 60 ? `${m} min ${s % 60} s` : `${Math.floor(m / 60)} h ${m % 60} min`;
+  }
+  function linhasDeTexto(texto) { return String(texto || '').split('\n').filter((l) => l.trim()).map((l) => el('p', { text: l.replace(/\*\*/g, '').replace(/`/g, '').replace(/^- /, '• ') })); }
+  function opcoesDeBase(ctx) { return [['padrao', ctx.base_em_uso ? `Base em uso (${ctx.base_em_uso})` : 'Base em uso (não há base real: só a tabela curada)'], ['so_tabela_curada', 'Só a tabela curada'], ...ctx.bases.map((b) => [b, b])]; }
+  function formularioComando(cmd, ctx) { // campos desenhados a partir das opções do comando, as mesmas da linha de comando
+    const campos = {};
+    const grupos = new Map();
+    for (const o of cmd.opcoes) {
+      const flags = [o.flag, ...o.flags_extras].join(' ou ');
+      const dicaCampo = [o.dica, `Linha de comando: ${flags}.`].filter(Boolean).join(' ');
+      const atributos = {};
+      let c;
+      if (o.tipo === 'marcacao') c = marcacao({ nome: o.nome, rotulo: `${o.rotulo} (${o.flag})` });
+      else if (o.tipo === 'escolha') c = campo({ nome: o.nome, rotulo: o.rotulo, tipo: 'select', valor: o.padrao, opcoes: o.opcoes.map((x) => [x, x]), dica: dicaCampo });
+      else if (o.tipo === 'base') c = campo({ nome: o.nome, rotulo: o.rotulo, tipo: 'select', valor: 'padrao', opcoes: opcoesDeBase(ctx), dica: dicaCampo });
+      else if (o.tipo === 'origem') c = campo({ nome: o.nome, rotulo: o.rotulo, tipo: 'select', valor: 'pacote', opcoes: [['pacote', 'Cenários sintéticos do artefato'], ...ctx.origens.map((x) => [x.id, `Cenários gerados em ${fmtData(x.iniciada_em)}`])], dica: dicaCampo });
+      else if (o.tipo === 'arquivo') c = campo({ nome: o.nome, rotulo: o.rotulo, tipo: 'file', opcional: true, dica: dicaCampo, atributos: { accept: '.yaml,.yml' } });
+      else if (o.tipo === 'inteiros') c = campo({ nome: o.nome, rotulo: o.rotulo, valor: (o.padrao || []).join(', '), opcional: !o.padrao, dica: dicaCampo, atributos: { inputmode: 'numeric' } });
+      else if (o.tipo === 'data') c = campo({ nome: o.nome, rotulo: o.rotulo, opcional: true, dica: dicaCampo, atributos: { placeholder: 'AAAA-MM-DD', inputmode: 'numeric' } });
+      else {
+        if (o.minimo !== null) atributos.min = o.minimo;
+        if (o.maximo !== null) atributos.max = o.maximo;
+        atributos.step = o.tipo === 'decimal' ? 'any' : 1;
+        c = campo({ nome: o.nome, rotulo: o.rotulo, tipo: 'number', valor: o.padrao, opcional: o.padrao === null, dica: dicaCampo, atributos });
+      }
+      campos[o.nome] = c;
+      if (!grupos.has(o.grupo)) grupos.set(o.grupo, []);
+      grupos.get(o.grupo).push(c.no);
+    }
+    const no = el('div', {}, [...grupos.entries()].map(([grupo, nos]) => (grupo ? el('fieldset', {}, el('legend', { text: grupo }), el('div', { class: 'grade-campos grade-campos-3' }, nos)) : el('div', { class: 'grade-campos grade-campos-3' }, nos))));
+    return { no, campos, coletar() {
+      const parametros = {};
+      const fd = new FormData();
+      for (const o of cmd.opcoes) {
+        const c = campos[o.nome];
+        if (o.tipo === 'arquivo') { if (c.input.files.length) fd.append(o.nome, c.input.files[0]); } else parametros[o.nome] = o.tipo === 'marcacao' ? c.valor() : String(c.valor()).trim();
+      }
+      fd.append('comando', cmd.nome);
+      fd.append('parametros', JSON.stringify(parametros));
+      return fd;
+    } };
+  }
+  async function telaArtefato(area) {
+    definirTitulo('Artefato');
+    definirTrilha([[areaDoPapel()], ['Artefato']]);
+    const [ctx, lista] = await Promise.all([api('GET', '/api/artefato/comandos'), api('GET', '/api/artefato/tarefas')]);
+    area.append(cabecalhoTela({ titulo: 'Artefato: reprodução e avaliação', subtitulo: 'Os comandos da linha de comando, com as mesmas opções e as mesmas saídas, executados daqui. Rodam em segundo plano, um por vez, só com dados sintéticos e a base pública do ClinVar.' }));
+    if (ctx.em_andamento) area.append(el('div', { class: 'alerta alerta-info' }, icone('relogio'), el('p', {}, 'Há uma execução em andamento. ', el('a', { href: `#/artefato/${ctx.em_andamento}`, text: 'Acompanhar' }), '. Uma nova só pode começar quando ela terminar.')));
+    const corpo = el('div');
+    const prog = caixaProgresso();
+    let atual = null;
+    const desenhar = (nome) => { atual = formularioComando(ctx.comandos.find((c) => c.nome === nome), ctx); limpar(corpo).append(atual.no); };
+    const escolha = cartoesOpcao({ nome: 'comando', rotulo: 'Comando', valor: 'avaliar', onchange: desenhar, opcoes: ctx.comandos.map((c) => ({ valor: c.nome, titulo: c.titulo, descricao: `${c.descricao} Duração: ${c.duracao}. Linha de comando: ela-preditivo ${c.nome}.`, icone: c.nome === 'tudo' ? 'prancheta' : c.nome === 'avaliar' ? 'grafico' : 'dna' })) });
+    const enviar = botao('Executar', { tipo: 'submit', icone: 'frasco', desabilitado: !!ctx.em_andamento });
+    const form = el('form', { novalidate: true, onsubmit: async (ev) => {
+      ev.preventDefault();
+      enviar.disabled = true; prog.mostrar('Iniciando a execução…');
+      try {
+        const t = await api('POST', '/api/artefato/tarefas', { form: atual.coletar() });
+        navegar(`#/artefato/${t.id}`);
+      } catch (e) { aplicarErros(atual.campos, e.campos, Object.keys(e.campos).length ? null : e.message); enviar.disabled = false; } finally { prog.esconder(); }
+    } }, escolha.no, corpo, prog.caixa, el('div', { class: 'acoes acoes-direita' }, enviar));
+    desenhar('avaliar');
+    area.append(el('div', { class: 'cartao' }, el('h2', { text: 'Nova execução' }), form));
+    area.append(el('div', { class: 'cartao' }, el('h2', { text: 'Execuções' }), lista.tarefas.length ? tabela([
+      { rotulo: 'Início', valor: (t) => fmtData(t.iniciada_em) }, { rotulo: 'Comando', valor: (t) => t.titulo }, { rotulo: 'Estado', valor: (t) => chipEstadoTarefa(t) },
+      { rotulo: 'Duração', valor: (t) => fmtDuracao(t.estado === 'executando' ? t.decorrido_s : t.duracao_s) }, { rotulo: 'Disparada por', valor: (t) => (t.minha ? 'você' : PAPEL_CURTO[t.papel] || '—') },
+      { rotulo: 'Ação', valor: (t) => linkBotao('Abrir', `#/artefato/${t.id}`, { classe: 'botao-secundario botao-pequeno', icone: 'seta-dir' }) }], lista.tarefas, { blocos: true, legenda: 'Execuções do artefato, da mais recente para a mais antiga' }) : el('p', { class: 'texto-suave', text: 'Nenhuma execução ainda.' })));
+    area.append(el('details', {}, el('summary', { text: 'Equivalência com a linha de comando' }), el('p', { class: 'pequeno texto-suave', text: 'Onde a interface oferece cada comando e cada opção de ela-preditivo. Só subir o serviço (servir) e criar a chave de cifra (gerar-chave) ficam com o arranque: a chave é criada sozinha na primeira subida.' }),
+      tabela([{ rotulo: 'Comando', chave: 'comando' }, { rotulo: 'Opção', chave: 'opcao' }, { rotulo: 'Na interface', chave: 'onde' }, { rotulo: 'Campo', valor: (x) => x.campo || '—' }], ctx.equivalencia, { legenda: 'Equivalência entre a linha de comando e a interface' })));
+  }
+  function corpoRelatorio(r, base, extras) { // relatório de uma pasta da saída: texto, tabelas, figuras e metadados
+    const cartoes = [];
+    const tabelas = () => {
+      if (!r.tabelas.length) return el('p', { class: 'texto-suave', text: 'Este relatório não tem tabelas.' });
+      const ir = campo({ nome: 'ir_para_tabela', rotulo: 'Ir para', tipo: 'select', opcoes: r.tabelas.map((t, i) => [String(i), t.legenda.split(' — ')[0] + (t.legenda.includes(' — ') ? `: ${t.legenda.split(' — ')[1].slice(0, 70)}` : '')]) });
+      ir.input.addEventListener('change', () => { const alvo = cartoes[Number(ir.valor())]; if (alvo) alvo.scrollIntoView({ behavior: 'smooth', block: 'start' }); });
+      for (const t of r.tabelas) cartoes.push(el('div', { class: 'cartao' }, tabelaRegistros(t), t.total_de_linhas > t.linhas.length ? el('p', { class: 'pequeno texto-suave', text: `Mostrando ${t.linhas.length} de ${t.total_de_linhas} linhas; o arquivo completo está no pacote.` }) : null));
+      return el('div', {}, el('div', { class: 'grade-campos' }, ir.no), cartoes);
+    };
+    const figuras = () => (r.figuras.length ? el('div', {}, r.figuras.map((f) => el('figure', { class: 'figura' }, el('img', { src: `${base}/arquivo?caminho=${encodeURIComponent(f.caminho)}`, alt: f.legenda, loading: 'lazy' }), el('figcaption', { text: f.legenda })))) : el('p', { class: 'texto-suave', text: 'Este relatório não tem figuras.' }));
+    const metadados = () => el('div', {}, Object.keys(r.metadados).length ? el('div', { class: 'cartao' }, el('h2', { text: 'Metadados da execução (reprodutibilidade)' }), el('dl', { class: 'lista-definicao' }, Object.entries(r.metadados).filter(([, v]) => v !== null).map(([k, v]) => [el('dt', { text: k }), el('dd', { text: typeof v === 'object' ? JSON.stringify(v) : String(v) })]).flat())) : null,
+      el('details', {}, el('summary', { text: 'Relatório completo (Markdown)' }), el('pre', { text: r.relatorio_md })));
+    contadorAbas += 1;
+    return el('div', {}, el('h2', { text: r.titulo }), abas([
+      { rotulo: 'Texto', icone: 'prancheta', conteudo: () => el('div', {}, r.secoes.map((s) => el('div', { class: 'cartao' }, el('h3', { text: s.titulo }), linhasDeTexto(s.texto)))) },
+      { rotulo: `Tabelas (${r.tabelas.length})`, icone: 'grafico', conteudo: tabelas },
+      { rotulo: `Figuras (${r.figuras.length})`, icone: 'degraus', conteudo: figuras },
+      { rotulo: 'Metadados', icone: 'escudo', conteudo: metadados },
+      ...(extras || []),
+    ], `rel-${contadorAbas}`, { rotulo: 'Partes do relatório' }));
+  }
+  async function telaTarefa(area, params) {
+    const id = params[0];
+    const base = `/api/artefato/tarefas/${id}`;
+    definirTitulo('Execução do artefato');
+    definirTrilha([[areaDoPapel()], ['Artefato', '#/artefato'], ['Execução']]);
+    const corpo = el('div');
+    area.append(corpo);
+    const desenhar = (t) => {
+      limpar(corpo);
+      const acoes = [];
+      if (t.estado === 'concluida') acoes.push(el('a', { class: 'botao', href: `${base}/pacote.zip`, download: '' }, icone('baixar'), 'Baixar pacote (.zip)'));
+      if (t.minha) acoes.push(botao(t.estado === 'executando' ? 'Cancelar' : 'Remover', { classe: 'botao-perigo', icone: t.estado === 'executando' ? 'fechar' : 'lixeira', onclick: async () => {
+        if (!window.confirm(t.estado === 'executando' ? 'Cancelar esta execução? O que já foi calculado se perde.' : 'Remover esta execução e a saída dela?')) return;
+        try { await api('DELETE', base); estado.avisoPendente = t.estado === 'executando' ? 'Execução cancelada.' : 'Execução removida.'; navegar('#/artefato'); } catch (e) { avisar('erro', e.message); }
+      } }));
+      acoes.push(linkBotao('Voltar', '#/artefato', { classe: 'botao-secundario', icone: 'seta-esq' }));
+      corpo.append(cabecalhoTela({ titulo: t.titulo, subtitulo: `Iniciada em ${fmtData(t.iniciada_em)}${t.minha ? ' por você' : ` por ${PAPEL_CURTO[t.papel] || 'outro usuário'}`}${t.duracao_s !== null && t.duracao_s !== undefined ? `; durou ${fmtDuracao(t.duracao_s)}` : ''}.`, chips: [chipEstadoTarefa(t)], acoes }));
+      if (t.estado === 'executando') corpo.append(el('div', { class: 'ocupado', role: 'status' }, el('span', { text: `Em execução há ${fmtDuracao(t.decorrido_s)}. A página se atualiza sozinha; você pode sair e voltar depois.` })));
+      else if (t.mensagem) corpo.append(el('div', { class: `alerta ${t.estado === 'falhou' ? 'alerta-erro' : 'alerta-aviso'}` }, icone('alerta'), el('p', { text: t.mensagem })));
+      const execucao = () => el('div', {}, el('div', { class: 'cartao' }, el('h2', { text: 'Comando equivalente' }), el('pre', { text: t.linha_de_comando }), el('p', { class: 'pequeno texto-suave', text: 'É o que a linha de comando rodaria com estas opções; os caminhos foram trocados por nomes.' })),
+        el('div', { class: 'cartao' }, el('h2', { text: 'Registro da execução' }), el('pre', { text: t.registro || '(o comando ainda não escreveu nada)' })));
+      if (t.estado !== 'concluida' || !t.saida) { corpo.append(execucao()); return; }
+      const arquivos = () => el('div', { class: 'cartao' }, el('h2', { text: `Arquivos da saída (${t.saida.total_de_arquivos})` }), tabela([
+        { rotulo: 'Arquivo', valor: (a) => el('a', { href: `${base}/arquivo?caminho=${encodeURIComponent(a.caminho)}`, download: a.caminho.split('/').pop(), text: a.caminho }) }, { rotulo: 'Tamanho', valor: (a) => fmtBytes(a.tamanho), num: true }], t.saida.arquivos, { legenda: 'Arquivos escritos pelo comando' }));
+      const extras = [{ rotulo: 'Arquivos', icone: 'arquivo', conteudo: arquivos }, { rotulo: 'Execução', icone: 'relogio', conteudo: execucao }];
+      const rels = t.saida.relatorios;
+      if (!rels.length) { contadorAbas += 1; corpo.append(abas(extras, `exe-${contadorAbas}`, { rotulo: 'Saída da execução' })); return; }
+      const painel = el('div');
+      const abrir = async (pasta) => {
+        limpar(painel).append(el('div', { class: 'ocupado', role: 'status' }, el('span', { text: 'Carregando o relatório…' })));
+        try { const r = await api('GET', `${base}/relatorio?pasta=${encodeURIComponent(pasta)}`); if (area.isConnected) limpar(painel).append(corpoRelatorio(r, base, extras)); } catch (e) { limpar(painel).append(el('p', { text: e.message })); }
+      };
+      if (rels.length > 1) {
+        const seletor = campo({ nome: 'relatorio', rotulo: 'Relatório', tipo: 'select', valor: rels[0].pasta, opcoes: rels.map((x) => [x.pasta, x.titulo]), dica: `${rels.length} relatórios nesta execução.` });
+        seletor.input.addEventListener('change', () => abrir(seletor.valor()));
+        corpo.append(el('div', { class: 'cartao' }, el('div', { class: 'grade-campos' }, seletor.no)));
+      }
+      corpo.append(painel);
+      abrir(rels[0].pasta);
+    };
+    const carregar = async () => {
+      const t = await api('GET', base);
+      if (!area.isConnected) return;
+      desenhar(t);
+      if (t.estado === 'executando') setTimeout(() => { if (area.isConnected) carregar().catch(() => {}); }, 3000);
+    };
+    await carregar();
+  }
+
+  // ---------------------------------------------------------------------------------------------
+  // Base de anotação: a base em uso, os arquivos da pasta de bases e o registro de versões
+  // ---------------------------------------------------------------------------------------------
+  async function telaBase(area) {
+    definirTitulo('Base de anotação');
+    definirTrilha([[areaDoPapel()], ['Base de anotação']]);
+    const b = await api('GET', '/api/base');
+    area.append(cabecalhoTela({ titulo: 'Base de anotação', subtitulo: 'Subconjunto do ClinVar dos quatro genes usado para classificar as variantes. Cada resultado guarda o arquivo, a release e o sha256 da base usada.', chips: [b.em_uso ? chip(`Em uso: ${b.em_uso.nome}`, 'chip-ok', 'check') : chip('Só a tabela curada', 'chip-aviso', 'alerta')] }));
+    if (b.sem_base) area.append(el('div', { class: 'alerta alerta-aviso' }, icone('alerta'), el('p', { text: `${b.sem_base}${b.pode_gerir ? ' Envie a base abaixo ou baixe a release do ClinVar.' : ' O administrador pode enviar a base por esta tela.'}` })));
+    const curto = (h) => (h ? `${h.slice(0, 12)}…` : '—');
+    const registrar = async (nome, campoRelease) => {
+      try { const r = await api('POST', '/api/base/versoes', { json: { arquivo: nome, release: campoRelease ? campoRelease.valor().trim() || null : null } }); estado.avisoPendente = `Versão registrada: release ${r.atual.release}.`; aoMudarRota(); } catch (e) { if (campoRelease && e.campos.release) { campoRelease.setErro(e.campos.release); campoRelease.input.focus(); } else avisar('erro', Object.values(e.campos)[0] || e.message); }
+    };
+    const releaseRegistro = campo({ nome: 'release_registro', rotulo: 'Release para registrar', opcional: true, dica: 'AAAA-MM-DD. Só é preciso quando o arquivo não traz a data no cabeçalho nem no nome.', atributos: { placeholder: 'AAAA-MM-DD', inputmode: 'numeric' } });
+    area.append(el('div', { class: 'cartao' }, el('h2', { text: `Arquivos na pasta de bases (${b.pasta}/)` }), b.arquivos.length ? tabela([
+      { rotulo: 'Arquivo', chave: 'nome' }, { rotulo: 'Release', valor: (a) => a.release || 'não identificada' }, { rotulo: 'Tamanho', valor: (a) => fmtBytes(a.tamanho), num: true }, { rotulo: 'sha256', valor: (a) => curto(a.sha256) },
+      { rotulo: 'Situação', valor: (a) => el('span', {}, a.em_uso ? chip('em uso', 'chip-ok', 'check') : null, ' ', a.registrada ? chip('versão registrada', 'chip-azul') : chip('sem registro', 'chip-neutro')) },
+      ...(b.pode_gerir ? [{ rotulo: 'Ação', valor: (a) => (a.registrada ? '—' : botao('Registrar versão', { classe: 'botao-secundario botao-pequeno', ariaLabel: `Registrar a versão de ${a.nome}`, onclick: () => registrar(a.nome, releaseRegistro) })) }] : [])], b.arquivos, { blocos: true, legenda: 'Arquivos reconhecidos como base; a primeira da ordem de preferência é a base em uso' }) : el('p', { class: 'texto-suave', text: `Nenhum arquivo reconhecido. Nomes aceitos: ${b.nomes_aceitos.join(', ')}.` }),
+      b.pode_gerir && b.arquivos.some((a) => !a.registrada) ? el('div', { class: 'grade-campos' }, releaseRegistro.no) : null));
+    area.append(el('div', { class: 'cartao' }, el('h2', { text: 'Versões registradas' }), b.versoes.length ? tabela([
+      { rotulo: 'Release', chave: 'release' }, { rotulo: 'Arquivo', chave: 'arquivo' }, { rotulo: 'Variantes', chave: 'n_variantes', num: true }, { rotulo: 'Por classe', valor: (v) => Object.entries(v.por_classe || {}).map(([k, n]) => `${k} ${n}`).join('; ') },
+      { rotulo: 'sha256', valor: (v) => curto(v.sha256) }, { rotulo: 'Registrada em', valor: (v) => String(v.registrado_em || '').replace('T', ' ') }], b.versoes, { blocos: true, legenda: 'Versões da base registradas, da mais recente para a mais antiga' }) : el('p', { class: 'texto-suave', text: 'Nenhuma versão registrada ainda.' })));
+    if (b.relatorios.length) {
+      const texto = el('pre', { hidden: true });
+      area.append(el('div', { class: 'cartao' }, el('h2', { text: 'O que mudou entre versões' }), el('div', { class: 'acoes' }, b.relatorios.map((nome) => botao(nome.replace('atualizacao_', '').replace('.md', '').replace('_', ' → '), { classe: 'botao-secundario botao-pequeno', ariaLabel: `Abrir o relatório ${nome}`, onclick: async () => { try { const r = await api('GET', `/api/base/relatorios/${encodeURIComponent(nome)}`); texto.textContent = r.texto; texto.hidden = false; } catch (e) { avisar('erro', e.message); } } }))), texto));
+    }
+    if (!b.pode_gerir) return;
+    const arquivo = campo({ nome: 'arquivo', rotulo: 'Arquivo da base', tipo: 'file', obrigatorio: true, dica: `Nomes aceitos: ${b.nomes_aceitos.join(', ')}. Um arquivo de mesmo nome já na pasta é guardado em anteriores/ antes de ser substituído.`, atributos: { accept: '.csv,.txt,.vcf,.gz' } });
+    const release = campo({ nome: 'release', rotulo: 'Release', opcional: true, dica: 'AAAA-MM-DD. Obrigatória quando o arquivo não traz a data (ex.: base_consolidada_ela.csv).', atributos: { placeholder: 'AAAA-MM-DD', inputmode: 'numeric' } });
+    const camposEnvio = { arquivo, release };
+    const progEnvio = caixaProgresso();
+    const botaoEnvio = botao('Enviar e registrar', { tipo: 'submit', icone: 'upload' });
+    area.append(el('div', { class: 'cartao' }, el('h2', { text: 'Enviar base' }), el('p', { class: 'pequeno texto-suave', text: 'O mesmo que copiar o arquivo para a pasta de bases e rodar ela-preditivo atualizar-base --base ARQUIVO.' }), el('form', { novalidate: true, onsubmit: async (ev) => {
+      ev.preventDefault();
+      if (!arquivo.input.files.length) { aplicarErros(camposEnvio, { arquivo: 'Envie o arquivo da base.' }); return; }
+      const fd = new FormData();
+      fd.append('arquivo', arquivo.input.files[0]);
+      if (release.valor().trim()) fd.append('release', release.valor().trim());
+      botaoEnvio.disabled = true; progEnvio.mostrar('Enviando e conferindo a base…');
+      try { const r = await api('POST', '/api/base/arquivos', { form: fd }); estado.avisoPendente = `Base enviada: ${r.arquivo}, release ${r.atual.release}, ${r.variantes} variantes${r.em_uso ? '; é a base em uso' : ''}.`; aoMudarRota(); } catch (e) { aplicarErros(camposEnvio, e.campos, Object.keys(e.campos).length ? null : e.message); } finally { botaoEnvio.disabled = false; progEnvio.esconder(); }
+    } }, el('div', { class: 'grade-campos' }, arquivo.no, release.no), progEnvio.caixa, el('div', { class: 'acoes acoes-direita' }, botaoEnvio))));
+    const releaseDownload = campo({ nome: 'release_download', rotulo: 'Release', opcional: true, dica: 'AAAA-MM-DD de uma release do arquivo mensal. Vazio = a mais recente.', atributos: { placeholder: 'AAAA-MM-DD', inputmode: 'numeric' } });
+    const situacao = el('div');
+    const acompanhar = (t) => {
+      limpar(situacao).append(el('div', { class: 'acoes' }, chipEstadoTarefa(t), el('span', { class: 'pequeno texto-suave', text: `Iniciado em ${fmtData(t.iniciada_em)}; ${t.estado === 'executando' ? `em andamento há ${fmtDuracao(t.decorrido_s)}` : `durou ${fmtDuracao(t.duracao_s)}`}.` })), el('pre', { text: t.registro || '(o comando ainda não escreveu nada)' }));
+      if (t.estado === 'executando') setTimeout(async () => { if (!area.isConnected) return; try { const n = await api('GET', `/api/base/tarefas/${t.id}`); if (n.estado === 'concluida') { estado.avisoPendente = 'Download concluído: release registrada.'; aoMudarRota(); } else acompanhar(n); } catch (e) { /* a próxima visita mostra a situação */ } }, 3000);
+    };
+    area.append(el('div', { class: 'cartao' }, el('h2', { text: 'Baixar a release do ClinVar' }), el('p', { class: 'pequeno texto-suave', text: `${b.comando_baixar.descricao} Fonte: ${b.fonte_do_download}. O servidor precisa de acesso à internet. Linha de comando: ela-preditivo atualizar-base --baixar.` }),
+      el('div', { class: 'grade-campos' }, releaseDownload.no), el('div', { class: 'acoes acoes-direita' }, botao('Baixar e registrar', { icone: 'baixar', onclick: async () => {
+        try { const t = await api('POST', '/api/base/baixar', { json: { release: releaseDownload.valor().trim() || null } }); acompanhar(t); } catch (e) { if (e.campos.release) { releaseDownload.setErro(e.campos.release); releaseDownload.input.focus(); } else avisar('erro', e.message); }
+      } })), situacao));
+    if (b.tarefa) acompanhar(b.tarefa);
+  }
+
+  // ---------------------------------------------------------------------------------------------
+  // Primeiro acesso: administrador e dados de demonstração criados pela interface
+  // ---------------------------------------------------------------------------------------------
+  function cartaoCredenciais(r) { // senhas geradas, mostradas uma única vez
+    const texto = ['papel\tsituação\te-mail\tsenha', ...r.credenciais.map((c) => `${c.papel}\t${c.situacao}\t${c.email}\t${c.senha}`)].join('\n');
+    return el('div', { class: 'cartao' }, el('h2', { text: 'Contas de demonstração criadas' }),
+      el('div', { class: 'alerta alerta-aviso' }, icone('alerta'), el('p', {}, el('strong', { text: 'Copie as senhas agora. ' }), r.aviso)),
+      el('p', { class: 'pequeno texto-suave', text: `${r.credenciais.length} usuários, ${r.registros} registros fictícios, ${r.vcfs} VCFs sintéticos anexados e ${r.analises} análises.` }),
+      tabela([{ rotulo: 'Papel', valor: (c) => PAPEL_CURTO[c.papel] || c.papel }, { rotulo: 'Situação', valor: (c) => c.situacao.toLowerCase().replace(/_/g, ' ') }, { rotulo: 'E-mail', chave: 'email' }, { rotulo: 'Senha', valor: (c) => el('code', { text: c.senha }) }], r.credenciais, { blocos: true, legenda: 'Contas de demonstração e senhas geradas' }),
+      el('div', { class: 'acoes' }, botao('Baixar como texto', { classe: 'botao-secundario', icone: 'baixar', onclick: () => baixarBlob(new Blob([`${texto}\n`], { type: 'text/plain;charset=utf-8' }), 'contas_de_demonstracao.txt') }), linkBotao('Ir para Entrar', '#/entrar', { icone: 'seta-dir' })));
+  }
+  function cartaoDemonstracao(rota, explicacao) { // botão que cria a demonstração e troca o cartão pelas credenciais
+    const prog = caixaProgresso();
+    const cartao = el('div', { class: 'cartao' });
+    const criar = botao('Criar dados de demonstração', { icone: 'frasco', onclick: async () => {
+      criar.disabled = true; prog.mostrar('Criando usuários, registros fictícios e análises de exemplo… leva cerca de um minuto.');
+      try {
+        const r = await api('POST', rota, { json: {}, semRedirecionar: true });
+        estado.sistema = await api('GET', '/api/sistema');
+        renderizarCasca();
+        cartao.replaceWith(cartaoCredenciais(r));
+      } catch (e) { avisar('erro', e.message); criar.disabled = false; } finally { prog.esconder(); }
+    } });
+    cartao.append(el('h2', { text: 'Dados de demonstração' }), el('p', { text: explicacao }), el('p', { class: 'pequeno texto-suave', text: 'São criados um administrador, um médico e um pesquisador verificados, dois cadastros pendentes e oito registros fictícios com VCFs sintéticos e análises. As senhas aparecem aqui, uma única vez.' }), prog.caixa, el('div', { class: 'acoes' }, criar));
+    return cartao;
+  }
+  function camposDeAdministrador(sis) { // nome, CPF, e-mail, senha e aceites (nunca pré-marcados)
+    const versoes = (sis && sis.versoes_termos) || {};
+    const nome = campo({ nome: 'nome', rotulo: 'Nome completo', obrigatorio: true, icone: 'pessoa', atributos: { autocomplete: 'name' } });
+    const cpf = campo({ nome: 'cpf', rotulo: 'CPF', obrigatorio: true, atributos: { inputmode: 'numeric', placeholder: '000.000.000-00' } });
+    cpf.input.addEventListener('input', () => { cpf.input.value = mascararCpf(cpf.input.value); });
+    const email = campo({ nome: 'email', rotulo: 'E-mail', tipo: 'email', obrigatorio: true, icone: 'email', atributos: { autocomplete: 'username' } });
+    const senha = campo({ nome: 'senha', rotulo: 'Senha do novo administrador', tipo: 'password', obrigatorio: true, icone: 'cadeado', mostrarSenha: true, dica: 'Mínimo de 10 caracteres; não pode ser igual ao e-mail nem ao CPF.', atributos: { autocomplete: 'new-password' } });
+    const confirma = campo({ nome: 'confirma', rotulo: 'Confirme a senha', tipo: 'password', obrigatorio: true, icone: 'cadeado', mostrarSenha: true, atributos: { autocomplete: 'new-password' } });
+    const aceitePriv = marcacao({ nome: 'aceite_privacidade', rotulo: `O titular da conta leu e aceita o aviso de privacidade (versão ${versoes.aviso_privacidade || '—'}).` });
+    const aceiteUso = marcacao({ nome: 'aceite_termo_uso', rotulo: `O titular da conta leu e aceita o termo de uso (versão ${versoes.termo_uso || '—'}).` });
+    const campos = { nome, cpf, email, senha, confirma, aceite_privacidade: aceitePriv, aceite_termo_uso: aceiteUso };
+    return { campos, no: el('div', {}, el('div', { class: 'grade-campos' }, nome.no, cpf.no, email.no), el('div', { class: 'grade-campos' }, senha.no, confirma.no), aceitePriv.no, aceiteUso.no,
+      el('p', { class: 'pequeno' }, el('a', { href: '#/privacidade', text: 'Ler o aviso de privacidade' }))),
+      validar() {
+        const erros = {};
+        if (nome.valor().trim().length < 3) erros.nome = 'Informe o nome completo.';
+        if (!cpfValido(cpf.valor())) erros.cpf = 'CPF inválido: confira os dígitos.';
+        if (!/^[^@\s]+@[^@\s]+\.[^@\s]{2,}$/.test(email.valor().trim())) erros.email = 'Informe um e-mail válido.';
+        if (senha.valor().length < 10) erros.senha = 'A senha precisa ter pelo menos 10 caracteres.';
+        if (confirma.valor() !== senha.valor()) erros.confirma = 'As senhas não coincidem.';
+        if (!aceitePriv.valor()) erros.aceite_privacidade = 'É preciso aceitar o aviso de privacidade.';
+        if (!aceiteUso.valor()) erros.aceite_termo_uso = 'É preciso aceitar o termo de uso.';
+        return erros;
+      },
+      dados() { return { nome: nome.valor().trim(), cpf: cpf.valor(), email: email.valor().trim(), senha: senha.valor(), aceite_privacidade: aceitePriv.valor(), aceite_termo_uso: aceiteUso.valor(), versao_privacidade: versoes.aviso_privacidade, versao_termo_uso: versoes.termo_uso }; } };
+  }
+  async function telaPrimeiroAcesso(area) {
+    definirTitulo('Primeiro acesso');
+    definirTrilha([['EloSense'], ['Primeiro acesso']]);
+    estado.sistema = await api('GET', '/api/sistema');
+    const pa = estado.sistema.primeiro_acesso || {};
+    if (!pa.administrador && !pa.demonstracao) { estado.avisoPendente = 'O primeiro acesso já foi feito. Entre com a sua conta.'; navegar('#/entrar'); return; }
+    area.append(cabecalhoTela({ titulo: 'Primeiro acesso', subtitulo: 'A plataforma acabou de ser instalada e ainda não tem administrador. Esta tela só existe até ele ser criado; depois disso, o acesso é por conta e senha.', chips: [chip(estado.sistema.demonstracao ? 'Ambiente de homologação' : 'Ambiente de produção', estado.sistema.demonstracao ? 'chip-aviso' : 'chip-azul')] }));
+    if (pa.demonstracao) area.append(cartaoDemonstracao('/api/primeiro-acesso/demonstracao', 'Para testar a plataforma com dados fictícios, crie a demonstração: ela já traz um administrador, e você não precisa preencher o formulário abaixo.'));
+    if (!pa.administrador) return;
+    const adm = camposDeAdministrador(estado.sistema);
+    const enviar = botao('Criar administrador', { tipo: 'submit', icone: 'cadeado' });
+    area.append(el('div', { class: 'cartao' }, el('h2', { text: pa.demonstracao ? 'Ou criar só o administrador' : 'Criar o administrador' }), el('p', { class: 'pequeno texto-suave', text: 'O administrador aprova os cadastros de médicos e pesquisadores, gere a base de anotação e consulta a auditoria. Não vê registros de pacientes nem resultados.' }),
+      el('form', { novalidate: true, onsubmit: async (ev) => {
+        ev.preventDefault();
+        const erros = adm.validar();
+        if (Object.keys(erros).length) { aplicarErros(adm.campos, erros); return; }
+        enviar.disabled = true;
+        try {
+          const r = await api('POST', '/api/primeiro-acesso/administrador', { json: adm.dados(), semRedirecionar: true });
+          estado.sistema = await api('GET', '/api/sistema');
+          estado.avisoPendente = `Conta criada: ${r.mensagem}`;
+          navegar('#/entrar');
+        } catch (e) { aplicarErros(adm.campos, e.campos, Object.keys(e.campos).length ? null : e.message); } finally { enviar.disabled = false; }
+      } }, adm.no, el('div', { class: 'acoes acoes-direita' }, enviar))));
+  }
+  function cartaoNovoAdministrador(depois) { // um administrador cria outro; a senha é temporária e gerada pelo sistema
+    const nome = campo({ nome: 'nome', rotulo: 'Nome completo', obrigatorio: true, icone: 'pessoa' });
+    const cpf = campo({ nome: 'cpf', rotulo: 'CPF', obrigatorio: true, atributos: { inputmode: 'numeric', placeholder: '000.000.000-00' } });
+    cpf.input.addEventListener('input', () => { cpf.input.value = mascararCpf(cpf.input.value); });
+    const email = campo({ nome: 'email', rotulo: 'E-mail', tipo: 'email', obrigatorio: true, icone: 'email' });
+    const senhaAtual = campo({ nome: 'senha_atual', rotulo: 'Sua senha atual', tipo: 'password', obrigatorio: true, icone: 'cadeado', mostrarSenha: true, dica: 'Confirma que é você quem está criando a conta.', atributos: { autocomplete: 'current-password' } });
+    const campos = { nome, cpf, email, senha_atual: senhaAtual };
+    const resultado = el('div', { role: 'status' });
+    const enviar = botao('Criar administrador', { tipo: 'submit', icone: 'mais' });
+    const form = el('form', { novalidate: true, onsubmit: async (ev) => {
+      ev.preventDefault();
+      const erros = {};
+      if (nome.valor().trim().length < 3) erros.nome = 'Informe o nome completo.';
+      if (!cpfValido(cpf.valor())) erros.cpf = 'CPF inválido: confira os dígitos.';
+      if (!/^[^@\s]+@[^@\s]+\.[^@\s]{2,}$/.test(email.valor().trim())) erros.email = 'Informe um e-mail válido.';
+      if (!senhaAtual.valor()) erros.senha_atual = 'Informe a sua senha.';
+      if (Object.keys(erros).length) { aplicarErros(campos, erros); return; }
+      enviar.disabled = true;
+      try {
+        const r = await api('POST', '/api/admin/administradores', { json: { nome: nome.valor().trim(), cpf: cpf.valor(), email: email.valor().trim(), senha_atual: senhaAtual.valor() } });
+        form.reset();
+        limpar(resultado).append(el('div', { class: 'alerta alerta-aviso' }, icone('alerta'), el('div', {}, el('p', {}, el('strong', { text: `Administrador criado: ${r.usuario.email}. ` }), r.aviso), el('p', {}, 'Senha temporária: ', el('code', { text: r.senha_temporaria })))));
+        if (depois) await depois();
+      } catch (e) { aplicarErros(campos, e.campos, Object.keys(e.campos).length ? null : e.message); } finally { enviar.disabled = false; }
+    } }, el('div', { class: 'grade-campos grade-campos-3' }, nome.no, cpf.no, email.no), el('div', { class: 'grade-campos' }, senhaAtual.no), el('div', { class: 'acoes acoes-direita' }, enviar));
+    return el('details', {}, el('summary', { text: 'Novo administrador' }), el('p', { class: 'pequeno texto-suave', text: 'O sistema gera uma senha temporária, mostrada aqui uma única vez; o novo administrador é obrigado a trocá-la no primeiro login. Médicos e pesquisadores continuam se cadastrando pela tela Criar conta e passando pela sua aprovação.' }), form, resultado);
+  }
+  async function telaTrocarSenha(area) { // senha temporária: nada mais fica acessível até a pessoa definir a própria senha
+    definirTitulo('Trocar a senha');
+    definirTrilha([['EloSense'], ['Trocar a senha']]);
+    if (!estado.eu.trocar_senha) { navegar(inicioPorPapel()); return; }
+    const atual = campo({ nome: 'senha_atual', rotulo: 'Senha temporária', tipo: 'password', obrigatorio: true, icone: 'cadeado', mostrarSenha: true, atributos: { autocomplete: 'current-password' } });
+    const nova = campo({ nome: 'senha_nova', rotulo: 'Nova senha', tipo: 'password', obrigatorio: true, icone: 'cadeado', mostrarSenha: true, dica: 'Mínimo de 10 caracteres; diferente da temporária, do e-mail e do CPF.', atributos: { autocomplete: 'new-password' } });
+    const confirma = campo({ nome: 'confirma', rotulo: 'Confirme a nova senha', tipo: 'password', obrigatorio: true, icone: 'cadeado', mostrarSenha: true, atributos: { autocomplete: 'new-password' } });
+    const campos = { senha_atual: atual, senha_nova: nova, confirma };
+    const enviar = botao('Definir a senha e continuar', { tipo: 'submit', icone: 'check' });
+    area.append(cabecalhoTela({ titulo: 'Defina a sua senha', subtitulo: 'Você entrou com uma senha temporária. Ela serve só para este passo: defina a sua senha para usar a plataforma.' }),
+      el('div', { class: 'cartao' }, el('form', { novalidate: true, onsubmit: async (ev) => {
+        ev.preventDefault();
+        const erros = {};
+        if (!atual.valor()) erros.senha_atual = 'Informe a senha temporária.';
+        if (nova.valor().length < 10) erros.senha_nova = 'A senha precisa ter pelo menos 10 caracteres.';
+        if (confirma.valor() !== nova.valor()) erros.confirma = 'As senhas não coincidem.';
+        if (Object.keys(erros).length) { aplicarErros(campos, erros); return; }
+        enviar.disabled = true;
+        try {
+          await api('POST', '/api/contas/minha/senha', { json: { senha_atual: atual.valor(), senha_nova: nova.valor() } });
+          await carregarSessao();
+          renderizarCasca();
+          estado.avisoPendente = 'Conta pronta: senha definida.';
+          navegar(inicioPorPapel());
+        } catch (e) { aplicarErros(campos, e.campos, Object.keys(e.campos).length ? null : e.message); } finally { enviar.disabled = false; }
+      } }, el('div', { class: 'grade-campos grade-campos-3' }, atual.no, nova.no, confirma.no), el('div', { class: 'acoes acoes-direita' }, enviar))));
+    atual.input.focus();
   }
 
   // ---------------------------------------------------------------------------------------------

@@ -1,0 +1,38 @@
+# EloSense (ela_preditivo) em um comando:
+#
+#   docker compose up --build
+#
+# e abra http://localhost:8000. O resto é feito no navegador: na primeira vez a plataforma abre na tela Primeiro
+# acesso, onde se cria o administrador e, em homologação, os dados de demonstração (as senhas aparecem na tela).
+# As opções abaixo podem ser definidas num arquivo .env ao lado deste (modelo em .env.exemplo).
+services:
+  elosense:
+    build: .
+    image: ela-preditivo:local
+    ports:
+      # só nesta máquina por padrão; para atender a rede, ELA_ENDERECO=0.0.0.0 atrás de HTTPS
+      - "${ELA_ENDERECO:-127.0.0.1}:${ELA_PORTA:-8000}:8000"
+    environment:
+      # homologacao: selo de dados fictícios, cenários de exemplo e demonstração populada. producao: nada disso.
+      ELA_WEB_AMBIENTE: ${ELA_WEB_AMBIENTE:-homologacao}
+      # vazia: a chave é criada na primeira subida e guardada no volume (dados_web/chave.env)
+      ELA_WEB_CHAVE: ${ELA_WEB_CHAVE:-}
+      ELA_WEB_COOKIE_SEGURO: ${ELA_WEB_COOKIE_SEGURO:-0}
+      ELA_WEB_SESSAO_MINUTOS: ${ELA_WEB_SESSAO_MINUTOS:-30}
+      ELA_ENCARREGADO_NOME: ${ELA_ENCARREGADO_NOME:-}
+      ELA_ENCARREGADO_CONTATO: ${ELA_ENCARREGADO_CONTATO:-}
+      # opcional: administrador criado já na subida, com senha temporária (trocada no primeiro login). Para servidor
+      # exposto, onde não convém deixar a tela de primeiro acesso aberta a quem chegar primeiro
+      ELA_ADMIN_NOME: ${ELA_ADMIN_NOME:-}
+      ELA_ADMIN_CPF: ${ELA_ADMIN_CPF:-}
+      ELA_ADMIN_EMAIL: ${ELA_ADMIN_EMAIL:-}
+      ELA_ADMIN_SENHA: ${ELA_ADMIN_SENHA:-}
+    volumes:
+      # banco, chave, VCFs e documentos cifrados, resultados e execuções do artefato
+      - elosense_dados:/app/dados_web
+      # base real do ClinVar: envie pela tela Base de anotação (ou copie base_consolidada_ela.csv para ./dados_reais)
+      - ./dados_reais:/app/dados_reais:z
+    restart: unless-stopped
+
+volumes:
+  elosense_dados:

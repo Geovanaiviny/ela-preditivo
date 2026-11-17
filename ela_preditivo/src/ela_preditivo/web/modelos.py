@@ -62,6 +62,8 @@ class Usuario(Base):
     verificado_em: Mapped[_dt.datetime | None] = mapped_column(DateTime, default=None)
     verificado_por_id: Mapped[int | None] = mapped_column(Integer, default=None)
     encerramento_solicitado_em: Mapped[_dt.datetime | None] = mapped_column(DateTime, default=None)
+    # senha temporária (gerada pelo sistema ou vinda do ambiente): a conta só serve para trocar a senha
+    trocar_senha: Mapped[bool] = mapped_column(Boolean, default=False)
     criado_em: Mapped[_dt.datetime] = mapped_column(DateTime)
     atualizado_em: Mapped[_dt.datetime] = mapped_column(DateTime)
 
