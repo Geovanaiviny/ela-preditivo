@@ -21,7 +21,14 @@ from lifelines.fitters import ParametricUnivariateFitter
 
 warnings.filterwarnings("ignore", category=ApproximationWarning)
 
-from .exato import combinar_independentes, f_acumulada, hazard, prob_portador_condicional, risco_condicional
+from .exato import (
+    combinar_independentes,
+    f_acumulada,
+    hazard,
+    prob_portador_condicional,
+    quantil_inicio_condicional,
+    risco_condicional,
+)
 from .monte_carlo import Locus, ResultadoSimulacao
 
 QUALQUER = "qualquer lócus"
@@ -169,7 +176,7 @@ def curvas_analiticas(res: ResultadoSimulacao, t_max: float = 90.0, passo: float
     f_por_locus = []
     for j, l in enumerate(res.loci):
         pen = res.penetrancia[:, j][:, None]  # (n, 1)
-        f = l.p_portador_exato * pen * l.dist.cdf(t)[None, :]  # (n, T)
+        f = l.q_dado_pi(pen) * pen * l.dist.cdf(t)[None, :]  # (n, T)
         f_por_locus.append(f)
         q = np.percentile(f, [2.5, 50, 97.5], axis=0)
         linhas.append(
@@ -212,41 +219,39 @@ def tabela_risco_condicional(
     res: ResultadoSimulacao, idades_atuais=(0, 20, 30, 40, 50, 60, 70), janelas=(10, 20), horizonte: float = 90.0
 ) -> pd.DataFrame:
     """Tabela 4: para cada idade atual sem sintomas, P(portador | assintomático), risco nos próximos 10/20 anos
-    e risco vitalício residual, por lócus e combinado, com banda de 95 % pela incerteza de π."""
+    e risco vitalício residual (até o horizonte), por lócus e combinado, com banda de 95 % pela incerteza de π.
+
+    As janelas de 10 e 20 anos são limitadas ao horizonte. Na linha combinada, P(portador de ≥ 1 lócus | assintomático)
+    é 1 − ∏_j (1 − P(C_j | assintomático)): dado que nenhum lócus manifestou, os lóci continuam independentes."""
     linhas = []
     pen_draws = res.penetrancia
     for a in idades_atuais:
-        por_locus_media, por_locus_draws = [], []
+        por_locus_draws, p_cond = [], []
         for j, l in enumerate(res.loci):
             pen = pen_draws[:, j]
-            linha = {
-                "unidade": l.rotulo,
-                "idade_atual": a,
-                "p_portador_condicional": prob_portador_condicional(a, l.p_portador_exato, l.pen_media, l.dist),
-            }
-            fa = l.p_portador_exato * pen * float(l.dist.cdf(a))
-            riscos = {}
+            qpen = l.q_dado_pi(pen) * pen  # P(portador | π) · π em cada sorteio
+            p_cond.append(prob_portador_condicional(a, l.p_portador_exato, l.pen_media, l.dist))
+            linha = {"unidade": l.rotulo, "idade_atual": a, "p_portador_condicional": p_cond[-1]}
+            fa = qpen * float(l.dist.cdf(a))
             for jan in list(janelas) + [None]:
-                t = horizonte if jan is None else a + jan
+                t = horizonte if jan is None else min(a + jan, horizonte)
                 r = float(risco_condicional(t, a, l.p_portador_exato, l.pen_media, l.dist))
-                ft = l.p_portador_exato * pen * float(l.dist.cdf(t))
+                ft = qpen * float(l.dist.cdf(t))
                 rd = np.clip((ft - fa) / (1 - fa), 0, 1)
                 nome = "vitalicio" if jan is None else f"{jan}_anos"
-                riscos[nome] = (r, np.percentile(rd, 2.5), np.percentile(rd, 97.5))
                 linha[f"risco_{nome}"] = r
-                linha[f"risco_{nome}_q025"] = riscos[nome][1]
-                linha[f"risco_{nome}_q975"] = riscos[nome][2]
+                linha[f"risco_{nome}_q025"] = float(np.percentile(rd, 2.5))
+                linha[f"risco_{nome}_q975"] = float(np.percentile(rd, 97.5))
             linhas.append(linha)
-            por_locus_media.append(l)
-            por_locus_draws.append(pen)
+            por_locus_draws.append(qpen)
         if len(res.loci) > 1:
-            linha = {"unidade": QUALQUER, "idade_atual": a, "p_portador_condicional": np.nan}
-            fa_all = [l.p_portador_exato * pen * float(l.dist.cdf(a)) for l, pen in zip(res.loci, por_locus_draws)]
+            linha = {"unidade": QUALQUER, "idade_atual": a, "p_portador_condicional": combinar_independentes(p_cond)}
+            fa_all = [qpen * float(l.dist.cdf(a)) for l, qpen in zip(res.loci, por_locus_draws)]
             fa_any = 1 - np.prod([1 - f for f in fa_all], axis=0)
             fa_med = 1 - np.prod([1 - l.p_portador_exato * l.pen_media * float(l.dist.cdf(a)) for l in res.loci])
             for jan in list(janelas) + [None]:
-                t = horizonte if jan is None else a + jan
-                ft_all = [l.p_portador_exato * pen * float(l.dist.cdf(t)) for l, pen in zip(res.loci, por_locus_draws)]
+                t = horizonte if jan is None else min(a + jan, horizonte)
+                ft_all = [qpen * float(l.dist.cdf(t)) for l, qpen in zip(res.loci, por_locus_draws)]
                 ft_any = 1 - np.prod([1 - f for f in ft_all], axis=0)
                 ft_med = 1 - np.prod([1 - l.p_portador_exato * l.pen_media * float(l.dist.cdf(t)) for l in res.loci])
                 rd = np.clip((ft_any - fa_any) / (1 - fa_any), 0, 1)
@@ -256,6 +261,47 @@ def tabela_risco_condicional(
                 linha[f"risco_{nome}_q975"] = float(np.percentile(rd, 97.5))
             linhas.append(linha)
     return pd.DataFrame(linhas)
+
+
+def indicadores_condicionados(
+    res: ResultadoSimulacao, idade_atual: float, horizonte: float = 90.0, janelas=(10, 20)
+) -> dict:
+    """Os três indicadores principais para quem chegou à idade atual sem sintomas, pelo mesmo cálculo exato da Tabela 4.
+
+    1. P(portador de ≥ 1 lócus | assintomático na idade atual); 2. risco residual até o horizonte e nos próximos 10 e 20
+    anos, com banda de 95 % pelos sorteios da penetrância; 3. idade provável de início: mediana e faixa de 25 % a 75 %
+    da idade de início entre quem vai manifestar até o horizonte, condicionada a ainda não ter manifestado.
+    A unidade é a combinada ("qualquer lócus") quando há mais de um lócus."""
+    a = float(idade_atual)
+    tab = tabela_risco_condicional(res, idades_atuais=(a,), janelas=janelas, horizonte=horizonte)
+    unidade = QUALQUER if len(res.loci) > 1 else res.loci[0].rotulo
+    r = tab[tab.unidade == unidade].iloc[0]
+    comps = [(l.p_manifesta_sem_limite, l.dist) for l in res.loci]
+    inicio = {
+        nome: quantil_inicio_condicional(q, a, horizonte, comps)
+        for nome, q in (("q25", 0.25), ("mediana", 0.5), ("q75", 0.75))
+    }
+    return {
+        "idade_referencia": a,
+        "horizonte": float(horizonte),
+        "unidade": unidade,
+        "p_portador": float(r.p_portador_condicional),
+        "risco_residual": {
+            "valor": float(r.risco_vitalicio),
+            "q025": float(r.risco_vitalicio_q025),
+            "q975": float(r.risco_vitalicio_q975),
+        },
+        "janelas": {
+            str(jan): {
+                "valor": float(r[f"risco_{jan}_anos"]),
+                "q025": float(r[f"risco_{jan}_anos_q025"]),
+                "q975": float(r[f"risco_{jan}_anos_q975"]),
+                "ate": float(min(a + jan, horizonte)),
+            }
+            for jan in janelas
+        },
+        "inicio": inicio,
+    }
 
 
 def risco_condicional_km(

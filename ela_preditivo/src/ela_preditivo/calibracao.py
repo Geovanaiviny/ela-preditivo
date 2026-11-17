@@ -1,6 +1,8 @@
 """Calibração das priors a partir da literatura.
 
 - `ajustar_beta`: Beta(α, β) por ajuste de quantis ao ponto e ao IC 95% de penetrância.
+- `ajustar_lognormal_truncada`: alternativa à Beta, log-normal truncada em 1 que reproduz ao mesmo tempo a mediana e
+  os dois limites publicados (os IC de DOUGLAS; BARALLE, 2024, são simétricos em escala logarítmica).
 - `ajustar_weibull` / `ajustar_lognormal`: forma da distribuição de idade de início G(t) a partir
   de pontos de Kaplan-Meier ou de faixas etárias.
 - `weibull_de_momentos` / `weibull_de_quantis` (e as log-normais correspondentes): G(t) em forma fechada a partir das
@@ -21,7 +23,7 @@ import yaml
 from scipy import optimize, special, stats
 
 from . import DIR_CONFIG, GENES
-from .exato import DistribuicaoInicio
+from .exato import DistribuicaoInicio, DistribuicaoPenetrancia
 
 CAMINHO_PADRAO = DIR_CONFIG / "parametros_literatura.yaml"
 
@@ -61,6 +63,72 @@ def ajustar_beta(ponto: float, ic95: tuple[float, float], peso_ponto: float = 0.
         "q975": float(q975),
         "erro_ic": float(max(abs(q025 - lo), abs(q975 - hi))),
         "erro_ponto": float(abs(stats.beta.median(a, b) - ponto)),
+    }
+
+
+# ---------------------------------------------------------------------------
+# Log-normal truncada em 1 a partir de ponto + IC 95% (alternativa à Beta)
+# ---------------------------------------------------------------------------
+DISTRIBUICOES_PENETRANCIA = ("beta", "lognormal_truncada")
+_Z975 = float(stats.norm.ppf(0.975))
+
+
+def ajustar_lognormal_truncada(ponto: float, ic95: tuple[float, float]) -> dict[str, float]:
+    """Log-normal truncada em 1 para a penetrância: mediana no valor publicado e desvio em escala log tirado do IC.
+
+    Ponto de partida: μ = ln(ponto) e σ = (ln sup − ln inf)/(2·1,96). O truncamento em 1 (π é uma probabilidade)
+    desloca os quantis, por isso μ e σ recebem um ajuste fino que minimiza o maior erro absoluto entre os quantis de
+    2,5 %, 50 % e 97,5 % da distribuição já truncada e os três valores publicados. `massa_truncada` é a fração da
+    log-normal que ficaria acima de 1 e foi retirada.
+    """
+    lo, hi = float(ic95[0]), float(ic95[1])
+    if not (0 < lo < ponto < hi < 1):
+        raise ValueError(f"ponto/IC inconsistentes: {ponto}, {ic95}")
+    alvo = np.array([lo, float(ponto), hi])
+    qs = (0.025, 0.5, 0.975)
+
+    def quantis(mu: float, sigma: float) -> np.ndarray:
+        return DistribuicaoPenetrancia("lognormal_truncada", mu=mu, sigma=sigma).ppf(qs)
+
+    mu0, sigma0 = math.log(ponto), (math.log(hi) - math.log(lo)) / (2 * _Z975)
+    # minimax em forma de epígrafe: minimizar e sujeito a |quantil_i − alvo_i| ≤ e
+    restricoes = []
+    for i in range(3):
+        restricoes.append({"type": "ineq", "fun": lambda x, i=i: x[2] - (quantis(x[0], x[1])[i] - alvo[i])})
+        restricoes.append({"type": "ineq", "fun": lambda x, i=i: x[2] + (quantis(x[0], x[1])[i] - alvo[i])})
+    e0 = float(np.max(np.abs(quantis(mu0, sigma0) - alvo)))
+    res = optimize.minimize(
+        lambda x: x[2],
+        [mu0, sigma0, e0],
+        constraints=restricoes,
+        method="SLSQP",
+        bounds=[(None, None), (1e-3, 3.0), (0.0, 1.0)],
+        options={"ftol": 1e-14, "maxiter": 500},
+    )
+    mu, sigma = float(res.x[0]), float(res.x[1])
+    if not res.success or np.max(np.abs(quantis(mu, sigma) - alvo)) > e0:  # reserva: busca direta no máximo
+        nm = optimize.minimize(
+            lambda x: float(np.max(np.abs(quantis(x[0], abs(x[1])) - alvo))),
+            [mu0, sigma0],
+            method="Nelder-Mead",
+            options={"xatol": 1e-12, "fatol": 1e-14, "maxiter": 20000},
+        )
+        mu, sigma = float(nm.x[0]), float(abs(nm.x[1]))
+    dist = DistribuicaoPenetrancia("lognormal_truncada", mu=mu, sigma=sigma)
+    q025, mediana, q975 = (float(x) for x in dist.ppf(qs))
+    return {
+        "mu": mu,
+        "sigma": sigma,
+        "mu_inicial": mu0,
+        "sigma_inicial": sigma0,
+        "media": dist.media,
+        "mediana": mediana,
+        "q025": q025,
+        "q975": q975,
+        "erro_ic": float(max(abs(q025 - lo), abs(q975 - hi))),
+        "erro_ponto": float(abs(mediana - ponto)),
+        "erro_max": float(max(abs(q025 - lo), abs(mediana - ponto), abs(q975 - hi))),
+        "massa_truncada": dist.massa_truncada,
     }
 
 
@@ -291,14 +359,30 @@ class ParametrosGene:
         default_factory=dict
     )  # {media, dp} ou {mediana, iqr} quando G(t) vem de estatísticas
     extras: dict = field(default_factory=dict)
+    pen_distribuicao: str = "beta"  # distribuição em uso (bloco `calibracao_penetrancia` do YAML)
+    pen_lognormal: dict = field(default_factory=dict)  # ajuste da log-normal truncada (alternativa à Beta)
 
     def distribuicao_sexo(self, sexo: str | None) -> DistribuicaoInicio:
         """G(t) deslocada pelo efeito do sexo ("M", "F" ou None = sem deslocamento)."""
         return self.inicio.deslocar(self.delta_sexo.get(sexo, 0.0) if sexo else 0.0)
 
+    def prior_penetrancia(self, distribuicao: str | None = None) -> DistribuicaoPenetrancia:
+        """Distribuição da penetrância: a em uso (padrão) ou a pedida ("beta" ou "lognormal_truncada")."""
+        distribuicao = distribuicao or self.pen_distribuicao
+        if distribuicao == "beta":
+            return DistribuicaoPenetrancia("beta", alpha=self.alpha, beta=self.beta)
+        if distribuicao == "lognormal_truncada":
+            aj = self.pen_lognormal or ajustar_lognormal_truncada(self.pen_valor, self.pen_ic95)
+            return DistribuicaoPenetrancia("lognormal_truncada", mu=aj["mu"], sigma=aj["sigma"])
+        raise ValueError(f"distribuição de penetrância desconhecida: {distribuicao}")
+
+    @property
+    def penetrancia(self) -> DistribuicaoPenetrancia:
+        return self.prior_penetrancia()
+
     @property
     def pen_media(self) -> float:
-        return self.alpha / (self.alpha + self.beta)
+        return self.penetrancia.media
 
 
 @dataclass
@@ -313,13 +397,24 @@ class Parametros:
     genes: dict[str, ParametrosGene]
     caminho: Path
     regra_conflitante: dict = field(default_factory=dict)  # bloco `regra_conflitante` do YAML; vazio = desligada
+    calibracao_penetrancia: dict = field(default_factory=dict)  # bloco `calibracao_penetrancia` do YAML
+
+    @property
+    def distribuicao_penetrancia(self) -> str:
+        return str((self.calibracao_penetrancia or {}).get("distribuicao", "beta"))
+
+    def priors_penetrancia(self, distribuicao: str) -> dict[str, DistribuicaoPenetrancia]:
+        """Distribuição pedida para a penetrância de cada gene (cenário de sensibilidade)."""
+        return {nome: g.prior_penetrancia(distribuicao) for nome, g in self.genes.items()}
 
     def tabela_calibracao(self) -> pd.DataFrame:
-        """Tabela 6 do relatório: priors Beta e distribuições de início calibradas, com flags de confirmação."""
+        """Tabela 6 do relatório: distribuições de penetrância (Beta e log-normal truncada) e de idade de início
+        calibradas, com flags de confirmação."""
         linhas = []
         for g in self.genes.values():
             esc = g.inicio_ajuste["escolhido"]
             alt = g.inicio_ajuste["alternativa"]
+            ln = g.pen_lognormal
             linhas.append(
                 {
                     "gene": g.nome,
@@ -331,6 +426,14 @@ class Parametros:
                     "media_beta": round(g.pen_media, 3),
                     "mediana_beta": round(stats.beta.median(g.alpha, g.beta), 3),
                     "ic95_beta": f"{stats.beta.ppf(0.025, g.alpha, g.beta):.3f}–{stats.beta.ppf(0.975, g.alpha, g.beta):.3f}",
+                    "distribuicao_penetrancia_em_uso": g.pen_distribuicao,
+                    "lognormal_mu": round(ln["mu"], 4),
+                    "lognormal_sigma": round(ln["sigma"], 4),
+                    "media_lognormal": round(ln["media"], 3),
+                    "mediana_lognormal": round(ln["mediana"], 3),
+                    "ic95_lognormal": f"{ln['q025']:.3f}–{ln['q975']:.3f}",
+                    "erro_max_lognormal": round(ln["erro_max"], 4),
+                    "massa_truncada_lognormal": ln["massa_truncada"],
                     "distribuicao_inicio": g.inicio.tipo,
                     "metodo_inicio": esc.get("metodo", "pontos"),
                     "parametros_inicio": ", ".join(f"{k}={v:.2f}" for k, v in g.inicio.params.items()),
@@ -358,10 +461,17 @@ def carregar_parametros(caminho: str | Path | None = None) -> Parametros:
     with open(caminho, encoding="utf-8") as f:
         cfg = yaml.safe_load(f)
     peso_ponto = float(cfg.get("calibracao_beta", {}).get("peso_ponto", 1.0))
+    cal_pen = dict(cfg.get("calibracao_penetrancia") or {})
+    distribuicao_pen = str(cal_pen.get("distribuicao", "beta"))
+    if distribuicao_pen not in DISTRIBUICOES_PENETRANCIA:
+        raise ValueError(
+            f"calibracao_penetrancia.distribuicao deve ser uma de {DISTRIBUICOES_PENETRANCIA}; recebido: {distribuicao_pen!r}"
+        )
     genes: dict[str, ParametrosGene] = {}
     for nome, g in cfg["genes"].items():
         pen = g["penetrancia"]
         beta_fit = ajustar_beta(pen["valor"], tuple(pen["ic95"]), peso_ponto=peso_ponto)
+        ln_fit = ajustar_lognormal_truncada(pen["valor"], tuple(pen["ic95"]))
         ini = g["inicio"]
         dist, ajuste = ajustar_inicio(
             ini.get("pontos"),
@@ -396,6 +506,8 @@ def carregar_parametros(caminho: str | Path | None = None) -> Parametros:
             delta_citacao=ds.get("citacao", ""),
             delta_confirmar=bool(ds.get("confirmar", True)),
             extras=extras,
+            pen_distribuicao=distribuicao_pen,
+            pen_lognormal=ln_fit,
         )
     faltam = set(GENES) - set(genes)
     if faltam:
@@ -411,4 +523,5 @@ def carregar_parametros(caminho: str | Path | None = None) -> Parametros:
         genes=genes,
         caminho=caminho,
         regra_conflitante=dict(cfg.get("regra_conflitante") or {}),
+        calibracao_penetrancia={**cal_pen, "distribuicao": distribuicao_pen},
     )

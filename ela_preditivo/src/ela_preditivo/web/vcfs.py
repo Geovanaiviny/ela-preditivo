@@ -121,10 +121,7 @@ def sem_variantes(destino: Path, amostra: str) -> Path:
     """VCF GRCh38 de uma amostra com um único registro homozigoto de referência (0/0) fora dos genes-alvo: representa
     o genitor sem exame assumido não portador (dosagem 0 em todos os lóci). O registro existe só para que a ingestão
     produza um quadro com colunas; a suposição é declarada no resultado e nos metadados."""
-    linhas = cenarios._cabecalho(amostra, "genitor sem exame: assumido sem variante de risco", set(), "00000000")
-    linhas.append("chr17\t7675088\t.\tC\tT\t99.0\tPASS\tAC=0;AN=2;SINTETICO\tGT:DP:GQ\t0/0:40:90")
-    destino.write_text("\n".join(linhas) + "\n", encoding="utf-8", newline="\n")
-    return destino
+    return cenarios.escrever_vcf_sem_variantes(destino, amostra, "genitor sem exame: assumido sem variante de risco")
 
 
 def pasta_temporaria(config: Configuracao) -> Path:

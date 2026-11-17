@@ -1,6 +1,7 @@
 """Comparação com o modelo de Cox (extensão)."""
 
 import numpy as np
+import pandas as pd
 import pytest
 
 from ela_preditivo import cenarios, comparacao, genotipo, pipeline
@@ -29,6 +30,26 @@ def test_coorte_so_portadores_nos_dois_sexos(res_cenario_3, parametros):
     comb = c[c.unidade == QUALQUER]
     assert (comb[["portador_0", "portador_1"]].sum(axis=1) >= 1).all()
     assert c.duracao.between(0, 90).all() and c.evento.dtype == bool
+
+
+def test_coortes_dos_dois_sexos_sao_amostras_independentes(res_cenario_3, parametros):
+    c = comparacao.coorte_cox(res_cenario_3, parametros, 90.0)
+    sod1 = next(u for u in c.unidade.unique() if u.startswith("SOD1"))
+    f = c[(c.unidade == sod1) & (c.sexo_masculino == 0)].duracao.to_numpy()
+    m = c[(c.unidade == sod1) & (c.sexo_masculino == 1)].duracao.to_numpy()
+    # no SOD1, sem efeito do sexo, as duas coortes eram idênticas linha a linha quando a semente era a mesma
+    assert len(f) != len(m) or not np.array_equal(f, m)
+    sementes = comparacao.sementes_por_sexo(res_cenario_3.seed)
+    assert set(sementes) == {"F", "M"} and sementes["F"] != sementes["M"]
+    assert sementes == comparacao.sementes_por_sexo(res_cenario_3.seed) != comparacao.sementes_por_sexo(6)
+    # mesma semente da execução, mesma coorte e mesmo resultado
+    pd.testing.assert_frame_equal(c, comparacao.coorte_cox(res_cenario_3, parametros, 90.0))
+    tab = comparacao.comparar(res_cenario_3, parametros, 90.0)["tabela"].set_index("unidade")
+    tab2 = comparacao.comparar(res_cenario_3, parametros, 90.0)["tabela"].set_index("unidade")
+    hr, p = tab.loc[sod1, "HR[sexo masculino]"], tab.loc[sod1, "p[sexo masculino]"]
+    assert hr == tab2.loc[sod1, "HR[sexo masculino]"] and p == tab2.loc[sod1, "p[sexo masculino]"]
+    # razão de riscos perto de 1, mas não 1 com p = 1 por construção
+    assert 0.8 < hr < 1.25 and abs(hr - 1.0) > 1e-6 and 0.0 < p < 0.999
 
 
 def test_loci_por_sexo_desloca_so_o_c9orf72(res_cenario_3, parametros):

@@ -26,8 +26,8 @@ def construir_parser() -> argparse.ArgumentParser:
     g.add_argument("--sem-ruido", action="store_true")
 
     e = sub.add_parser("executar", help="executa as três camadas para um casal (VCF materno + paterno)")
-    e.add_argument("--vcf-mae", required=True)
-    e.add_argument("--vcf-pai", required=True)
+    e.add_argument("--vcf-mae", default=None, help="VCF da mãe (dispensável só com parentes dela ou filho testado)")
+    e.add_argument("--vcf-pai", default=None, help="VCF do pai (dispensável só com parentes dele ou filho testado)")
     e.add_argument(
         "--sexo", choices=["M", "F"], default=None, help="sexo do descendente (efeito documentado só para C9orf72)"
     )
@@ -67,6 +67,7 @@ def construir_parser() -> argparse.ArgumentParser:
         "--amostra-mae", default=None, help="nome da amostra no VCF materno, se multiamostra (padrão: a primeira)"
     )
     e.add_argument("--amostra-pai", default=None, help="idem para o VCF paterno")
+    _arg_parentes(e)
     _arg_extensoes(e)
     _arg_base(e)
 
@@ -82,6 +83,7 @@ def construir_parser() -> argparse.ArgumentParser:
     a.add_argument("--sexo", choices=["M", "F"], default="F")
     a.add_argument("--n-coerencia", type=int, default=10_000)
     a.add_argument("--config", default=None)
+    _arg_verificacao(a)
     _arg_base(a)
 
     t = sub.add_parser("tudo", help="gera cenários, executa os 5 (dois sexos), avalia e escreve o índice")
@@ -96,6 +98,7 @@ def construir_parser() -> argparse.ArgumentParser:
     t.add_argument(
         "--sem-cox", action="store_true", help="não ajusta o modelo de Cox de comparação (Tabela 11, Figura 9)"
     )
+    _arg_verificacao(t)
     _arg_base(t)
 
     u = sub.add_parser(
@@ -142,6 +145,118 @@ def construir_parser() -> argparse.ArgumentParser:
     return p
 
 
+def _arg_verificacao(sp: argparse.ArgumentParser) -> None:
+    """Verificação com famílias sintéticas de desfecho conhecido (Tabelas 12 a 20 da avaliação)."""
+    g = sp.add_argument_group("verificação com famílias sintéticas (calibração, discriminação, cobertura, tornado)")
+    g.add_argument("--sem-metricas", action="store_true", help="não calcula as métricas de verificação")
+    g.add_argument("--mundos", type=int, default=200, help="nº de mundos: em cada um a penetrância é sorteada uma vez")
+    g.add_argument("--por-estrato", type=int, default=10, help="pessoas por estrato (cenário × sexo × idade) e mundo")
+    g.add_argument(
+        "--seed-coorte", type=int, default=None, help="semente própria da coorte (padrão: derivada da semente)"
+    )
+
+
+def _arg_parentes(sp: argparse.ArgumentParser) -> None:
+    """Genótipo de parentes para o genitor que não pôde ser testado: avô, avó e tios de cada lado, a situação
+    clínica e a idade do genitor, e o VCF de filhos já testados."""
+    g = sp.add_argument_group(
+        "genitor sem exame, inferido por parentes",
+        "Quando um genitor não pôde ser testado, omita o VCF dele e informe o de parentes dele. A dosagem do genitor "
+        "passa a ser inferida e condicionada à situação clínica dele; a penetrância é a mesma para toda a família.",
+    )
+    for lado, de in (("mae", "da mãe"), ("pai", "do pai")):
+        s = f"-{'da-mae' if lado == 'mae' else 'do-pai'}"
+        g.add_argument(f"--vcf-pai{s}", default=None, metavar="VCF", help=f"VCF do pai {de} (avô do descendente)")
+        g.add_argument(f"--vcf-mae{s}", default=None, metavar="VCF", help=f"VCF da mãe {de} (avó do descendente)")
+        g.add_argument(
+            f"--vcf-irmao{s}",
+            nargs="+",
+            default=None,
+            metavar="VCF",
+            help=f"VCF de irmão(s) {de} (tios do descendente)",
+        )
+        g.add_argument(
+            f"--c9orf72-pai{s}", type=int, nargs="+", default=None, metavar="REP", help=f"laudo do C9orf72 do pai {de}"
+        )
+        g.add_argument(
+            f"--c9orf72-mae{s}", type=int, nargs="+", default=None, metavar="REP", help=f"laudo do C9orf72 da mãe {de}"
+        )
+        g.add_argument(
+            f"--c9orf72-irmao{s}",
+            type=int,
+            nargs="+",
+            default=None,
+            metavar="REP",
+            help=f"laudo do C9orf72 de irmão(s) {de}: uma contagem por irmão, na ordem de --vcf-irmao{s}",
+        )
+        g.add_argument(
+            f"--situacao-{lado}",
+            choices=["vivo_assintomatico", "falecido_sem_ela", "afetado", "desconhecido"],
+            default=None,
+            help=f"situação clínica {de} sem exame (obrigatória com parentes; afetado e desconhecido não condicionam)",
+        )
+        g.add_argument(
+            f"--idade-{lado}",
+            type=float,
+            default=None,
+            metavar="ANOS",
+            help=f"idade atual {de} (vivo sem sintomas) ou ao falecer (falecido sem ELA)",
+        )
+    g.add_argument(
+        "--vcf-filho-testado",
+        nargs="+",
+        default=None,
+        metavar="VCF",
+        help="VCF de filho(s) já testado(s): evidência sobre o genitor sem exame (o filho testado não é a pessoa em risco)",
+    )
+    g.add_argument(
+        "--prior-avos",
+        choices=["nao_portador", "hardy_weinberg"],
+        default="nao_portador",
+        help="avô ou avó sem exame: suposto não portador (padrão) ou prior de Hardy-Weinberg com a frequência alélica "
+        "da base de anotação (sem frequência na base, volta à suposição de não portador)",
+    )
+
+
+def _contagem(v):
+    """Laudo passado como um ou dois inteiros → inteiro (maior alelo) ou par (dois alelos)."""
+    if not v:
+        return None
+    return v[0] if len(v) == 1 else tuple(v)
+
+
+def _parentes(args) -> dict | None:
+    """Monta o argumento `parentes` de `pipeline.executar` a partir das opções da linha de comando."""
+    out: dict = {}
+    for lado in ("mae", "pai"):
+        s = "_da_mae" if lado == "mae" else "_do_pai"
+        d: dict = {}
+        for papel in ("pai", "mae"):
+            vcf, laudo = getattr(args, f"vcf_{papel}{s}", None), _contagem(getattr(args, f"c9orf72_{papel}{s}", None))
+            if vcf or laudo is not None:
+                d[papel] = {"vcf": vcf, "laudo_c9orf72": laudo}
+        vcfs_irmaos = getattr(args, f"vcf_irmao{s}", None) or []
+        laudos_irmaos = getattr(args, f"c9orf72_irmao{s}", None) or []
+        irmaos = []
+        for i in range(max(len(vcfs_irmaos), len(laudos_irmaos))):
+            irmaos.append(
+                {
+                    "vcf": vcfs_irmaos[i] if i < len(vcfs_irmaos) else None,
+                    "laudo_c9orf72": laudos_irmaos[i] if i < len(laudos_irmaos) else None,
+                }
+            )
+        if irmaos:
+            d["irmaos"] = irmaos
+        situacao, idade = getattr(args, f"situacao_{lado}", None), getattr(args, f"idade_{lado}", None)
+        if d or situacao or idade is not None:
+            d.update(situacao=situacao or "desconhecido", idade=idade, prior_avos=getattr(args, "prior_avos", None))
+            out[lado] = d
+    filhos = getattr(args, "vcf_filho_testado", None) or []
+    if filhos:
+        out["filhos_testados"] = [{"vcf": v} for v in filhos]
+    return out or None
+
+
 def _arg_extensoes(sp: argparse.ArgumentParser) -> None:
     """Extensões experimentais: transmissão do C9orf72 por repetições e comparação com Cox."""
     g = sp.add_argument_group("extensões experimentais")
@@ -162,6 +277,11 @@ def _arg_extensoes(sp: argparse.ArgumentParser) -> None:
     )
     g.add_argument(
         "--cox", action="store_true", help="ajusta CoxPHFitter na coorte de portadores e compara com a cura mista"
+    )
+    g.add_argument(
+        "--tornado",
+        action="store_true",
+        help="sensibilidade tipo tornado do caso: um parâmetro por vez, dentro da faixa publicada (Tabela 20, Figura 12)",
     )
 
 
@@ -208,7 +328,11 @@ def main(argv=None) -> int:
     if args.comando == "gerar-cenarios":
         df = cenarios.gerar_cenarios(args.saida, seed=args.seed, incluir_ruido=not args.sem_ruido)
         print(df.to_string(index=False))
-        print(f"\n{len(df) * 2} VCFs sintéticos em {args.saida}")
+        extras = cenarios.gerar_cenarios_parentes(args.saida, seed=args.seed, incluir_ruido=not args.sem_ruido)
+        n_extras = len(list(__import__("pathlib").Path(args.saida).glob("parentes_*.vcf")))
+        for c in extras:
+            print(f"cenário de parentes {c['numero']}: {c['descricao']}")
+        print(f"\n{len(df) * 2} VCFs sintéticos dos cenários e {n_extras} dos cenários de parentes em {args.saida}")
     elif args.comando == "executar":
         r = pipeline.executar(
             args.vcf_mae,
@@ -230,6 +354,8 @@ def main(argv=None) -> int:
             amostra_pai=args.amostra_pai,
             hipoteses_c9orf72=_hipoteses(args),
             comparar_cox=args.cox,
+            parentes=_parentes(args),
+            tornado=args.tornado,
         )
         print(f"Relatório: {r['relatorio']}")
         if r["res"] is not None:
@@ -261,6 +387,10 @@ def main(argv=None) -> int:
             n_coerencia=args.n_coerencia,
             config=args.config,
             base_clinvar=_base(args),
+            metricas=not args.sem_metricas,
+            mundos=args.mundos,
+            por_estrato=args.por_estrato,
+            seed_coorte=args.seed_coorte,
         )
         print(f"Relatório: {r['relatorio']}")
         print(
@@ -280,6 +410,10 @@ def main(argv=None) -> int:
             idade_atual=args.idade_atual,
             base_clinvar=_base(args),
             comparar_cox=not args.sem_cox,
+            metricas=not args.sem_metricas,
+            mundos=args.mundos,
+            por_estrato=args.por_estrato,
+            seed_coorte=args.seed_coorte,
         )
         print(f"Índice: {r['saida'] / 'README.md'}")
     elif args.comando == "atualizar-base":
@@ -366,7 +500,8 @@ def _comando_web(args) -> int:
                 return 2
             print(
                 f"Demonstração populada: {len(r['credenciais'])} usuários, {r['pacientes']} registros fictícios "
-                f"(pessoa, casal e família), {r['vcfs']} VCFs sintéticos anexados e {r['analises']} análises.\n"
+                f"(pessoa, casal e família, dois deles com genitor inferido por parentes), {r['vcfs']} VCFs sintéticos "
+                f"anexados e {r['analises']} análises.\n"
             )
             print(f"{'papel':<12} {'situação':<26} {'e-mail':<34} senha")
             for c in r["credenciais"]:

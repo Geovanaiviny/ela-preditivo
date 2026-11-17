@@ -65,6 +65,10 @@ def _analise_pseudonimizada(a: dict | None, detalhado: bool = False) -> dict | N
     c = analise_compacta(a)
     c.pop("id", None)
     c.pop("descendente_id", None)
+    # o pesquisador recebe a idade só por década (como a faixa etária do descendente), nunca a idade exata
+    c.pop("idade_na_analise", None)
+    ref = c.pop("idade_referencia", None)
+    c["faixa_idade_referencia"] = decada(int(ref)) if ref is not None else None
     c["executado_em"] = _mes(c["executado_em"])
     r = a["resumo"]
     c["herancas"] = sorted({l.get("heranca") for l in r.get("loci", []) if l.get("heranca")})
@@ -80,9 +84,36 @@ def _analise_pseudonimizada(a: dict | None, detalhado: bool = False) -> dict | N
                 "loci_descartados": r.get("loci_descartados", []),
                 "horizonte": r.get("horizonte"),
                 "versao": r.get("versao"),
+                "parentes": _parentes_pseudonimizados(r.get("parentes")),
+                "limite_inferior": bool(r.get("limite_inferior")),
             }
         )
+    c["inferido_por_parentes"] = bool((r.get("parentes") or {}).get("loci_inferidos"))
     return c
+
+
+def _parentes_pseudonimizados(info: dict | None) -> dict | None:
+    """Inferência por parentes para o pesquisador: situação do genitor com a idade só por década, parentesco dos
+    parentes considerados, suposições e dosagem inferida por lócus."""
+    if not info:
+        return None
+    genitores = {}
+    for lado, g in (info.get("genitores") or {}).items():
+        idade = g.get("idade")
+        genitores[lado] = {
+            "situacao": g.get("situacao"),
+            "faixa_idade": decada(int(idade)) if idade is not None else None,
+            "limite_inferior": bool(g.get("limite_inferior")),
+        }
+    loci = []
+    for l in info.get("loci_inferidos") or []:
+        loci.append({k: v for k, v in l.items() if k != "situacao_clinica"})
+    return {
+        "genitores": genitores,
+        "pessoas": info.get("pessoas") or [],
+        "suposicoes": info.get("suposicoes") or [],
+        "loci_inferidos": loci,
+    }
 
 
 def caso_dict(p: Paciente, cifra, hoje: _dt.date, detalhado: bool = False) -> dict:
@@ -116,7 +147,12 @@ def caso_dict(p: Paciente, cifra, hoje: _dt.date, detalhado: bool = False) -> di
         "momento_rotulo": textos.MOMENTOS.get(p.momento) if p.momento else None,
         "liberado_em": _mes(p.liberado_pesquisa_em.isoformat() if p.liberado_pesquisa_em else None),
         "genitores": {
-            g.papel: {"laudo_informado": bool(cifra.decifrar(g.laudo_c9orf72_cifrado)), "vcf_presente": g.tem_vcf}
+            g.papel: {
+                "laudo_informado": bool(cifra.decifrar(g.laudo_c9orf72_cifrado)),
+                "vcf_presente": g.tem_vcf,
+                # genitor sem exame: quantos parentes testados entram na inferência (só o número e o parentesco)
+                "parentes": [x.parentesco for x in p.parentes_de(g.papel)],
+            }
             for g in p.genitores
         },
         "descendentes": descendentes,
@@ -398,10 +434,13 @@ COLUNAS_CSV = [
     "suposicao_nao_portador",
     "genes_de_risco",
     "herancas",
+    "faixa_idade_referencia",
     "p_transmissao",
     "p_manifesta_vida",
     "p_manifesta_q025",
     "p_manifesta_q975",
+    "risco_10_anos",
+    "risco_20_anos",
     "F_50",
     "F_60",
     "F_70",
@@ -412,7 +451,11 @@ COLUNAS_CSV = [
 
 
 def csv_casos(casos: list[dict]) -> str:
-    """Uma linha por análise (descendente ou futuro filho); separador ';' e decimal com vírgula (pt-BR)."""
+    """Uma linha por análise (descendente ou futuro filho); separador ';' e decimal com vírgula (pt-BR).
+
+    Com `faixa_idade_referencia` preenchida, `p_transmissao`, `p_manifesta_vida` (risco residual até o horizonte), a
+    banda, `risco_10_anos`, `risco_20_anos` e a idade de início são os valores condicionados à pessoa sem sintomas nessa
+    faixa de idade; vazia, valem desde o nascimento e `F_50`, `F_60`, `F_70` são o risco acumulado até essas idades."""
     linhas = [";".join(COLUNAS_CSV)]
     for c in casos:
         pessoas = [
@@ -423,6 +466,7 @@ def csv_casos(casos: list[dict]) -> str:
         for pessoa, sexo, faixa, a in pessoas:
             a = a or {}
             F = a.get("F") or {}
+            jan = a.get("janelas") or {}
             ini = a.get("inicio") or {}
             valores = [
                 c["codigo"],
@@ -439,10 +483,13 @@ def csv_casos(casos: list[dict]) -> str:
                 ",".join((a.get("suposicoes") or {}).get("nao_portador", [])),
                 ",".join(a.get("genes_de_risco") or []),
                 ",".join(a.get("herancas") or []),
+                a.get("faixa_idade_referencia") or "",
                 _num(a.get("p_portador")),
                 _num(a.get("p_manifesta")),
                 _num(a.get("q025")),
                 _num(a.get("q975")),
+                _num((jan.get("10") or {}).get("valor")),
+                _num((jan.get("20") or {}).get("valor")),
                 _num((F.get("50") or {}).get("valor")),
                 _num((F.get("60") or {}).get("valor")),
                 _num((F.get("70") or {}).get("valor")),

@@ -136,6 +136,7 @@ def test_avaliar_reduzido(dir_cenarios, tmp_path):
         seed=3,
         n_coerencia=1500,
         base_clinvar=False,
+        metricas=False,  # as métricas de verificação têm testes próprios (test_metricas_verificacao.py)
     )
     assert set(r["estabilidade"].n) == {500, 1000} and r["pulados"] == []
     assert {

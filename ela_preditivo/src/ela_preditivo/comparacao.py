@@ -7,8 +7,10 @@ Kaplan-Meier e a curva analítica.
 
 Por que só portadores: no modelo, quem não porta a variante nunca manifesta, logo a covariável "portador" separa
 perfeitamente eventos de não eventos e a verossimilhança parcial de Cox não tem máximo (Lifelines interrompe por
-separação completa). Entre portadores há covariáveis com variação real: o sexo (os dois sexos são simulados com a mesma
-semente) e, na unidade combinada, qual lócus cada descendente porta.
+separação completa). Entre portadores há covariáveis com variação real: o sexo e, na unidade combinada, qual lócus cada
+descendente porta. Cada sexo é simulado com semente própria, derivada da semente da execução
+(`numpy.random.SeedSequence(seed).spawn(2)`): as duas coortes são amostras independentes, como pressupõem os valores p,
+os intervalos de confiança e o teste de riscos proporcionais, e a execução continua reprodutível.
 
 O que a comparação mostra: a função de base de Cox é não paramétrica e reproduz a sobrevivência observada, mas Cox não
 separa quem nunca manifestará (fração de cura 1 − π) de quem ainda não manifestou, nem estima π; o efeito do sexo entra
@@ -53,16 +55,25 @@ def loci_por_sexo(res: ResultadoSimulacao, parametros: Parametros) -> dict[str, 
     return out
 
 
+def sementes_por_sexo(seed: int) -> dict[str, int]:
+    """Uma semente independente por sexo, derivada da semente da execução (reprodutível)."""
+    filhas = np.random.SeedSequence(int(seed)).spawn(len(SEXOS))
+    return {s: int(f.generate_state(1)[0]) for s, f in zip(SEXOS, filhas)}
+
+
 def coorte_cox(res: ResultadoSimulacao, parametros: Parametros, horizonte: float = 90.0) -> pd.DataFrame:
-    """Coorte sintética de portadores, simulada para os dois sexos com a mesma semente e o mesmo N de `res`.
+    """Coorte sintética de portadores, simulada para os dois sexos com o mesmo N de `res` e sementes independentes
+    por sexo (`sementes_por_sexo`): sem isso, num gene sem efeito do sexo as duas coortes seriam idênticas linha a
+    linha e a razão de riscos do sexo sairia 1 com p = 1 por construção.
 
     Uma linha por fecundação e unidade: `unidade`, `duracao`, `evento`, `sexo_masculino` e, na unidade combinada
     (só quando há mais de um lócus), `portador_<j>` para cada lócus j.
     """
     partes = []
     n = res.n_original or res.n
+    sementes = sementes_por_sexo(res.seed)
     for s, loci in loci_por_sexo(res, parametros).items():
-        r = simular_numpy(loci, n=n, seed=res.seed)
+        r = simular_numpy(loci, n=n, seed=sementes[s])
         masc = int(s == "M")
         for j, l in enumerate(r.loci):
             m = r.portador[:, j]
@@ -222,8 +233,9 @@ def comparar(
 def texto_relatorio(tabela: pd.DataFrame, mensagens: list[str]) -> str:
     """Parágrafo da seção "Comparação com o modelo de Cox" do relatório."""
     partes = [
-        "`CoxPHFitter` (Lifelines) ajustado na coorte sintética de portadores (os dois sexos simulados com a mesma semente; "
-        "não portadores ficam fora porque nunca manifestam e separariam completamente a verossimilhança parcial)."
+        "`CoxPHFitter` (Lifelines) ajustado na coorte sintética de portadores (os dois sexos simulados com sementes "
+        "independentes, derivadas da semente da execução; não portadores ficam fora porque nunca manifestam e separariam "
+        "completamente a verossimilhança parcial)."
     ]
     for r in tabela.to_dict(orient="records"):
         if r.get("cox") != "ajustado":

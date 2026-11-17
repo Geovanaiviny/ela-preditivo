@@ -23,8 +23,11 @@ from .bd import agora
 from .comum import exigir_campos, interpretar_laudo, iso, laudo_texto, obter_bd, obter_cifra, obter_config, texto_curto
 from .modelos import (
     BASE_LEGAL_ATENDIMENTO,
+    MAXIMO_IRMAOS_POR_GENITOR,
     MOMENTOS,
     PAPEIS_GENITOR,
+    PARENTESCOS,
+    SITUACOES_GENITOR,
     TIPOS_ATENDIMENTO,
     TIPOS_DOCUMENTO,
     TITULARES,
@@ -34,6 +37,7 @@ from .modelos import (
     Documento,
     Genitor,
     Paciente,
+    Parente,
     Usuario,
 )
 from .permissoes import CONSENTIMENTOS_GERIR, PACIENTES_GERIR, exigir
@@ -117,10 +121,19 @@ class ConfirmacaoExclusao(BaseModel):
     confirmacao_nome: str = Field(max_length=200)
 
 
+class SituacaoGenitorEntrada(BaseModel):
+    """Situação clínica do genitor sem exame e a idade correspondente (atual, ou ao falecer)."""
+
+    model_config = ConfigDict(extra="ignore", str_strip_whitespace=True)
+    situacao: str | None = Field(default=None, max_length=20)
+    idade: int | None = Field(default=None, ge=0, le=120)
+
+
 class ConsentimentoEntrada(BaseModel):
     model_config = ConfigDict(extra="ignore", str_strip_whitespace=True)
     titular: str = Field(max_length=20)
     descendente_id: int | None = None
+    parente_id: int | None = None
     nome_titular: str | None = Field(default=None, max_length=200)
     confirmado: bool = False  # a interface nunca pré-marca; o servidor exige a marcação explícita
     versao_termo: str | None = None
@@ -282,23 +295,40 @@ def idades(p: Paciente, cifra, hoje: _dt.date | None = None) -> dict[int, int]:
 # Pesquisa: titulares exigidos e liberação
 # ---------------------------------------------------------------------------
 def requisitos_pesquisa(p: Paciente, idades_desc: dict[int, int], nomes: dict[int, str] | None = None) -> dict:
-    """Situação de cada titular cujo consentimento é exigido para liberar o caso à pesquisa: os dois genitores e, fora do
-    caso CASAL, cada descendente (ou o responsável legal, se menor de 18)."""
-    ativos = {(c.titular, c.descendente_id) for c in p.consentimentos if c.ativo}
+    """Situação de cada titular cujo consentimento é exigido para liberar o caso à pesquisa: os dois genitores, cada
+    parente testado de um genitor sem exame (o dado genético dele seria exposto) e, fora do caso CASAL, cada descendente
+    (ou o responsável legal, se menor de 18)."""
+    ativos = {(c.titular, c.descendente_id, c.parente_id) for c in p.consentimentos if c.ativo}
     exigidos = []
     for papel in PAPEIS_GENITOR:
-        exigidos.append({"titular": papel, "descendente_id": None, "rotulo": textos.ROTULO_GENITOR[p.tipo][papel]})
+        exigidos.append(
+            {
+                "titular": papel,
+                "descendente_id": None,
+                "parente_id": None,
+                "rotulo": textos.ROTULO_GENITOR[p.tipo][papel],
+            }
+        )
+    for x in p.parentes:
+        exigidos.append(
+            {
+                "titular": "PARENTE",
+                "descendente_id": None,
+                "parente_id": x.id,
+                "rotulo": f"Parente testado: {textos.rotulo_parente(p.tipo, x.papel_genitor, x.parentesco)}",
+            }
+        )
     if p.tipo != "CASAL":
         for d in p.descendentes:
             t = "RESPONSAVEL" if idades_desc.get(d.id, 99) < MAIORIDADE else "DESCENDENTE"
             rotulo = ROTULO_TITULAR[t] if p.tipo == "PESSOA" else f"{ROTULO_TITULAR[t]}: filho(a) {d.ordem}"
             if nomes and d.id in nomes:
                 rotulo = f"{rotulo} ({nomes[d.id]})" if p.tipo != "PESSOA" else rotulo
-            exigidos.append({"titular": t, "descendente_id": d.id, "rotulo": rotulo})
+            exigidos.append({"titular": t, "descendente_id": d.id, "parente_id": None, "rotulo": rotulo})
     for e in exigidos:
-        chave = (e["titular"], e["descendente_id"])
+        chave = (e["titular"], e["descendente_id"], e["parente_id"])
         e["consentido"] = chave in ativos or (
-            e["titular"] == "DESCENDENTE" and ("RESPONSAVEL", e["descendente_id"]) in ativos
+            e["titular"] == "DESCENDENTE" and ("RESPONSAVEL", e["descendente_id"], None) in ativos
         )
     return {"exigidos": exigidos, "liberado": bool(exigidos) and all(e["consentido"] for e in exigidos)}
 
@@ -336,6 +366,7 @@ def consentimento_dict(c: Consentimento, cifra) -> dict:
         "titular": c.titular,
         "titular_rotulo": ROTULO_TITULAR.get(c.titular, c.titular),
         "descendente_id": c.descendente_id,
+        "parente_id": c.parente_id,
         "nome_titular": cifra.decifrar(c.nome_titular_cifrado),
         "finalidade": c.finalidade,
         "versao_termo": c.versao_termo,
@@ -357,9 +388,54 @@ def documento_dict(d: Documento, cifra) -> dict:
     }
 
 
-def genitor_dict(g: Genitor, tipo: str, cifra, hoje: _dt.date, completo: bool, documentos: list | None = None) -> dict:
+def _vcf_dict(x) -> dict:
+    """Metadados do VCF anexado a um genitor, parente ou descendente (nunca o conteúdo nem o nome do arquivo)."""
+    return {
+        "presente": x.vcf_arquivo is not None,
+        "tamanho": x.vcf_tamanho,
+        "enviado_em": iso(x.vcf_enviado_em),
+        "hash_curto": (x.vcf_hash or "")[:12] or None,
+    }
+
+
+def situacao_do_genitor(g: Genitor, cifra) -> dict:
+    """Situação clínica do genitor sem exame e a idade correspondente ({"situacao": None, "idade": None} se ausente)."""
+    bruto = cifra.decifrar(g.situacao_clinica_cifrada) if g.situacao_clinica_cifrada else None
+    try:
+        d = json.loads(bruto) if bruto else {}
+    except ValueError:
+        d = {}
+    situacao = d.get("situacao") if d.get("situacao") in SITUACOES_GENITOR else None
+    return {"situacao": situacao, "idade": d.get("idade") if situacao else None}
+
+
+def parente_dict(x: Parente, tipo: str, cifra) -> dict:
+    laudo = cifra.decifrar(x.laudo_c9orf72_cifrado)
+    return {
+        "id": x.id,
+        "papel_genitor": x.papel_genitor,
+        "parentesco": x.parentesco,
+        "rotulo": textos.rotulo_parente(tipo, x.papel_genitor, x.parentesco),
+        "laudo_c9orf72": laudo,
+        "laudo_informado": bool(laudo),
+        "vcf": _vcf_dict(x),
+        "criado_em": iso(x.criado_em),
+    }
+
+
+def genitor_dict(
+    g: Genitor,
+    tipo: str,
+    cifra,
+    hoje: _dt.date,
+    completo: bool,
+    documentos: list | None = None,
+    parentes: list | None = None,
+) -> dict:
     nasc = cifra.decifrar(g.data_nascimento_cifrada)
     laudo = cifra.decifrar(g.laudo_c9orf72_cifrado)
+    sit = situacao_do_genitor(g, cifra)
+    meus = [parente_dict(x, tipo, cifra) for x in (parentes or [])]
     d = {
         "papel": g.papel,
         "rotulo": textos.ROTULO_GENITOR.get(tipo, textos.ROTULO_GENITOR["PESSOA"])[g.papel],
@@ -367,12 +443,13 @@ def genitor_dict(g: Genitor, tipo: str, cifra, hoje: _dt.date, completo: bool, d
         "idade": idade_em(_dt.date.fromisoformat(nasc), hoje),
         "laudo_c9orf72": laudo,
         "laudo_informado": bool(laudo),
-        "vcf": {
-            "presente": g.tem_vcf,
-            "tamanho": g.vcf_tamanho,
-            "enviado_em": iso(g.vcf_enviado_em),
-            "hash_curto": (g.vcf_hash or "")[:12] or None,
-        },
+        "vcf": _vcf_dict(g),
+        # genitor sem exame: situação clínica (condiciona a inferência) e parentes testados dele
+        "situacao_clinica": sit["situacao"],
+        "situacao_rotulo": textos.SITUACOES_GENITOR.get(sit["situacao"]) if sit["situacao"] else None,
+        "idade_situacao": sit["idade"],
+        "parentes": meus,
+        "inferido_por_parentes": (not g.tem_vcf) and any(x["vcf"]["presente"] for x in meus),
         "laudo_documento": next(
             (
                 documento_dict(x, cifra)
@@ -401,6 +478,8 @@ def analise_dict(a: AnalisePaciente, cifra) -> dict:
         "cox": a.cox,
         "sexo": a.sexo,
         "idade_na_analise": a.idade_na_analise,
+        "assintomatico_confirmado": a.assintomatico_confirmado,
+        "assintomatico_confirmado_em": iso(a.assintomatico_confirmado_em),
         "suposicoes": json.loads(a.suposicoes) if a.suposicoes else {},
         "tem_resultado": bool(a.resultado_arquivo),
         "resumo": json.loads(cifra.decifrar(a.resumo_cifrado)),
@@ -408,9 +487,13 @@ def analise_dict(a: AnalisePaciente, cifra) -> dict:
 
 
 def analise_compacta(a: dict) -> dict:
-    """O essencial de uma análise para listas, comparativos e filtros: as três respostas do artefato."""
+    """O essencial de uma análise para listas, comparativos e filtros: as três respostas do artefato. Quando a
+    análise tem idade de referência, os três valores são os condicionados (pessoa sem sintomas a partir dessa idade)."""
     r = a["resumo"]
     comb = r.get("combinado") or {}
+    vida = r.get("vida") or {}  # ausente em resumos antigos: cai no valor desde o nascimento
+    condicionado = bool(r.get("condicionado"))
+    inicio = r.get("inicio") or {}
     return {
         "id": a["id"],
         "descendente_id": a["descendente_id"],
@@ -421,17 +504,21 @@ def analise_compacta(a: dict) -> dict:
         "hipoteses": a["hipoteses"],
         "sexo": a["sexo"],
         "idade_na_analise": a["idade_na_analise"],
+        "assintomatico_confirmado": a.get("assintomatico_confirmado"),
         "suposicoes": a["suposicoes"],
         "com_suposicao": bool(a["suposicoes"]),
         "tem_resultado": a.get("tem_resultado", False),
         "sem_locus": r.get("sem_locus", True),
         "genes_de_risco": r.get("genes_de_risco", []),
-        "p_portador": comb.get("p_portador_qualquer_exato"),
-        "p_manifesta": comb.get("p_manifesta_qualquer_exato"),
-        "q025": comb.get("p_manifesta_qualquer_q025"),
-        "q975": comb.get("p_manifesta_qualquer_q975"),
-        "idade_mediana": comb.get("idade_mediana_primeiro_inicio"),
-        "inicio": r.get("inicio") or {},
+        "condicionado": condicionado,
+        "idade_referencia": r.get("idade_referencia") if condicionado else None,
+        "p_portador": r["transmissao"] if r.get("transmissao") is not None else comb.get("p_portador_qualquer_exato"),
+        "p_manifesta": vida.get("valor", comb.get("p_manifesta_qualquer_exato")),
+        "q025": vida.get("q025", comb.get("p_manifesta_qualquer_q025")),
+        "q975": vida.get("q975", comb.get("p_manifesta_qualquer_q975")),
+        "idade_mediana": inicio.get("mediana") if condicionado else comb.get("idade_mediana_primeiro_inicio"),
+        "inicio": inicio,
+        "janelas": r.get("janelas") or {},
         "F": r.get("F") or {},
     }
 
@@ -458,13 +545,22 @@ def paciente_dict(p: Paciente, cifra, resumo: bool = False) -> dict:
             "sexo": d.sexo,
             "ultima_analise": ultimas.get(d.id),
             "n_analises": sum(1 for a in analises if a["descendente_id"] == d.id),
+            # filho que já fez o teste (caso de família): evidência sobre o genitor sem exame, não pessoa em risco
+            "vcf": _vcf_dict(d),
+            "testado": d.tem_vcf,
         }
         if not resumo:
             item["data_nascimento"] = cifra.decifrar(d.data_nascimento_cifrada)
         descendentes.append(item)
     genitores = {
-        g.papel: genitor_dict(g, p.tipo, cifra, hoje, completo=not resumo, documentos=p.documentos) for g in p.genitores
+        g.papel: genitor_dict(
+            g, p.tipo, cifra, hoje, completo=not resumo, documentos=p.documentos, parentes=p.parentes_de(g.papel)
+        )
+        for g in p.genitores
     }
+    filho_testado = any(d.tem_vcf for d in p.descendentes)
+    for g in genitores.values():  # um filho já testado também permite inferir o genitor sem exame
+        g["inferido_por_parentes"] = g["inferido_por_parentes"] or (not g["vcf"]["presente"] and filho_testado)
     prontuario_doc = next((documento_dict(x, cifra) for x in p.documentos if x.tipo == "PRONTUARIO"), None)
     requisitos = requisitos_pesquisa(p, idades_desc, nomes)
     genes = sorted({g for a in ultimas.values() for g in a["genes_de_risco"]})
@@ -485,6 +581,10 @@ def paciente_dict(p: Paciente, cifra, resumo: bool = False) -> dict:
         "descendentes": descendentes,
         "vcfs_presentes": sum(1 for g in p.genitores if g.tem_vcf),
         "vcfs_completos": all(g.tem_vcf for g in p.genitores) and len(p.genitores) == 2,
+        "genitores_inferidos": [k for k, g in genitores.items() if g["inferido_por_parentes"]],
+        "n_parentes": len(p.parentes),
+        # a análise precisa de ao menos um genitor com VCF ou inferível por parentes (o outro pode ser assumido)
+        "pode_analisar": any(g["vcf"]["presente"] or g["inferido_por_parentes"] for g in genitores.values()),
         "laudo_informado": any(g["laudo_informado"] for g in genitores.values()),
         "liberado_para_pesquisa": p.liberado_pesquisa_em is not None,
         "pesquisa_situacao": situacao_pesquisa(p, p.liberado_pesquisa_em is not None),
@@ -661,6 +761,8 @@ def _analises_do_medico(pacientes: list[Paciente], itens: list[dict], cifra) -> 
                     ),
                     "sexo": c["sexo"],
                     "idade_na_analise": c["idade_na_analise"],
+                    "condicionado": c["condicionado"],
+                    "idade_referencia": c["idade_referencia"],
                     "executado_em": c["executado_em"],
                     "modo": c["modo"],
                     "motor": c["motor"],
@@ -756,6 +858,11 @@ def opcoes(usuario: Usuario = Depends(exigir(PACIENTES_GERIR))):
         "rotulos_genitor": textos.ROTULO_GENITOR,
         "suposicao_nao_portador": textos.SUPOSICAO_NAO_PORTADOR,
         "suposicao_laudo_sem_vcf": textos.SUPOSICAO_LAUDO_SEM_VCF,
+        "situacoes_genitor": [{"valor": k, "rotulo": v} for k, v in textos.SITUACOES_GENITOR.items()],
+        "parentescos": [{"valor": k, "rotulo": v} for k, v in textos.PARENTESCOS.items()],
+        "inferencia_por_parentes": textos.INFERENCIA_POR_PARENTES,
+        "aviso_parceiro_inferido": textos.AVISO_PARCEIRO_INFERIDO,
+        "confirmacao_assintomatico": textos.CONFIRMACAO_ASSINTOMATICO,
     }
 
 
@@ -864,7 +971,7 @@ def excluir(
     if normalizar_texto(entrada.confirmacao_nome) != normalizar_texto(nome):
         exigir_campos({"confirmacao_nome": "Digite o nome do registro exatamente como está na ficha."})
     n_cons, n_an, n_desc = len(p.consentimentos), len(p.analises), len(p.descendentes)
-    n_vcf = vcfs.remover_todos(config, p.genitores)
+    n_vcf = vcfs.remover_todos(config, list(p.genitores) + list(p.parentes) + list(p.descendentes))
     _apagar_arquivos_de_analises(config, p.analises)
     for d in p.documentos:
         arquivos.apagar(config.dir_documentos, d.arquivo)
@@ -996,6 +1103,215 @@ def remover_vcf(paciente_id: int, papel: str, request: Request, usuario: Usuario
         alvo_tipo="paciente",
         alvo_id=p.id,
         detalhe=f"genitor {g.papel}",
+    )
+    bd.commit()
+    return paciente_dict(p, cifra)
+
+
+# ---------------------------------------------------------------------------
+# Rotas: genitor sem exame (situação clínica), parentes testados e VCF de filho já testado
+# ---------------------------------------------------------------------------
+@router.put("/{paciente_id}/genitores/{papel}/situacao")
+def definir_situacao_genitor(
+    paciente_id: int,
+    papel: str,
+    entrada: SituacaoGenitorEntrada,
+    request: Request,
+    usuario: Usuario = Depends(exigir(PACIENTES_GERIR)),
+):
+    """Situação clínica do genitor que não pôde ser testado e a idade correspondente: condicionam a inferência da
+    dosagem dele pelos parentes. Dado de saúde, guardado cifrado; a auditoria registra só que mudou."""
+    bd, cifra = obter_bd(request), obter_cifra(request)
+    p = do_medico(bd, usuario, paciente_id)
+    g = _genitor(p, papel)
+    campos: dict[str, str] = {}
+    situacao = (entrada.situacao or "").strip().upper() or None
+    if situacao == "DESCONHECIDO":
+        situacao = "DESCONHECIDA"
+    if situacao is not None and situacao not in SITUACOES_GENITOR:
+        campos["situacao"] = "Situação clínica desconhecida."
+    idade = entrada.idade
+    if situacao == "VIVO_ASSINTOMATICO" and idade is None:  # vivo: a idade atual vem da data de nascimento
+        idade = idade_em(_dt.date.fromisoformat(cifra.decifrar(g.data_nascimento_cifrada)), agora().date())
+    if situacao == "FALECIDO_SEM_ELA" and idade is None:
+        campos["idade"] = "Informe a idade ao falecer."
+    exigir_campos(campos)
+    if situacao is None:
+        g.situacao_clinica_cifrada = None
+    else:
+        sem_idade = situacao in ("AFETADO", "DESCONHECIDA")
+        g.situacao_clinica_cifrada = cifra.cifrar(
+            json.dumps({"situacao": situacao, "idade": None if sem_idade else int(idade)})
+        )
+    g.atualizado_em = agora()
+    p.atualizado_em = agora()
+    auditoria.registrar(
+        bd,
+        acao=auditoria.PACIENTE_EDITADO,
+        usuario=usuario,
+        alvo_tipo="paciente",
+        alvo_id=p.id,
+        detalhe=f"situação clínica do genitor {g.papel} {'definida' if situacao else 'removida'}",
+    )
+    bd.commit()
+    return paciente_dict(p, cifra)
+
+
+@router.post("/{paciente_id}/genitores/{papel}/parentes", status_code=201)
+def adicionar_parente(
+    paciente_id: int,
+    papel: str,
+    request: Request,
+    parentesco: str = Form(""),
+    laudo_c9orf72: str | None = Form(None),
+    vcf: UploadFile | None = File(None),
+    usuario: Usuario = Depends(exigir(PACIENTES_GERIR)),
+):
+    """Parente testado de um genitor sem exame (pai, mãe ou irmão dele): VCF e, para o C9orf72, o laudo. O VCF segue
+    as regras dos genitores: validado pela ingestão, cifrado em disco com nome aleatório, sem download, auditado."""
+    bd, cifra, config = obter_bd(request), obter_cifra(request), obter_config(request)
+    p = do_medico(bd, usuario, paciente_id)
+    g = _genitor(p, papel)
+    campos: dict[str, str] = {}
+    parentesco = (parentesco or "").strip().upper()
+    existentes = p.parentes_de(g.papel)
+    if g.tem_vcf:
+        campos["parentesco"] = (
+            "Este genitor já tem VCF próprio: o genótipo dele é observado. Parentes só entram para genitor sem exame."
+        )
+    elif parentesco not in PARENTESCOS:
+        campos["parentesco"] = "Escolha o parentesco: pai, mãe ou irmão do genitor."
+    elif parentesco != "IRMAO_DO_GENITOR" and any(x.parentesco == parentesco for x in existentes):
+        campos["parentesco"] = "Este parente já está cadastrado; remova-o para substituir."
+    elif sum(1 for x in existentes if x.parentesco == "IRMAO_DO_GENITOR") >= MAXIMO_IRMAOS_POR_GENITOR:
+        campos["parentesco"] = f"Limite de {MAXIMO_IRMAOS_POR_GENITOR} irmãos por genitor."
+    laudo = interpretar_laudo(laudo_c9orf72, "laudo_c9orf72", campos)
+    tem_arquivo = vcf is not None and bool(vcf.filename)
+    if not tem_arquivo and laudo is None and "laudo_c9orf72" not in campos:
+        campos["vcf"] = "Envie o VCF do parente ou informe o laudo do C9orf72 dele (ao menos um dos dois)."
+    exigir_campos(campos)
+    x = Parente(
+        papel_genitor=g.papel,
+        parentesco=parentesco,
+        laudo_c9orf72_cifrado=cifra.cifrar(laudo_texto(laudo)),
+        criado_em=agora(),
+        atualizado_em=agora(),
+    )
+    if tem_arquivo:
+        tmp = vcfs.pasta_temporaria(config)
+        try:
+            caminho = vcfs.guardar_upload(vcf, tmp / "envio.vcf", "vcf", campos, config.tamanho_maximo_vcf)
+            exigir_campos(campos)
+            erro = vcfs.validar(caminho)
+            if erro:
+                exigir_campos({"vcf": erro})
+            vcfs.anexar(config, cifra, x, caminho)
+        finally:
+            vcfs.apagar_pasta(tmp)
+    p.parentes.append(x)
+    p.atualizado_em = agora()
+    bd.flush()
+    atualizar_liberacao(bd, p, cifra, usuario)  # o parente é titular: a liberação passa a exigir o consentimento dele
+    auditoria.registrar(
+        bd,
+        acao=auditoria.PARENTE_ADICIONADO,
+        usuario=usuario,
+        alvo_tipo="paciente",
+        alvo_id=p.id,
+        detalhe=(
+            f"genitor {g.papel}; {parentesco}; VCF={'sim' if x.tem_vcf else 'não'}; "
+            f"laudo={'sim' if laudo is not None else 'não'}"
+        ),
+    )
+    bd.commit()
+    bd.refresh(p)
+    return paciente_dict(p, cifra)
+
+
+@router.delete("/{paciente_id}/parentes/{parente_id}")
+def remover_parente(
+    paciente_id: int, parente_id: int, request: Request, usuario: Usuario = Depends(exigir(PACIENTES_GERIR))
+):
+    bd, cifra, config = obter_bd(request), obter_cifra(request), obter_config(request)
+    p = do_medico(bd, usuario, paciente_id)
+    x = next((x for x in p.parentes if x.id == parente_id), None)
+    if x is None:
+        raise HTTPException(404, "Parente não encontrado.")
+    detalhe = f"genitor {x.papel_genitor}; {x.parentesco}"
+    vcfs.remover(config, x)
+    p.parentes.remove(x)  # o consentimento desse parente sai junto (cascata)
+    bd.flush()
+    bd.expire(p)
+    p = do_medico(bd, usuario, paciente_id)
+    p.atualizado_em = agora()
+    atualizar_liberacao(bd, p, cifra, usuario)
+    auditoria.registrar(
+        bd, acao=auditoria.PARENTE_REMOVIDO, usuario=usuario, alvo_tipo="paciente", alvo_id=p.id, detalhe=detalhe
+    )
+    bd.commit()
+    bd.expire(p)
+    return paciente_dict(do_medico(bd, usuario, paciente_id), cifra)
+
+
+@router.post("/{paciente_id}/descendentes/{descendente_id}/vcf", status_code=201)
+def anexar_vcf_descendente(
+    paciente_id: int,
+    descendente_id: int,
+    request: Request,
+    vcf: UploadFile | None = File(None),
+    usuario: Usuario = Depends(exigir(PACIENTES_GERIR)),
+):
+    """VCF próprio de um filho que já fez o teste (só no caso de família): entra como evidência sobre o genitor sem
+    exame, e esse filho deixa de ser analisado como pessoa em risco."""
+    bd, cifra, config = obter_bd(request), obter_cifra(request), obter_config(request)
+    p = do_medico(bd, usuario, paciente_id)
+    d = descendente_de(p, descendente_id)
+    if p.tipo != "FAMILIA":
+        exigir_campos({"vcf": "O VCF do próprio filho só se aplica ao caso 3 (família): filho que já fez o teste."})
+    campos: dict[str, str] = {}
+    tmp = vcfs.pasta_temporaria(config)
+    try:
+        caminho = vcfs.guardar_upload(vcf, tmp / "envio.vcf", "vcf", campos, config.tamanho_maximo_vcf)
+        exigir_campos(campos)
+        erro = vcfs.validar(caminho)
+        if erro:
+            exigir_campos({"vcf": erro})
+        substituiu = d.tem_vcf
+        vcfs.anexar(config, cifra, d, caminho)
+    finally:
+        vcfs.apagar_pasta(tmp)
+    p.atualizado_em = agora()
+    auditoria.registrar(
+        bd,
+        acao=auditoria.VCF_ANEXADO,
+        usuario=usuario,
+        alvo_tipo="paciente",
+        alvo_id=p.id,
+        detalhe=f"descendente {d.id} (filho já testado); {d.vcf_tamanho} bytes; substituiu={'sim' if substituiu else 'não'}",
+    )
+    bd.commit()
+    return paciente_dict(p, cifra)
+
+
+@router.delete("/{paciente_id}/descendentes/{descendente_id}/vcf")
+def remover_vcf_descendente(
+    paciente_id: int, descendente_id: int, request: Request, usuario: Usuario = Depends(exigir(PACIENTES_GERIR))
+):
+    bd, cifra, config = obter_bd(request), obter_cifra(request), obter_config(request)
+    p = do_medico(bd, usuario, paciente_id)
+    d = descendente_de(p, descendente_id)
+    if not d.tem_vcf:
+        raise HTTPException(404, "Este descendente não tem VCF anexado.")
+    vcfs.remover(config, d)
+    d.atualizado_em = agora()
+    p.atualizado_em = agora()
+    auditoria.registrar(
+        bd,
+        acao=auditoria.VCF_REMOVIDO,
+        usuario=usuario,
+        alvo_tipo="paciente",
+        alvo_id=p.id,
+        detalhe=f"descendente {d.id} (filho já testado)",
     )
     bd.commit()
     return paciente_dict(p, cifra)
@@ -1204,6 +1520,7 @@ def remover_descendente(
         )
     n_an = sum(1 for a in p.analises if a.descendente_id == d.id)
     _apagar_arquivos_de_analises(obter_config(request), [a for a in p.analises if a.descendente_id == d.id])
+    vcfs.remover(obter_config(request), d)  # VCF próprio do filho já testado, se houver
     bd.delete(d)  # cascata apaga resumos e consentimentos desse descendente
     bd.flush()
     bd.expire(p)
@@ -1263,7 +1580,16 @@ def registrar_consentimento(
         campos["versao_termo"] = "Versão do termo desatualizada; recarregue a ficha."
     nome_titular = " ".join((entrada.nome_titular or "").split())
     descendente_id = None
-    if titular in PAPEIS_GENITOR:
+    parente_id = None
+    if titular == "PARENTE":
+        x = next((x for x in p.parentes if x.id == entrada.parente_id), None)
+        if x is None:
+            campos["parente_id"] = "Indique a qual parente testado o consentimento se refere."
+        else:
+            parente_id = x.id
+        if len(nome_titular) < 3:
+            campos["nome_titular"] = "Informe o nome do parente que consentiu (ele também é titular de dado genético)."
+    elif titular in PAPEIS_GENITOR:
         g = p.genitor(titular)
         nome_titular = nome_titular or (cifra.decifrar(g.nome_cifrado) if g else "")
         if len(nome_titular) < 3:
@@ -1292,12 +1618,14 @@ def registrar_consentimento(
         if (
             c.ativo
             and c.descendente_id == descendente_id
+            and c.parente_id == parente_id
             and (c.titular == titular or {c.titular, titular} == {"DESCENDENTE", "RESPONSAVEL"})
         ):
             raise HTTPException(409, f"Já existe consentimento ativo de: {ROTULO_TITULAR[c.titular]}.")
     c = Consentimento(
         paciente=p,
         descendente_id=descendente_id,
+        parente_id=parente_id,
         finalidade="PESQUISA",
         titular=titular,
         nome_titular_cifrado=cifra.cifrar(nome_titular),
@@ -1313,7 +1641,10 @@ def registrar_consentimento(
         usuario=usuario,
         alvo_tipo="consentimento",
         alvo_id=c.id,
-        detalhe=f"paciente {p.id}; titular {titular}; descendente {descendente_id}; termo {c.versao_termo}",
+        detalhe=(
+            f"paciente {p.id}; titular {titular}; descendente {descendente_id}; parente {parente_id}; "
+            f"termo {c.versao_termo}"
+        ),
     )
     p.atualizado_em = agora()
     atualizar_liberacao(bd, p, cifra, usuario)

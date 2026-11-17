@@ -25,6 +25,28 @@ logging.getLogger("pymc").setLevel(
 from .monte_carlo import Locus, ResultadoSimulacao
 
 
+def no_penetrancia(nome: str, l: Locus):
+    """Nó da penetrância π de um lócus: constante (sensibilidade), Beta (padrão) ou log-normal truncada em 1, esta
+    escrita pela inversa da acumulada, π = exp(μ + σ·Φ⁻¹(u·m)), com u ~ Uniforme(0, 1) e m = P(π ≤ 1)."""
+    if l.pen_fixa is not None:
+        return pt.constant(float(l.pen_fixa))
+    prior = l.prior
+    if prior.tipo == "beta":
+        return pm.Beta(nome, alpha=prior.params["alpha"], beta=prior.params["beta"])
+    u = pm.Uniform(f"{nome}_u", lower=0.0, upper=1.0)
+    m = 1.0 - prior.massa_truncada
+    return pt.exp(prior.params["mu"] + prior.params["sigma"] * pt.sqrt(2.0) * pt.erfinv(2.0 * u * m - 1.0))
+
+
+def no_idade(nome: str, l: Locus):
+    """Idade de início latente do lócus (Weibull ou log-normal), já deslocada pelo sexo."""
+    if l.dist.tipo == "weibull":
+        lat = pm.Weibull(nome, alpha=l.dist.params["k"], beta=l.dist.params["lam"])
+    else:
+        lat = pm.LogNormal(nome, mu=l.dist.params["mu"], sigma=l.dist.params["sigma"])
+    return lat + l.dist.delta
+
+
 def construir_modelo(loci: list[Locus]) -> pm.Model:
     rotulos = [l.rotulo for l in loci]
     with pm.Model(coords={"locus": rotulos}) as modelo:
@@ -39,15 +61,8 @@ def construir_modelo(loci: list[Locus]) -> pm.Model:
         )
         pens, idades = [], []
         for i, l in enumerate(loci):
-            if l.pen_fixa is not None:
-                pens.append(pt.constant(float(l.pen_fixa)))
-            else:
-                pens.append(pm.Beta(f"penetrancia_{i}", alpha=l.alpha, beta=l.beta))
-            if l.dist.tipo == "weibull":
-                lat = pm.Weibull(f"idade_latente_{i}", alpha=l.dist.params["k"], beta=l.dist.params["lam"])
-            else:
-                lat = pm.LogNormal(f"idade_latente_{i}", mu=l.dist.params["mu"], sigma=l.dist.params["sigma"])
-            idades.append(lat + l.dist.delta)
+            pens.append(no_penetrancia(f"penetrancia_{i}", l))
+            idades.append(no_idade(f"idade_latente_{i}", l))
         pen = pm.Deterministic("penetrancia", pt.stack(pens), dims="locus")
         manifesta = pm.Bernoulli("manifesta", p=portador * pen, dims="locus")
         pm.Deterministic("idade_inicio", pt.stack(idades), dims="locus")
@@ -57,6 +72,10 @@ def construir_modelo(loci: list[Locus]) -> pm.Model:
 
 def simular_pymc(loci: list[Locus], n: int = 10_000, seed: int = 42) -> ResultadoSimulacao:
     """Monte Carlo sobre a Rede Bayesiana: N sorteios conjuntos do DAG (fecundações hipotéticas)."""
+    if any(l.inferencia is not None for l in loci):  # genitor sem exame inferido por parentes: DAG de três gerações
+        from .parentes import simular_pymc_parentes
+
+        return simular_pymc_parentes(loci, n=n, seed=seed)
     t0 = time.perf_counter()
     modelo = construir_modelo(loci)
     with modelo:
@@ -121,4 +140,13 @@ def descrever_dag(loci: list[Locus]) -> dict:
         ("Manifesta", "Idade de início G(t)"),
         ("Sexo", "Idade de início G(t)"),
     ]
+    if any(l.inferencia is not None for l in loci):  # três gerações: genitor sem exame inferido por parentes
+        nos += ["Genótipo dos parentes", "Dose do genitor sem exame (latente)", "Situação clínica do genitor"]
+        arestas += [
+            ("Genótipo dos parentes", "Dose do genitor sem exame (latente)"),
+            ("Dose do genitor sem exame (latente)", "Alelo materno"),
+            ("Dose do genitor sem exame (latente)", "Alelo paterno"),
+            ("Dose do genitor sem exame (latente)", "Situação clínica do genitor"),
+            ("Penetrância π ~ Beta(α, β)", "Situação clínica do genitor"),
+        ]
     return {"nos": nos, "arestas": arestas, "loci": [l.rotulo for l in loci]}

@@ -1,8 +1,11 @@
 """Comandos administrativos: criar administrador (só por CLI) e popular a demonstração com registros fictícios dos três
-casos (pessoa, casal e família), VCFs sintéticos anexados, consentimentos e análises de exemplo."""
+casos (pessoa, casal e família), VCFs sintéticos anexados, consentimentos e análises de exemplo. Dois registros mostram
+o genitor sem exame inferido por parentes: uma pessoa com o pai falecido e a avó testada, e uma família com um filho
+que já fez o teste."""
 
 from __future__ import annotations
 
+import json
 import secrets
 
 from sqlalchemy import func, select
@@ -12,7 +15,17 @@ from . import auditoria, textos
 from .bd import agora
 from .. import DIR_DADOS, cenarios
 from . import arquivos, vcfs
-from .modelos import AceiteTermo, Descendente, Documento, Genitor, Paciente, PerfilMedico, PerfilPesquisador, Usuario
+from .modelos import (
+    AceiteTermo,
+    Descendente,
+    Documento,
+    Genitor,
+    Paciente,
+    Parente,
+    PerfilMedico,
+    PerfilPesquisador,
+    Usuario,
+)
 from .seguranca import Cifra, hash_senha, normalizar_cpf, normalizar_email, validar_cpf, validar_senha
 
 
@@ -158,8 +171,8 @@ REGISTROS_FICTICIOS = [
         "momento": "ANTES_DO_TESTE",
         "mae": {"nome": "Luísa Fictícia Prado", "nascimento": "1982-04-18", "laudo": LAUDO_NORMAL_DEMO, "vcf": 5},
         "pai": {"nome": "Rafael Fictício Prado", "nascimento": "1980-11-02", "laudo": LAUDO_NORMAL_DEMO, "vcf": 5},
-        "descendentes": [{"nome": "Elisa Fictícia Prado", "nascimento": "2010-09-08", "sexo": "F"}],
-        "observacoes": "Cenário 5 de demonstração: pai TARDBP p.Met337Val × mãe FUS p.Arg521Cys. Menor de idade (consentimento pelo responsável). Registro fictício.",
+        "descendentes": [{"nome": "Elisa Fictícia Prado", "nascimento": "2004-09-08", "sexo": "F"}],
+        "observacoes": "Cenário 5 de demonstração: pai TARDBP p.Met337Val × mãe FUS p.Arg521Cys. Registro fictício.",
         "consentir": False,
         "analisar": False,
     },
@@ -172,6 +185,56 @@ REGISTROS_FICTICIOS = [
         "descendentes": [],
         "observacoes": "Casal que planeja filhos: parceira com expansão do C9orf72 (laudo e VCF do cenário 2); parceiro sem exame, assumido não portador na análise. Registro fictício.",
         "consentir": True,
+        "analisar": True,
+    },
+    {
+        "tipo": "PESSOA",
+        "prontuario": "DEMO-0007",
+        "momento": "ANTES_DO_TESTE",
+        "mae": {
+            "nome": "Tereza Fictícia Moraes",
+            "nascimento": "1962-06-10",
+            "laudo": LAUDO_NORMAL_DEMO,
+            "vcf": "parentes_1_mae",
+        },
+        "pai": {
+            "nome": "Otávio Fictício Moraes",
+            "nascimento": "1958-01-25",
+            "laudo": None,
+            "vcf": None,
+            "situacao": {"situacao": "FALECIDO_SEM_ELA", "idade": 60},
+            "parentes": [{"parentesco": "MAE_DO_GENITOR", "vcf": "parentes_1_avo_paterna", "laudo": LAUDO_NORMAL_DEMO}],
+        },
+        "descendentes": [{"nome": "Heitor Fictício Moraes", "nascimento": "1988-04-02", "sexo": "M"}],
+        "observacoes": "Cenário de parentes 1 de demonstração: pai falecido sem ELA aos 60 anos, sem exame; avó paterna testada, heterozigota SOD1 p.Ala5Val; mãe testada, sem a variante. Registro fictício.",
+        "consentir": False,
+        "analisar": True,
+    },
+    {
+        "tipo": "FAMILIA",
+        "nome": "Família Fictícia Teles",
+        "prontuario": "DEMO-0008",
+        "momento": "APOS_LAUDO",
+        "mae": {
+            "nome": "Vera Fictícia Teles",
+            "nascimento": "1966-09-12",
+            "laudo": LAUDO_NORMAL_DEMO,
+            "vcf": "parentes_2_mae",
+        },
+        "pai": {
+            "nome": "Nelson Fictício Teles",
+            "nascimento": "1964-03-18",
+            "laudo": None,
+            "vcf": None,
+            "situacao": {"situacao": "VIVO_ASSINTOMATICO", "idade": 62},
+            "parentes": [{"parentesco": "MAE_DO_GENITOR", "vcf": "parentes_2_avo_paterna", "laudo": LAUDO_NORMAL_DEMO}],
+        },
+        "descendentes": [
+            {"nome": "Íris Fictícia Teles", "nascimento": "1990-02-27", "sexo": "F", "vcf": "parentes_2_filho_testado"},
+            {"nome": "Jonas Fictício Teles", "nascimento": "1993-08-05", "sexo": "M"},
+        ],
+        "observacoes": "Cenário de parentes 2 de demonstração: pai sem exame, vivo sem sintomas aos 62 anos; avó paterna testada, heterozigota SOD1 p.Ala5Val; mãe testada, sem a variante; a filha mais velha já fez o teste (sem a variante) e entra como evidência. Registro fictício.",
+        "consentir": False,
         "analisar": True,
     },
 ]
@@ -250,6 +313,13 @@ def anexar_documento_demo(
     )
 
 
+def _vcf_sintetico(referencia, lado: str):
+    """VCF sintético versionado: número do cenário (arquivo do lado) ou nome do arquivo de um cenário de parentes."""
+    if isinstance(referencia, int):
+        return DIR_DADOS / "sinteticos" / f"cenario_{referencia}_{lado}.vcf"
+    return DIR_DADOS / "sinteticos" / f"{referencia}.vcf"
+
+
 def criar_registro(bd: Session, cifra: Cifra, config, medico: Usuario, r: dict) -> Paciente:
     """Cria um registro fictício com genitores, descendentes e, quando indicado, os VCFs sintéticos do cenário."""
     hoje = agora()
@@ -292,9 +362,24 @@ def criar_registro(bd: Session, cifra: Cifra, config, medico: Usuario, r: dict) 
     for papel, lado in (("MAE", "mae"), ("PAI", "pai")):
         num = r[lado].get("vcf")
         if num is not None:
-            origem = DIR_DADOS / "sinteticos" / f"cenario_{num}_{lado}.vcf"
+            origem = _vcf_sintetico(num, lado)
             if origem.exists():
                 vcfs.anexar(config, cifra, p.genitor(papel), origem)
+        # genitor sem exame: situação clínica e parentes testados (o VCF segue as mesmas regras dos genitores)
+        if r[lado].get("situacao"):
+            p.genitor(papel).situacao_clinica_cifrada = cifra.cifrar(json.dumps(r[lado]["situacao"]))
+        for x in r[lado].get("parentes") or []:
+            parente = Parente(
+                papel_genitor=papel,
+                parentesco=x["parentesco"],
+                laudo_c9orf72_cifrado=cifra.cifrar(x.get("laudo")),
+                criado_em=hoje,
+                atualizado_em=hoje,
+            )
+            origem = _vcf_sintetico(x["vcf"], lado) if x.get("vcf") else None
+            if origem is not None and origem.exists():
+                vcfs.anexar(config, cifra, parente, origem)
+            p.parentes.append(parente)
         if r[lado].get("laudo"):
             anexar_documento_demo(
                 bd,
@@ -310,6 +395,11 @@ def criar_registro(bd: Session, cifra: Cifra, config, medico: Usuario, r: dict) 
                 ],
                 genitor=p.genitor(papel),
             )
+    for d, dados in zip(p.descendentes, r["descendentes"]):  # filho que já fez o teste (caso de família)
+        if dados.get("vcf"):
+            origem = _vcf_sintetico(dados["vcf"], "")
+            if origem.exists():
+                vcfs.anexar(config, cifra, d, origem)
     anexar_documento_demo(
         bd,
         cifra,
@@ -328,8 +418,9 @@ def criar_registro(bd: Session, cifra: Cifra, config, medico: Usuario, r: dict) 
 
 
 def popular(bd: Session, cifra: Cifra, config, analisar: bool = True) -> dict:
-    """Um usuário verificado de cada papel, um cadastro pendente de cada tipo e seis registros fictícios do médico
-    (quatro pessoas, uma família com dois filhos e um casal), com VCFs sintéticos, consentimentos e análises.
+    """Um usuário verificado de cada papel, um cadastro pendente de cada tipo e oito registros fictícios do médico
+    (cinco pessoas, duas famílias e um casal), com VCFs sintéticos, consentimentos e análises. Dois deles têm o pai sem
+    exame, inferido por parentes: a avó testada e, numa das famílias, um filho que já fez o teste.
 
     Recusa rodar se já houver usuários. Devolve as credenciais geradas (impressas pela CLI, nunca gravadas em claro).
     """
@@ -401,7 +492,7 @@ def popular(bd: Session, cifra: Cifra, config, analisar: bool = True) -> dict:
         mensagem="Informe o vínculo com projeto de pesquisa aprovado por comitê de ética, se houver, e um link para publicação.",
     )
     registros = [criar_registro(bd, cifra, config, medico, r) for r in REGISTROS_FICTICIOS]
-    n_vcfs = sum(1 for p in registros for g in p.genitores if g.tem_vcf)
+    n_vcfs = sum(1 for p in registros for x in list(p.genitores) + list(p.parentes) + list(p.descendentes) if x.tem_vcf)
     bd.flush()
 
     # consentimentos (nunca pré-marcados na interface; aqui a demonstração registra em nome de cada titular fictício)
@@ -453,9 +544,12 @@ def popular(bd: Session, cifra: Cifra, config, analisar: bool = True) -> dict:
                 if not r["analisar"]:
                     continue
                 assumir = frozenset(papel for papel in ("MAE", "PAI") if not p.genitor(papel).tem_vcf)
-                alvos = p.descendentes if p.tipo != "CASAL" else [None]
-                for d in alvos:
-                    exec_ = Execucao(n=2000, seed=42, motor="numpy", cox=False, assumir=assumir)
+                alvos = [d for d in p.descendentes if not d.tem_vcf] if p.tipo != "CASAL" else [None]
+                for d in alvos:  # o filho que já fez o teste é evidência, não pessoa em risco
+                    # registros fictícios: todos declarados sem sintomas (confirmação exigida para pessoa analisada)
+                    exec_ = Execucao(
+                        n=2000, seed=42, motor="numpy", cox=False, assumir=assumir, assintomatico=d is not None
+                    )
                     executar_para_registro(bd, config, cifra, registro_an, medico, p, d, exec_)
                     n_analises += 1
         finally:

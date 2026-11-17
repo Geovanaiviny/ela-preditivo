@@ -377,8 +377,11 @@ def test_faixa_60_75_so_no_risco_combinado(anotados, parametros, curada):
         and isinstance(comb.pico_combinado_na_faixa_60_75.item(), bool)
         and 30 < comb.idade_pico_hazard.item() < 90
     )
-    assert comb.F_inf_exato.item() == pytest.approx(res.resumo_combinado()["p_manifesta_qualquer_exato"])
-    assert comb.risco_vitalicio_km.item() == pytest.approx(comb.F_inf_exato.item(), abs=0.03)
+    # risco vitalício exato (até o horizonte) comparado com o Kaplan-Meier no horizonte; F(∞) em coluna própria
+    assert comb.risco_vitalicio_exato.item() == pytest.approx(res.resumo_combinado()["p_manifesta_qualquer_exato"])
+    assert comb.risco_vitalicio_km.item() == pytest.approx(comb.risco_vitalicio_exato.item(), abs=0.03)
+    assert comb.fracao_manifesta_sem_limite.item() >= comb.risco_vitalicio_exato.item()
+    assert (por_locus.fracao_sem_limite_recuperada - por_locus.fracao_manifesta_sem_limite).abs().max() < 0.05
 
 
 # ---------------------------------------------------------------------------
@@ -395,7 +398,8 @@ def test_banda_combinada_usa_o_percentil_dos_sorteios(anotados, parametros, cura
     )
     res = monte_carlo.simular_numpy(loci, n=5000, seed=42)
     cb = res.resumo_combinado()
-    cv = sobrevivencia.curvas_analiticas(res, t_max=1000)  # G(1000) = 1: F(∞) por sorteio, como na Figura 4
+    # risco vitalício = risco até o horizonte: a banda da Tabela 3 é a da curva F(t) no horizonte (Figura 4)
+    cv = sobrevivencia.curvas_analiticas(res, t_max=res.horizonte)
     q = cv[cv.unidade == sobrevivencia.QUALQUER].iloc[-1]
     assert cb["p_manifesta_qualquer_q025"] == pytest.approx(q.F_q025, abs=1e-9) and cb[
         "p_manifesta_qualquer_q975"
@@ -703,6 +707,17 @@ def test_cenario_4_entra_pela_regra_qualificada(dir_cenarios, tmp_path, variant_
     assert "regra_qualificada" in tab1.columns and tab1[tab1.posicao == 31667290].regra_qualificada.all()
     # avaliação transversal: o cenário 4 deixa de ser pulado
     av = pipeline.avaliar(
-        dir_cenarios, tmp_path / "av", numeros=[4], ns=(200,), repeticoes=2, n_coerencia=300, base_clinvar=base
+        dir_cenarios,
+        tmp_path / "av",
+        numeros=[4],
+        ns=(200,),
+        repeticoes=2,
+        n_coerencia=300,
+        base_clinvar=base,
+        mundos=6,
+        por_estrato=3,
     )
     assert av["pulados"] == [] and set(av["estabilidade"].cenario) == {"cenário 4"}
+    # as métricas de verificação rodam também com a base no formato real (regra qualificada no cenário 4)
+    assert set(av["verificacao"]["robustez"].cenario) == {"cenário 4"}
+    assert "cenário de parentes 1" in set(av["verificacao"]["coorte"].cenario)

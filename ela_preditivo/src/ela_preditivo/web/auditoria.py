@@ -54,6 +54,8 @@ DOCUMENTO_ANEXADO = "documento_anexado"
 DOCUMENTO_ABERTO = "documento_aberto"
 DOCUMENTO_REMOVIDO = "documento_removido"
 RESULTADO_ABERTO = "resultado_aberto"
+PARENTE_ADICIONADO = "parente_adicionado"
+PARENTE_REMOVIDO = "parente_removido"
 
 ACOES = (
     CADASTRO,
@@ -95,6 +97,8 @@ ACOES = (
     DOCUMENTO_ABERTO,
     DOCUMENTO_REMOVIDO,
     RESULTADO_ABERTO,
+    PARENTE_ADICIONADO,
+    PARENTE_REMOVIDO,
 )
 HASH_GENESE = "0" * 64
 

@@ -126,6 +126,16 @@ def test_pipeline_cenario_3_com_base_real(dir_cenarios, tmp_path, base_real):
 
 def test_avaliar_com_base_real_nao_pula_cenarios(dir_cenarios, tmp_path, base_real):
     av = pipeline.avaliar(
-        dir_cenarios, tmp_path / "av", ns=(200,), repeticoes=2, n_coerencia=300, base_clinvar=base_real
+        dir_cenarios,
+        tmp_path / "av",
+        ns=(200,),
+        repeticoes=2,
+        n_coerencia=300,
+        base_clinvar=base_real,
+        mundos=6,
+        por_estrato=3,
     )
     assert av["pulados"] == [] and set(av["estabilidade"].cenario) == {f"cenário {n}" for n in range(1, 6)}
+    # métricas de verificação com a base real: os cinco cenários e o de parentes entram na coorte
+    assert set(av["verificacao"]["coorte"].cenario) == {f"cenário {n}" for n in range(1, 6)} | {"cenário de parentes 1"}
+    assert set(av["verificacao"]["robustez"].cenario) == {f"cenário {n}" for n in range(1, 6)}

@@ -364,3 +364,130 @@ def laudo_da_linha(linha) -> dict[str, int]:
         if v is not None and not pd.isna(v):
             laudo[lado] = int(v)
     return laudo
+
+
+def escrever_vcf_sem_variantes(destino: str | Path, amostra: str, descricao: str = "genitor sem exame") -> Path:
+    """VCF GRCh38 de uma amostra com um único registro homozigoto de referência (0/0) fora dos genes-alvo: representa
+    um genitor sem exame (assumido não portador, ou inferido por parentes). O registro existe só para que a ingestão
+    produza um quadro com colunas; a suposição ou a inferência é declarada no resultado e nos metadados."""
+    destino = Path(destino)
+    destino.parent.mkdir(parents=True, exist_ok=True)
+    linhas = _cabecalho(amostra, descricao, set(), "00000000")
+    linhas.append("chr17\t7675088\t.\tC\tT\t99.0\tPASS\tAC=0;AN=2;SINTETICO\tGT:DP:GQ\t0/0:40:90")
+    destino.write_text("\n".join(linhas) + "\n", encoding="utf-8", newline="\n")
+    return destino
+
+
+# ---------------------------------------------------------------------------
+# Cenários com genitor sem exame, inferido por parentes (extensão de três gerações)
+# ---------------------------------------------------------------------------
+@dataclass(frozen=True)
+class CenarioParentes:
+    """Família sintética em que um genitor não foi testado e entram os genótipos de parentes dele."""
+
+    numero: int
+    nome: str
+    descricao: str
+    genitor_inferido: str  # "pai" ou "mae"
+    situacao: str  # situação clínica do genitor sem exame
+    idade: float | None
+    testado: tuple  # variantes do outro genitor (com exame)
+    avo: tuple | None = None  # variantes do pai do genitor sem exame (None = sem exame)
+    avoh: tuple | None = None  # variantes da mãe do genitor sem exame
+    tios: tuple = ()  # um conjunto de variantes por irmão testado
+    filhos_testados: tuple = ()  # um conjunto de variantes por filho já testado
+    laudos: tuple = ()  # pares (pessoa, repetições): "testado", "avo", "avoh"
+
+    @property
+    def lado_testado(self) -> str:
+        return "mae" if self.genitor_inferido == "pai" else "pai"
+
+
+CENARIOS_PARENTES: list[CenarioParentes] = [
+    CenarioParentes(
+        1,
+        "avo_paterna_SOD1_pai_falecido",
+        "Pai sem exame, falecido sem ELA aos 60 anos; avó paterna heterozigota SOD1 p.Ala5Val; avô paterno sem "
+        "exame; mãe testada, sem a variante",
+        genitor_inferido="pai",
+        situacao="falecido_sem_ela",
+        idade=60,
+        testado=(SOD1_A5V.com_dosagem(0),),
+        avoh=(SOD1_A5V,),
+        laudos=(("testado", LAUDO_NORMAL), ("avoh", LAUDO_NORMAL)),
+    ),
+    CenarioParentes(
+        2,
+        "filho_testado_negativo",
+        "Pai sem exame, vivo sem sintomas aos 62 anos; avó paterna heterozigota SOD1 p.Ala5Val; mãe testada, sem a "
+        "variante; um filho já testado, sem a variante",
+        genitor_inferido="pai",
+        situacao="vivo_assintomatico",
+        idade=62,
+        testado=(SOD1_A5V.com_dosagem(0),),
+        avoh=(SOD1_A5V,),
+        filhos_testados=((SOD1_A5V.com_dosagem(0),),),
+        laudos=(("testado", LAUDO_NORMAL), ("avoh", LAUDO_NORMAL)),
+    ),
+]
+
+
+def cenario_parentes_por_numero(numero: int) -> CenarioParentes:
+    for c in CENARIOS_PARENTES:
+        if c.numero == numero:
+            return c
+    raise KeyError(f"cenário de parentes {numero} não existe (1 a {len(CENARIOS_PARENTES)})")
+
+
+def gerar_cenarios_parentes(
+    dir_saida: str | Path, seed: int = 2026, incluir_ruido: bool = True, config: str | Path | None = None
+) -> list[dict]:
+    """Gera os VCFs dos cenários com genitor sem exame e devolve, por cenário, os argumentos de `pipeline.executar`:
+    `vcf_mae`, `vcf_pai` (None para o genitor inferido), `laudo_c9orf72` e `parentes`. O gerador de números é próprio
+    (derivado da semente), de modo que os arquivos dos cinco cenários de `gerar_cenarios` não mudam."""
+    dir_saida = Path(dir_saida)
+    data_arquivo = data_fixa_vcf(config)
+    saida = []
+    for c in CENARIOS_PARENTES:
+        rng = np.random.default_rng([int(seed), 1000 + c.numero])
+
+        def vcf(sufixo: str, amostra: str, variantes) -> Path:
+            return escrever_vcf(
+                dir_saida / f"parentes_{c.numero}_{sufixo}.vcf",
+                amostra,
+                list(variantes),
+                rng,
+                descricao=f"cenario de parentes {c.numero}, {sufixo}: {c.descricao}",
+                incluir_ruido=incluir_ruido,
+                data_arquivo=data_arquivo,
+            )
+
+        laudos = dict(c.laudos)
+        g, t = c.genitor_inferido, c.lado_testado
+        sufixo_lado = "paterno" if g == "pai" else "materno"
+        lado = {"situacao": c.situacao, "idade": c.idade}
+        if c.avo is not None:
+            lado["pai"] = {"vcf": vcf(f"avo_{sufixo_lado}", "AVO", c.avo), "laudo_c9orf72": laudos.get("avo")}
+        if c.avoh is not None:
+            fem = "paterna" if g == "pai" else "materna"
+            lado["mae"] = {"vcf": vcf(f"avo_{fem}", "AVOH", c.avoh), "laudo_c9orf72": laudos.get("avoh")}
+        lado["irmaos"] = [{"vcf": vcf(f"tio_{i}", f"TIO{i}", v)} for i, v in enumerate(c.tios, 1)]
+        parentes = {g: lado}
+        if c.filhos_testados:
+            parentes["filhos_testados"] = [
+                {"vcf": vcf(f"filho_testado_{i}" if len(c.filhos_testados) > 1 else "filho_testado", f"FILHO{i}", v)}
+                for i, v in enumerate(c.filhos_testados, 1)
+            ]
+        caminho_testado = vcf(t, t.upper(), c.testado)
+        saida.append(
+            {
+                "numero": c.numero,
+                "nome": c.nome,
+                "descricao": c.descricao,
+                "vcf_mae": caminho_testado if t == "mae" else None,
+                "vcf_pai": caminho_testado if t == "pai" else None,
+                "laudo_c9orf72": {t: laudos["testado"]} if "testado" in laudos else {},
+                "parentes": parentes,
+            }
+        )
+    return saida

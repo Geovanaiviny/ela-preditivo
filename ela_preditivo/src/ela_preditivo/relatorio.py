@@ -122,8 +122,31 @@ def figura_dag(
             xytext=(xa + 0.62 * np.sign(dx) if abs(dx) > 0.1 else xa, ya + 0.4 * np.sign(dy) if abs(dx) <= 0.1 else ya),
             arrowprops=dict(arrowstyle="-|>", lw=1.2, color="black"),
         )
-    ax.set_xlim(-0.9, 8.9)
-    ax.set_ylim(-0.7, 3.4)
+    inferido = any(getattr(l, "inferencia", None) is not None for l in loci)
+    if inferido:  # três gerações: os parentes e a situação clínica informam a dosagem latente do genitor sem exame
+        extras = {
+            "Genótipo dos\nparentes": (-2.1, 2.9, "obs"),
+            "Dose do genitor\nsem exame": (-2.1, 1.0, "lat"),
+            "Situação clínica\ndo genitor": (-2.1, -0.6, "obs"),
+        }
+        for nome, (x, y, tipo) in extras.items():
+            ax.add_patch(
+                FancyBboxPatch(
+                    (x - 0.7, y - 0.38), 1.4, 0.76, boxstyle="round,pad=0.02", fc=cor[tipo], ec="black", lw=1.2
+                )
+            )
+            ax.text(x, y, nome, ha="center", va="center", fontsize=9)
+        seta = dict(arrowstyle="-|>", lw=1.2, color="black")
+        ax.annotate("", xy=(-2.1, 1.4), xytext=(-2.1, 2.5), arrowprops=seta)
+        ax.annotate("", xy=(-2.1, -0.2), xytext=(-2.1, 0.6), arrowprops=seta)
+        ax.annotate("", xy=(-0.62, 1.7), xytext=(-1.38, 1.15), arrowprops=seta)
+        ax.annotate("", xy=(-0.62, 0.3), xytext=(-1.38, 0.85), arrowprops=seta)
+        ax.annotate(
+            "", xy=(-1.4, -0.6), xytext=(4.8, 2.3), arrowprops=dict(arrowstyle="-|>", lw=1.0, color="gray", ls="--")
+        )
+        ax.text(-2.8, -1.25, "tracejado: a penetrância π é a mesma para o genitor e para o descendente", fontsize=8)
+    ax.set_xlim(-3.0 if inferido else -0.9, 8.9)
+    ax.set_ylim(-1.5 if inferido else -0.7, 3.4)
     ax.axis("off")
     ax.text(
         0,
@@ -132,19 +155,34 @@ def figura_dag(
         fontsize=8,
     )
     ax.set_title("Rede Bayesiana por lócus de risco: " + "; ".join(l.rotulo for l in loci), fontsize=10)
-    return _salvar(fig, caminho, legenda)
+    return _salvar(
+        fig,
+        caminho,
+        legenda + (" (três gerações: genitor sem exame inferido por parentes)" if inferido else ""),
+    )
 
 
 def figura_priors(
     parametros: Parametros,
     caminho: Path,
-    legenda: str = "Figura 2 — Priors Beta de penetrância vitalícia por gene, calibradas ao ponto e ao IC 95% de Douglas & Baralle (2024)",
+    legenda: str = "Figura 2 — Distribuições de penetrância vitalícia por gene, calibradas ao ponto e ao IC 95% de Douglas & Baralle (2024): Beta e log-normal truncada em 1",
 ) -> dict:
     preparar_estilo()
     fig, axes = plt.subplots(2, 2, figsize=(9, 6), sharex=True)
     x = np.linspace(0.001, 0.999, 500)
     for ax, (nome, g), cor in zip(axes.ravel(), parametros.genes.items(), CORES):
-        ax.plot(x, stats.beta.pdf(x, g.alpha, g.beta), color=cor, lw=2, label=f"Beta({g.alpha:.1f}, {g.beta:.1f})")
+        em_uso = {d: " (em uso)" if g.pen_distribuicao == d else "" for d in ("beta", "lognormal_truncada")}
+        ax.plot(
+            x,
+            stats.beta.pdf(x, g.alpha, g.beta),
+            color=cor,
+            lw=2,
+            label=f"Beta({g.alpha:.1f}, {g.beta:.1f}){em_uso['beta']}",
+        )
+        ln = g.prior_penetrancia("lognormal_truncada")
+        ax.plot(
+            x, ln.pdf(x), color="black", lw=1.2, ls="-.", label=f"log-normal truncada{em_uso['lognormal_truncada']}"
+        )
         ax.axvspan(g.pen_ic95[0], g.pen_ic95[1], color=cor, alpha=0.12, label="IC 95% publicado")
         ax.axvline(g.pen_valor, color="black", ls="--", lw=1, label=f"ponto publicado {g.pen_valor:.2f}")
         q = stats.beta.ppf([0.025, 0.975], g.alpha, g.beta)
@@ -348,6 +386,111 @@ def figura_estabilidade(
     ax.set_xlabel("N (fecundações simuladas)")
     ax.set_ylabel("DP de P(manifestação) entre execuções")
     ax.legend(fontsize=7, ncol=2)
+    fig.tight_layout()
+    return _salvar(fig, caminho, legenda)
+
+
+def figura_calibracao(
+    curvas: dict[str, pd.DataFrame],
+    caminho: Path,
+    legenda: str = "Figura 10 — Curva de calibração por decis de risco previsto: risco previsto contra fração observada na coorte sintética, com verdade = modelo e com verdades alternativas",
+) -> dict:
+    """`curvas`: {rótulo da verdade: tabela de `avaliacao.curva_calibracao`}. Um painel por previsão (10 anos, 20 anos,
+    até o horizonte); a diagonal é a calibração perfeita."""
+    preparar_estilo()
+    previsoes = list(dict.fromkeys(next(iter(curvas.values())).previsao))
+    fig, axes = plt.subplots(1, len(previsoes), figsize=(4.6 * len(previsoes), 4.2), squeeze=False)
+    for ax, prev in zip(axes[0], previsoes):
+        limite = 0.0
+        for (rotulo, tab), cor, marca in zip(curvas.items(), CORES, "os^Dv"):
+            t = tab[tab.previsao == prev]
+            ax.errorbar(
+                t.risco_previsto,
+                t.fracao_observada,
+                yerr=1.96 * t.ep_observado,
+                fmt=marca + "-",
+                color=cor,
+                lw=1.4,
+                ms=4,
+                capsize=2,
+                label=rotulo,
+            )
+            limite = max(limite, float(t.risco_previsto.max()), float(t.fracao_observada.max()))
+        ax.plot([0, limite * 1.05], [0, limite * 1.05], color="black", ls="--", lw=1, label="calibração perfeita")
+        ax.set_title(f"previsão: {prev}", fontsize=10)
+        ax.set_xlabel("risco previsto (média do decil)")
+        ax.legend(fontsize=7, loc="upper left")
+    axes[0, 0].set_ylabel("fração observada (±1,96 EP)")
+    fig.tight_layout()
+    return _salvar(fig, caminho, legenda)
+
+
+def figura_robustez(
+    tab: pd.DataFrame,
+    caminho: Path,
+    legenda: str = "Figura 11 — Robustez a erros no VCF: variação do risco vitalício combinado sob cada perturbação, por cenário",
+) -> dict:
+    preparar_estilo()
+    t = tab[tab.variacao_risco.notna()]
+    cenarios_ = list(dict.fromkeys(t.cenario))
+    tipos = list(dict.fromkeys(t.perturbacao))
+    fig, ax = plt.subplots(figsize=(10, 4.6))
+    largura = 0.8 / max(len(tipos), 1)
+    for k, tipo in enumerate(tipos):
+        s = t[t.perturbacao == tipo].set_index("cenario").reindex(cenarios_)
+        ax.bar(
+            np.arange(len(cenarios_)) + (k - (len(tipos) - 1) / 2) * largura,
+            s.variacao_risco.fillna(0).values,
+            largura,
+            color=CORES[k % len(CORES)],
+            label=tipo.replace("_", " "),
+        )
+    ax.axhline(0, color="black", lw=0.8)
+    ax.set_xticks(np.arange(len(cenarios_)))
+    ax.set_xticklabels(cenarios_)
+    ax.set_ylabel("variação do risco vitalício (perturbado − original)")
+    ax.legend(fontsize=7, ncol=3, loc="upper center", bbox_to_anchor=(0.5, -0.12))
+    fig.tight_layout()
+    return _salvar(fig, caminho, legenda)
+
+
+def figura_tornado(
+    tabelas: dict[str, pd.DataFrame],
+    caminho: Path,
+    legenda: str = "Figura 12 — Sensibilidade tipo tornado: variação do risco vitalício combinado e da idade mediana de início ao mudar um parâmetro por vez dentro da faixa publicada, ordenada pelo efeito no risco",
+) -> dict:
+    """`tabelas`: {rótulo do caso: tabela de `avaliacao.tornado`}. Uma linha de painéis por caso: à esquerda o risco e
+    à direita a idade mediana de início, em barras horizontais do valor baixo ao valor alto de cada parâmetro, em torno
+    do valor de base (linha tracejada). O parâmetro de maior efeito no risco fica no topo."""
+    import textwrap
+
+    preparar_estilo()
+    casos = {k: v for k, v in tabelas.items() if v is not None and not v.empty}
+    alturas = [0.5 * len(v) + 1.0 for v in casos.values()] or [2.0]
+    fig, axes = plt.subplots(
+        len(alturas), 2, figsize=(12, sum(alturas) + 0.6), squeeze=False, gridspec_kw={"height_ratios": alturas}
+    )
+    paineis = (
+        ("risco_baixo", "risco_alto", "risco_base", "risco vitalício combinado", CORES[0]),
+        ("mediana_baixa", "mediana_alta", "mediana_base", "idade mediana de início (anos)", CORES[1]),
+    )
+    for linha, (rotulo, tab) in zip(axes, casos.items()):
+        t = tab.iloc[::-1]  # o maior efeito fica no topo
+        y = np.arange(len(t))
+        for ax, (baixo, alto, base, eixo, cor) in zip(linha, paineis):
+            a, b = t[baixo].astype(float), t[alto].astype(float)
+            menor, maior = np.minimum(a, b), np.maximum(a, b)
+            ax.barh(y, (maior - menor).values, left=menor.values, color=cor, alpha=0.85, height=0.6)
+            ax.axvline(float(t[base].iloc[0]), color="black", lw=1, ls="--")
+            ax.set_yticks(y)
+            ax.margins(x=0.06)
+            ax.set_xlabel(eixo, fontsize=9)
+            ax.tick_params(labelsize=8)
+        linha[0].set_yticklabels([textwrap.fill(str(p), 44) for p in t.parametro], fontsize=8)
+        linha[1].set_yticklabels([])
+        linha[0].set_title(rotulo, fontsize=10, loc="left")
+    for ax in axes[len(casos) :].ravel():
+        ax.axis("off")
     fig.tight_layout()
     return _salvar(fig, caminho, legenda)
 

@@ -4,9 +4,9 @@ from __future__ import annotations
 
 from .. import AVISO_LEGAL  # noqa: F401 - continua disponível à API e ao relatório
 
-VERSAO_AVISO_PRIVACIDADE = "2026-11-15"
-VERSAO_TERMO_USO = "2026-11-15"
-VERSAO_TERMO_CONSENTIMENTO_PESQUISA = "2026-11-15"
+VERSAO_AVISO_PRIVACIDADE = "2026-11-16"
+VERSAO_TERMO_USO = "2026-11-16"
+VERSAO_TERMO_CONSENTIMENTO_PESQUISA = "2026-11-16"
 
 MARCA = "EloSense"
 MARCA_SUBTITULO = "Plataforma clínica"
@@ -14,8 +14,9 @@ SELO_DEMONSTRACAO = "Ambiente de homologação: todos os pacientes são fictíci
 DESCRICAO_SISTEMA = (
     "O EloSense apoia o aconselhamento genético preditivo da esclerose lateral amiotrófica (ELA): a partir dos "
     "arquivos genéticos (VCF) da mãe e do pai, estima a probabilidade de um descendente herdar e manifestar variantes "
-    "associadas à doença em quatro genes, e a idade provável de início. O resultado é lido e interpretado por "
-    "profissional habilitado, com o histórico clínico da família; não constitui diagnóstico."
+    "associadas à doença em quatro genes, e a idade provável de início. Quando um genitor não pôde ser testado, aceita "
+    "o genótipo de parentes dele. O resultado é lido e interpretado por profissional habilitado, com o histórico "
+    "clínico da família; não constitui diagnóstico."
 )
 
 # Os três casos que o artefato atende (texto do orientador). O rótulo aparece em todas as telas do registro.
@@ -69,7 +70,13 @@ ROTULO_GENITOR = {
     "FAMILIA": {"MAE": "Mãe", "PAI": "Pai"},
     "CASAL": {"MAE": "Parceira (futura mãe)", "PAI": "Parceiro (futuro pai)"},
 }
-ROTULO_TITULAR = {"MAE": "Mãe", "PAI": "Pai", "DESCENDENTE": "Paciente", "RESPONSAVEL": "Responsável legal"}
+ROTULO_TITULAR = {
+    "MAE": "Mãe",
+    "PAI": "Pai",
+    "DESCENDENTE": "Paciente",
+    "RESPONSAVEL": "Responsável legal",
+    "PARENTE": "Parente testado",
+}
 DESCRICAO_PESQUISA = (
     "Registros de pacientes disponíveis para pesquisa, com as informações referentes à doença: variantes encontradas "
     "nos VCFs dos genitores, laudo do C9orf72, dosagens por lócus e resultados das análises. A identificação é "
@@ -91,8 +98,22 @@ C9ORF72_INDETERMINADO = (
     "Genitor sem laudo do C9orf72 é tratado como não testado: o lócus do C9orf72 fica indeterminado, sai do cálculo e "
     "o resultado é parcial para esse gene. Registre o nº de repetições do laudo na ficha para incluí-lo."
 )
+CONFIRMACAO_ASSINTOMATICO = "Confirmo que a pessoa analisada não apresenta sintomas de ELA"
+ERRO_CONFIRMACAO_ASSINTOMATICO = (
+    "Confirme que a pessoa analisada não apresenta sintomas de ELA: o condicionamento pela idade só vale para quem "
+    "não manifestou a doença. Sem a confirmação, a análise não é executada."
+)
+EXPLICACAO_CONDICIONADO = (
+    "Com a idade atual informada, os três indicadores valem para a pessoa sem sintomas a partir dessa idade: a chance "
+    "de portar a variante, o risco de manifestar daqui em diante e a idade provável de início entre quem vai manifestar."
+)
 FORA_DO_ESCOPO = [
-    "Pessoas já sintomáticas ou com diagnóstico: o problema delas é prognóstico clínico, outro produto com outra validação.",
+    "Pessoas já sintomáticas ou com diagnóstico: o condicionamento pela idade só vale para quem não manifestou a "
+    "doença, e o problema delas é prognóstico clínico, outro produto com outra validação.",
+    "Números agregados da família, como a chance de pelo menos um filho manifestar: cada pessoa é analisada em separado.",
+    'Fenótipo de parente sem genótipo (por exemplo, "meu tio teve ELA", sem teste genético): só o genótipo de '
+    "parentes entra no cálculo.",
+    "Ancestralidade: as estimativas de penetrância vêm de coortes europeias e norte-americanas e não são ajustadas.",
     "Pessoas sem histórico familiar: o modelo depende do genótipo dos genitores e não estima o risco populacional de "
     "base (a forma familiar é 10 a 15 % dos casos).",
     "Decisões reprodutivas, como diagnóstico pré-implantacional: não cabem a esta ferramenta.",
@@ -132,9 +153,14 @@ def ajuda() -> dict:
             "Cadastre o atendimento escolhendo o caso (pessoa, casal ou família) e informe prontuário, genitores "
             "(nome, nascimento, laudo do C9orf72 e VCF) e, quando houver, os descendentes.",
             "Na ficha, anexe ou substitua os VCFs, registre os consentimentos para pesquisa (opcional) e acompanhe o "
-            "histórico de análises.",
-            "Execute a análise: o resultado traz se herdou (probabilidade de transmissão), a chance de manifestação por "
-            "idade com banda de 95 % e a idade provável de início, além do pacote completo para download.",
+            "histórico de análises. Se um genitor não pôde ser testado (faleceu, não está disponível ou não quer fazer "
+            'o teste), use "Adicionar parente testado" para anexar o VCF e o laudo do pai, da mãe ou de um irmão dele, '
+            "e informe a situação clínica e a idade desse genitor; na família, o VCF de um filho já testado também "
+            "entra como evidência.",
+            "Execute a análise confirmando que a pessoa analisada não apresenta sintomas de ELA: o resultado traz se "
+            "herdou (probabilidade de transmissão), a chance de manifestação com banda de 95 % e a idade provável de "
+            "início, além do pacote completo para download. Com a idade atual informada, os três indicadores valem a "
+            "partir dessa idade, sem sintomas.",
         ],
         "perfis": [
             (
@@ -159,10 +185,62 @@ AVISO_EXPERIMENTAL = (
     "não substitui o julgamento clínico e não deve ser usado isoladamente em decisões sobre pacientes."
 )
 LIMITACAO_MODELO = (
-    "O risco estimado é condicionado apenas ao genótipo dos genitores nos quatro genes-alvo, ao sexo e à idade atual "
-    "do descendente. O modelo não usa ancestralidade nem histórico familiar e assume independência entre os genes; "
-    'por isso "personalizado" significa condicionado a essas três informações, e não um perfil clínico completo.'
+    "O risco estimado é condicionado ao genótipo dos genitores nos quatro genes-alvo, ao sexo e à idade atual da "
+    "pessoa sem sintomas. Quando um genitor não pôde ser testado, entra o genótipo de parentes dele (pai, mãe, irmão "
+    "ou filho já testado), com a situação clínica do próprio genitor. O modelo não usa ancestralidade nem o fenótipo "
+    "de parentes sem teste genético, não calcula números agregados da família e assume independência entre os genes; "
+    'por isso "personalizado" significa condicionado a essas informações, e não um perfil clínico completo.'
 )
+INFERENCIA_POR_PARENTES = (
+    "O genótipo do genitor sem exame foi inferido a partir de parentes testados: a dosagem dele deixa de ser observada "
+    "e passa a ser uma probabilidade, calculada pela segregação mendeliana e condicionada à situação clínica dele. A "
+    "penetrância é a mesma para toda a família: um genitor que chegou a certa idade sem sintomas torna menos prováveis "
+    "tanto a variante nele quanto os valores altos de penetrância."
+)
+AVISO_PARCEIRO_INFERIDO = (
+    "Atenção: o parceiro não fez o teste. O cálculo a partir dos parentes dele revela indiretamente a chance de o "
+    "próprio parceiro ser portador. Leve isso em conta antes de apresentar o resultado ao casal."
+)
+SUPOSICAO_VARIANTE_HERDADA = "Supõe-se que a variante do parente foi herdada, e não surgiu nele: não há taxa de mutação nova nas fontes do modelo."
+SITUACOES_GENITOR = {
+    "VIVO_ASSINTOMATICO": "Vivo, sem sintomas de ELA",
+    "FALECIDO_SEM_ELA": "Falecido sem ter tido ELA",
+    "AFETADO": "Teve ou tem ELA",
+    "DESCONHECIDA": "Situação desconhecida",
+}
+LIMITE_INFERIOR_GENITOR_AFETADO = (
+    "Limite inferior: o fenótipo do genitor não é modelado. O genitor teve ELA, o que torna a variante nele mais "
+    "provável do que o cálculo considera; o risco real tende a ser maior."
+)
+PARENTESCOS = {
+    "PAI_DO_GENITOR": "Pai do genitor",
+    "MAE_DO_GENITOR": "Mãe do genitor",
+    "IRMAO_DO_GENITOR": "Irmão ou irmã do genitor",
+}
+_PARENTE_DO_ATENDIDO = {
+    ("MAE", "PAI_DO_GENITOR"): "Avô materno",
+    ("MAE", "MAE_DO_GENITOR"): "Avó materna",
+    ("MAE", "IRMAO_DO_GENITOR"): "Tio(a) materno(a)",
+    ("PAI", "PAI_DO_GENITOR"): "Avô paterno",
+    ("PAI", "MAE_DO_GENITOR"): "Avó paterna",
+    ("PAI", "IRMAO_DO_GENITOR"): "Tio(a) paterno(a)",
+}
+_PARENTE_DO_CASAL = {
+    ("MAE", "PAI_DO_GENITOR"): "Pai da parceira",
+    ("MAE", "MAE_DO_GENITOR"): "Mãe da parceira",
+    ("MAE", "IRMAO_DO_GENITOR"): "Irmão(ã) da parceira",
+    ("PAI", "PAI_DO_GENITOR"): "Pai do parceiro",
+    ("PAI", "MAE_DO_GENITOR"): "Mãe do parceiro",
+    ("PAI", "IRMAO_DO_GENITOR"): "Irmão(ã) do parceiro",
+}
+
+
+def rotulo_parente(tipo: str, papel_genitor: str, parentesco: str) -> str:
+    """Nome do parentesco na tela: em relação ao atendido (avô, avó, tio) ou, no casal, ao parceiro."""
+    tabela = _PARENTE_DO_CASAL if tipo == "CASAL" else _PARENTE_DO_ATENDIDO
+    return tabela.get((papel_genitor, parentesco), PARENTESCOS.get(parentesco, parentesco))
+
+
 LINHA_RISCO_PACIENTE = (
     "O risco estimado é o do paciente (descendente). Os arquivos genéticos analisados são os da mãe e do pai, "
     "que também são titulares desses dados."
@@ -192,7 +270,8 @@ def aviso_privacidade(encarregado_nome: str, encarregado_contato: str) -> dict:
                     DESCRICAO_SISTEMA,
                     "Atende três situações: a pessoa assintomática com histórico familiar; o casal que planeja filhos; "
                     "e a família de um genitor com variante confirmada, que quer o risco de cada filho. Pessoas já "
-                    "sintomáticas e pessoas sem histórico familiar estão fora do escopo.",
+                    "sintomáticas e pessoas sem histórico familiar estão fora do escopo, assim como números agregados "
+                    "da família, o fenótipo de parentes sem teste genético e a ancestralidade.",
                     LIMITACAO_MODELO,
                 ],
             },
@@ -204,10 +283,18 @@ def aviso_privacidade(encarregado_nome: str, encarregado_contato: str) -> dict:
                     "Do atendimento, cadastrado pelo médico: nome do registro, número e documento do prontuário, momento do "
                     "aconselhamento (opcional) e observações; de cada descendente: nome, data de nascimento e sexo; de "
                     "cada genitor: nome, data de nascimento e laudo do C9orf72 (número de repetições e documento). Não "
-                    "pedimos CPF, endereço, telefone nem e-mail de pacientes ou genitores. Todos os atendidos são assintomáticos.",
+                    "pedimos CPF, endereço, telefone nem e-mail de pacientes ou genitores. A pessoa analisada precisa "
+                    "estar sem sintomas de ELA: o profissional confirma isso a cada análise, e só a confirmação e a data "
+                    "ficam guardadas, sem nenhum dado clínico.",
                     "Dados genéticos dos genitores (arquivos VCF), anexados pelo médico à ficha e guardados cifrados em "
                     "disco, e o resultado completo de cada análise (relatório, tabelas, figuras e resumo), também cifrado. "
                     "Dado genético e dado de saúde são dados pessoais sensíveis (art. 5º, II).",
+                    "Quando um genitor não pôde ser testado: de cada parente dele anexado pelo médico (pai, mãe ou irmão "
+                    "do genitor), o parentesco, o arquivo genético (VCF), o laudo do C9orf72 e a data, sem nome nem "
+                    "documento (o nome só é registrado se o parente consentir com o uso em pesquisa); do próprio "
+                    "genitor, a situação clínica (vivo sem sintomas, falecido sem ELA, teve ELA ou "
+                    "desconhecida) e a idade correspondente; e, na família, o VCF de um filho já testado. O parente "
+                    "também é titular de dado genético sensível, tratado com as mesmas regras dos genitores.",
                     "Registros de auditoria: quem fez o quê e quando, sem nome de paciente, sem CPF completo e sem senha.",
                 ],
             },
@@ -217,17 +304,17 @@ def aviso_privacidade(encarregado_nome: str, encarregado_contato: str) -> dict:
                     "Atendimento: estimar o risco do paciente a pedido do médico, com base legal na tutela da saúde "
                     "por profissional de saúde (art. 11, II, f). O cadastro do paciente não depende de consentimento.",
                     "Pesquisa: só com consentimento específico, destacado e registrado de cada descendente (ou responsável, "
-                    "se menor) e de cada genitor cujo dado seria exposto (art. 11, I; art. 8º). Nunca vem pré-marcado e pode ser revogado "
-                    "na mesma tela, com efeito imediato (art. 8º, §5º).",
+                    "se menor), de cada genitor e de cada parente cujo dado genético seria exposto (art. 11, I; art. 8º). "
+                    "Nunca vem pré-marcado e pode ser revogado na mesma tela, com efeito imediato (art. 8º, §5º).",
                     "Segurança e prestação de contas: auditoria das operações (art. 37) e proteção de contas.",
                 ],
             },
             {
                 "titulo": "Por quanto tempo",
                 "itens": [
-                    "Arquivos VCF: cifrados em disco enquanto o registro existir; nunca podem ser baixados pela plataforma "
-                    "e são decifrados só na pasta temporária da análise, apagada ao fim. Substituir ou remover o anexo "
-                    "apaga o arquivo anterior.",
+                    "Arquivos VCF (dos genitores, dos parentes e do filho já testado): cifrados em disco enquanto o "
+                    "registro existir; nunca podem ser baixados pela plataforma e são decifrados só na pasta temporária "
+                    "da análise, apagada ao fim. Substituir ou remover o anexo apaga o arquivo anterior.",
                     "Resultados completos das análises, documentos do prontuário e laudos: cifrados em disco enquanto o "
                     "registro existir; só o médico dono os abre, e cada abertura fica na auditoria. A análise avulsa, sem "
                     "registro, expira em duas horas.",
@@ -286,7 +373,10 @@ TERMO_USO = {
         "O sistema destina-se a médicos, aconselhadores genéticos e pesquisadores, após verificação manual do cadastro "
         "pelo administrador. Pacientes e familiares não são usuários.",
         "O usuário responde pela veracidade dos dados profissionais informados e pelo sigilo da própria senha.",
-        "O médico só cadastra pacientes sob seu cuidado e só envia arquivos genéticos com autorização de quem é titular deles.",
+        "O médico só cadastra pacientes sob seu cuidado e só envia arquivos genéticos com autorização de quem é titular "
+        "deles, o que inclui os parentes do genitor que não pôde ser testado.",
+        "A cada análise de uma pessoa, o profissional confirma que ela não apresenta sintomas de ELA; o sistema não se "
+        "aplica a pessoas sintomáticas.",
         "Resultados são estimativas produzidas com parâmetros populacionais da literatura, com intervalos largos de "
         "incerteza, e devem ser interpretados por profissional habilitado, no contexto do aconselhamento genético.",
         "Toda operação relevante é registrada em auditoria, sem dado identificável de paciente.",
@@ -300,8 +390,9 @@ TERMO_CONSENTIMENTO_PESQUISA = {
         "Este consentimento é específico para a finalidade de pesquisa e independe do atendimento, que tem base legal própria.",
         "Ao consentir, o titular autoriza que o caso seja disponibilizado a pesquisadores de forma pseudonimizada: um código "
         "aleatório substitui o nome; nenhum nome, prontuário ou data de nascimento é exibido ao pesquisador.",
-        "Como os dados genéticos analisados são dos genitores, a liberação exige o consentimento de cada descendente "
-        "(ou do responsável legal, se menor de 18 anos) e de cada genitor cujo dado seria exposto.",
+        "Como os dados genéticos analisados são dos genitores e, quando anexados, de parentes deles, a liberação exige "
+        "o consentimento de cada descendente (ou do responsável legal, se menor de 18 anos), de cada genitor e de cada "
+        "parente cujo dado seria exposto.",
         "O consentimento pode ser revogado a qualquer momento, pelo médico, na ficha do paciente, com efeito imediato.",
     ],
 }

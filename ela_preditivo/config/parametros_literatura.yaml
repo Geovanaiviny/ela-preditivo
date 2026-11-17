@@ -16,6 +16,18 @@ calibracao_beta:
   peso_ponto: 1.0
   citacao: "Os IC de DOUGLAS; BARALLE (2024) são simétricos em escala logarítmica; a Beta não reproduz ponto e IC simultaneamente"
 
+# Distribuição da penetrância vitalícia de cada gene.
+#   beta               (padrão): Beta ajustada ao ponto e ao IC 95% publicados; o limite superior das bandas fica
+#                      abaixo do publicado (ver `calibracao_beta`).
+#   lognormal_truncada : log-normal truncada em 1, com mediana no valor publicado e desvio em escala log tirado do
+#                      IC publicado; reproduz ao mesmo tempo a mediana e os dois limites. A fração retirada pelo
+#                      truncamento é reportada na Tabela 6.
+# A escolha é da autora: trocar o padrão altera as bandas e, pouco, os riscos médios. A alternativa entra sempre
+# como cenário da análise de sensibilidade (Tabela 9 e tornado).
+calibracao_penetrancia:
+  distribuicao: beta
+  citacao: "DOUGLAS; BARALLE, 2024, p. 295, Tabela 1 (ponto e IC 95% de penetrância por gene)"
+
 filtro_qualidade:
   dp_minimo: 20        # profundidade de leitura (FORMAT DP) a partir de 20
   gq_minimo: 30        # qualidade da chamada de genótipo (FORMAT GQ) a partir de 30; QUAL é qualidade do sítio e não entra como limiar
@@ -60,6 +72,44 @@ sensibilidade:
       C9orf72: {penetrancia: 0.60, weibull_k: 5.0, weibull_lam: 62.0}
       TARDBP:  {penetrancia: 0.80, weibull_k: 4.2, weibull_lam: 57.0}
       FUS:     {penetrancia: 0.45, weibull_k: 3.8, weibull_lam: 44.0}
+  # Faixas da sensibilidade tipo tornado (um parâmetro por vez). Toda faixa vem de fonte publicada; nenhuma é
+  # inventada. A penetrância usa os limites do IC 95% de cada gene (bloco `genes`). A idade de início usa:
+  #   tipo: media    -> média ± z·dp/√n (média e dp do bloco `inicio.estatisticas` do gene);
+  #   tipo: mediana  -> mediana ± z·EP, com EP ≈ 1,2533·(IQR/1,349)/√n (aproximação normal do erro da mediana);
+  #   tipo: medianas_publicadas -> faixa entre a menor e a maior mediana publicada.
+  # Gene sem incerteza publicada para a idade de início (FUS) fica fora do tornado, e isso é reportado na saída.
+  tornado:
+    SOD1:
+      inicio:
+        tipo: media
+        n: 64
+        z: 1.96
+        citacao: "BERDYŃSKI et al., 2022, Tabela 1: média 50,2 e dp 10,6 anos em 64 portadores; faixa = média ± 1,96·dp/√n"
+        confirmar: false
+    TARDBP:
+      inicio:
+        tipo: mediana
+        n: 64
+        z: 1.96
+        citacao: "McFARLANE et al., 2025: mediana 58,30 e IQR 16,23 anos em 64 portadores; faixa = mediana ± 1,96·EP, com EP ≈ 1,2533·(IQR/1,349)/√n (aproximação)"
+        confirmar: true
+    C9orf72:
+      inicio:
+        tipo: medianas_publicadas
+        valores:
+          - {fonte: "MURPHY et al., 2017", mediana: 58.0}
+          - {fonte: "YAMASHITA; ANDO, 2015", mediana: 57.0}
+          - {fonte: "McFARLANE et al., 2025", mediana: 59.58}
+          - {fonte: "GRASSANO et al., 2022", mediana: 62.9}
+        citacao: "faixa entre as medianas publicadas de idade de início do C9orf72 (as mesmas citadas em `genes.C9orf72.inicio`)"
+        confirmar: true
+      delta_sexo:
+        alternativa: 0.0
+        citacao: "GOUTMAN et al., 2022: deslocamento de ±1 ano por sexo contra nenhum deslocamento"
+    FUS:
+      inicio:
+        tipo: sem_faixa
+        motivo: "sem incerteza publicada para a idade de início (GRASSANO et al., 2022, traz só os quartis)"
 
 genes:
   SOD1:

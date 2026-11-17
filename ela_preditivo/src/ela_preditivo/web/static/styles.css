@@ -230,6 +230,8 @@ body.tela-dividida .avisos { position: absolute; top: 1rem; right: 1.5rem; max-w
 .bloco-genitor h3 { margin-top: 0; display: flex; align-items: center; gap: 0.5rem; }
 .vcf-estado { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem 0.75rem; padding: 0.6rem 0.75rem; border: 1px dashed var(--borda-campo); border-radius: 8px; background: var(--branco); }
 .vcf-estado .detalhe { color: var(--texto-3); font-size: 0.9rem; overflow-wrap: anywhere; }
+.bloco-sem-exame { margin-top: 0.9rem; padding-top: 0.8rem; border-top: 1px solid var(--borda); min-width: 0; }
+.bloco-sem-exame h4 { margin: 0 0 0.35rem; font-size: 1rem; }
 .documento-estado { margin-top: 0.4rem; }
 dd .documento-estado { margin-top: 0.3rem; }
 

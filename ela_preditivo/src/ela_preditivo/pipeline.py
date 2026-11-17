@@ -19,6 +19,7 @@ from . import (
     comparacao,
     genotipo,
     ingestao,
+    parentes as parentes_mod,
     relatorio,
     repeticoes,
     sobrevivencia,
@@ -49,6 +50,37 @@ def _texto_qualidade(ind: dict) -> str:
     )
 
 
+# Nome da coluna de F(∞) na Tabela 3. "Risco vitalício" é sempre o risco até o horizonte; a fração que manifesta em
+# algum momento fica só nesta coluna e nas verificações de coerência.
+COLUNA_SEM_LIMITE = "fração que manifesta em algum momento (sem limite de idade)"
+IDADES_TABELA_4 = (0, 20, 30, 40, 50, 60, 70)
+
+
+def _idades_tabela_4(idade_atual: float | None) -> tuple:
+    """Idades padrão da Tabela 4, mais a idade do atendido quando ela não está entre as padrão."""
+    idades = list(IDADES_TABELA_4)
+    if idade_atual is not None and idade_atual > 0:
+        a = int(idade_atual) if float(idade_atual).is_integer() else float(idade_atual)
+        if a not in idades:
+            idades = sorted(idades + [a])
+    return tuple(idades)
+
+
+def _vcf_txt(caminho, resumo: dict) -> str:
+    if caminho is None:
+        return "sem exame (genótipo inferido por parentes)"
+    return f"`{Path(caminho).name}` (amostra {resumo['amostra']})"
+
+
+def _qualidade_ou_sem_exame(indicadores: dict, com_vcf: bool) -> str:
+    return _texto_qualidade(indicadores) if com_vcf else "sem exame; genótipo inferido por parentes"
+
+
+def _dose_txt(d) -> str:
+    """Dosagem parental para o texto: o número, ou "inferida" quando o genitor não foi testado."""
+    return "inferida" if d is None or (isinstance(d, float) and np.isnan(d)) else str(int(d))
+
+
 def _laudo_txt(laudo: dict | None) -> str:
     """Laudo do C9orf72 por genitor; genitor ausente = não testado (o lócus fica indeterminado)."""
     laudo = laudo or {}
@@ -67,8 +99,17 @@ ARTEFATOS_EXECUCAO = (
     "metadados.json",
     "curvas.csv",
     "variantes_ingeridas_anotadas.csv",
+    "_mae_sem_exame.vcf",
+    "_pai_sem_exame.vcf",
 )
-ARTEFATOS_AVALIACAO = ("tabelas", "figuras", "relatorio.md", "metadados.json", "estabilidade_execucoes.csv")
+ARTEFATOS_AVALIACAO = (
+    "tabelas",
+    "figuras",
+    "relatorio.md",
+    "metadados.json",
+    "estabilidade_execucoes.csv",
+    "_verificacao_tmp",
+)
 ARTEFATOS_TUDO = ("sinteticos", "cenarios", "avaliacao", "tabelas", "README.md")
 
 
@@ -108,6 +149,8 @@ def executar(
     amostra_pai: str | None = None,
     hipoteses_c9orf72: dict | None = None,
     comparar_cox: bool = False,
+    parentes: dict | None = None,
+    tornado: bool = False,
 ) -> dict:
     """Executa as três camadas para um casal e grava tabelas, figuras, relatório e metadados em `saida`.
 
@@ -119,6 +162,14 @@ def executar(
       experimental, `repeticoes.py`). None (padrão) mantém o modelo por dosagem, sem qualquer mudança de resultado.
     - `comparar_cox`: ajusta CoxPHFitter na coorte de portadores e compara com a cura mista (`comparacao.py`; Tabela 11,
       Figura 9). Desligado por padrão; ligado em `tudo` e na interface web.
+    - `parentes`: genótipo de parentes para o genitor que não pôde ser testado (`parentes.py`). Dicionário com, por
+      genitor, `{"mae": {...}, "pai": {...}}`, cada um com `situacao` ("vivo_assintomatico", "falecido_sem_ela",
+      "afetado" ou "desconhecido"), `idade`, os parentes dele `pai`, `mae` e `irmaos` (cada parente:
+      `{"vcf": caminho, "laudo_c9orf72": repetições}`) e `prior_avos` ("nao_portador" ou "hardy_weinberg"); e
+      `filhos_testados`: lista de `{"vcf": caminho}` de filhos já testados. O VCF do genitor inferido é `None`.
+      Sem `parentes` o comportamento é o de sempre.
+    - `tornado`: sensibilidade tipo tornado do caso, um parâmetro por vez dentro da faixa publicada (Tabela 20,
+      Figura 12). Desligada por padrão.
     """
     t_ini = time.perf_counter()
     saida = Path(saida)
@@ -131,23 +182,53 @@ def executar(
     tabela = anotacao.tabela_anotacao(base_real=base_clinvar, curada=tabela_variantes, regra=par.regra_conflitante)
     fontes = tabela.attrs.get("fontes", {})
     laudo = {k: v for k, v in (laudo_c9orf72 or {}).items() if v is not None}
+    familia = parentes_mod.Familia.de(parentes)
+    # genitor sem VCF: só com parentes informados; a ingestão recebe um VCF sem registros (o genitor é inferido)
+    com_vcf = {"mae": vcf_mae is not None, "pai": vcf_pai is not None}
+    sem_exame = {}
+    for lado, caminho in (("mae", vcf_mae), ("pai", vcf_pai)):
+        if caminho is not None:
+            continue
+        if familia is None or not familia.tem_parente_com_vcf(lado):
+            raise ValueError(
+                f"VCF d{'a' if lado == 'mae' else 'o'} {parentes_mod.ROTULO_GENITOR[lado]} não informado: sem ele é "
+                "preciso o VCF de um parente desse genitor (pai, mãe ou irmão) ou de um filho já testado"
+            )
+        sem_exame[lado] = cenarios.escrever_vcf_sem_variantes(
+            saida / f"_{lado}_sem_exame.vcf", f"{lado.upper()}_SEM_EXAME", "genitor sem exame: inferido por parentes"
+        )
+    vcf_mae_lido, vcf_pai_lido = sem_exame.get("mae", vcf_mae), sem_exame.get("pai", vcf_pai)
 
     # Camada 1: ingestão e anotação
     mae = anotacao.anotar(
-        ingestao.ler_vcf(vcf_mae, regioes, par.filtro_qualidade, amostra=amostra_mae), tabela, par.limiar_repeticoes
+        ingestao.ler_vcf(vcf_mae_lido, regioes, par.filtro_qualidade, amostra=amostra_mae),
+        tabela,
+        par.limiar_repeticoes,
     )
     pai = anotacao.anotar(
-        ingestao.ler_vcf(vcf_pai, regioes, par.filtro_qualidade, amostra=amostra_pai), tabela, par.limiar_repeticoes
+        ingestao.ler_vcf(vcf_pai_lido, regioes, par.filtro_qualidade, amostra=amostra_pai),
+        tabela,
+        par.limiar_repeticoes,
     )
+    for caminho in sem_exame.values():
+        Path(caminho).unlink(missing_ok=True)
     perfil = genotipo.perfil_variantes(mae, pai)
     ing = {"mae": ingestao.resumo_ingestao(mae), "pai": ingestao.resumo_ingestao(pai)}
     ind = {"mae": anotacao.indicadores_qualidade(mae), "pai": anotacao.indicadores_qualidade(pai)}
-    vetor = genotipo.vetor_dosagem(mae, pai, par, laudo_c9orf72=laudo, tabela=tabela)
+    pessoas = []
+    if familia is None:
+        vetor = genotipo.vetor_dosagem(mae, pai, par, laudo_c9orf72=laudo, tabela=tabela)
+    else:  # parentes do genitor sem exame: mesma ingestão e anotação; a dosagem do genitor passa a ser inferida
+        pessoas = parentes_mod.ler_familia(familia, par, tabela, regioes)
+        vetor = parentes_mod.vetor_familia(mae, pai, par, laudo, tabela, familia, pessoas, com_vcf)
+        perfil = parentes_mod.perfil_com_parentes(perfil, pessoas)
     # extensão experimental: transmissão do C9orf72 por repetições → dosagem efetiva; só com hipóteses informadas
     hip = repeticoes.HipotesesC9orf72.de_dict(hipoteses_c9orf72) if hipoteses_c9orf72 else None
     transmissao = repeticoes.transmissao_c9orf72(laudo, hip, par, tabela) if hip is not None else None
     if transmissao is not None:
+        attrs = dict(vetor.attrs)
         vetor = repeticoes.aplicar_ao_vetor(vetor, transmissao, par, tabela)
+        vetor.attrs.update(attrs)
     descartados, uteis = vetor[vetor.descartado], vetor[~vetor.descartado]
     nota_descarte = (
         ""
@@ -163,6 +244,9 @@ def executar(
             "genitor (não testado); o risco de transmissão da expansão não pode ser estimado nem afastado."
         )
     anotadas = genotipo.concatenar_anotadas(mae, pai)
+    for p in pessoas:  # variantes dos parentes entram no mesmo arquivo, identificadas pelo parentesco
+        if p.anotadas is not None:
+            anotadas = genotipo.concatenar_anotadas(anotadas, p.anotadas.assign(amostra=p.rotulo))
     anotadas.to_csv(saida / "variantes_ingeridas_anotadas.csv", index=False)
     # variantes aprovadas cuja classe `risco` veio da regra qualificada para classificação conflitante
     pela_regra = anotadas[anotadas.aprovado & anotadas.regra_qualificada.eq(True)]
@@ -195,14 +279,20 @@ def executar(
     secoes = [
         (
             "Entrada",
-            f"VCF materno: `{Path(vcf_mae).name}` (amostra {ing['mae']['amostra']}); VCF paterno: `{Path(vcf_pai).name}` (amostra {ing['pai']['amostra']}); "
+            f"VCF materno: {_vcf_txt(vcf_mae, ing['mae'])}; VCF paterno: {_vcf_txt(vcf_pai, ing['pai'])}; "
             f"laudo do C9orf72: {_laudo_txt(laudo)}; sexo do descendente: {sexo or 'não informado'}; "
             f"idade atual sem sintomas: {idade_atual if idade_atual is not None else 'não informada'}; motor: {motor}; N = {_n(n)}; seed = {seed}; horizonte = {horizonte:.0f} anos.",
         ),
         (
             "Qualidade dos dados (TCC 4.2.3)",
-            f"- Mãe: {_texto_qualidade(ind['mae'])}.\n- Pai: {_texto_qualidade(ind['pai'])}.\n"
-            f"- Base de anotação: {fontes.get('base_real') or 'apenas a tabela curada'}; "
+            f"- Mãe: {_qualidade_ou_sem_exame(ind['mae'], com_vcf['mae'])}.\n"
+            f"- Pai: {_qualidade_ou_sem_exame(ind['pai'], com_vcf['pai'])}.\n"
+            + "".join(
+                f"- {p.rotulo[0].upper() + p.rotulo[1:]}: {_texto_qualidade(anotacao.indicadores_qualidade(p.anotadas))}.\n"
+                for p in pessoas
+                if p.anotadas is not None
+            )
+            + f"- Base de anotação: {fontes.get('base_real') or 'apenas a tabela curada'}; "
             f"regra de classe: só Pathogenic/Likely pathogenic sustentam risco; significado incerto e classificações conflitantes não (TCC 4.2.2).{txt_regra}",
         ),
     ]
@@ -216,12 +306,13 @@ def executar(
         hipoteses_c9orf72=hip.como_dict() if hip is not None else None,
         transmissao_c9orf72=transmissao.resumo() if transmissao is not None else None,
         comparar_cox=comparar_cox,
+        tornado=tornado,
         parametros=str(par.caminho),
         versao_parametros=par.versao,
         data_parametros=par.data,
         base_anotacao=fontes,
-        vcf_mae=str(vcf_mae),
-        vcf_pai=str(vcf_pai),
+        vcf_mae=str(vcf_mae) if vcf_mae is not None else None,
+        vcf_pai=str(vcf_pai) if vcf_pai is not None else None,
         montagem={"mae": ing["mae"]["montagem"], "pai": ing["pai"]["montagem"]},
         indicadores_qualidade=ind,
         loci_descartados=descartados.variante.tolist(),
@@ -275,8 +366,16 @@ def executar(
         secoes.append(("Resultado", texto + extra + nota_descarte + nota_regra))
         if transmissao is not None:
             secoes.append(("Transmissão do C9orf72 por repetições (hipótese experimental)", transmissao.texto()))
+        if familia is not None:
+            secoes.append(("Genitor inferido por parentes", parentes_mod.texto_relatorio(vetor, [])))
         rel = relatorio.escrever_relatorio(saida, f"Relatório do artefato — {rotulo or 'caso'}", secoes, tabelas, figs)
-        relatorio.escrever_metadados(saida, data=_dt.datetime.now().isoformat(timespec="seconds"), loci=0, **meta_comum)
+        relatorio.escrever_metadados(
+            saida,
+            data=_dt.datetime.now().isoformat(timespec="seconds"),
+            loci=0,
+            parentes=parentes_mod.resumo_metadados(vetor, []) if familia is not None else None,
+            **meta_comum,
+        )
         return {
             "saida": saida,
             "relatorio": rel,
@@ -287,9 +386,24 @@ def executar(
             "indicadores": ind,
             "transmissao_c9orf72": transmissao,
             "cox": None,
+            "tornado": None,
+            "parentes": parentes_mod.resumo_metadados(vetor, []) if familia is not None else None,
         }
     # Camada 2: Rede Bayesiana + Monte Carlo (motor principal + motor cruzado para a aderência)
-    loci = loci_de_vetor(vetor, par, sexo=sexo)
+    loci = loci_de_vetor(vetor, par, sexo=sexo, horizonte=horizonte)
+    inferidos = [l for l in loci if l.inferencia is not None]
+    if inferidos:
+        tabelas.append(
+            relatorio.salvar_tabela(
+                parentes_mod.tabela_parentes(vetor, loci),
+                saida / "tabelas",
+                "tabela_01d_genitor_inferido",
+                "Tabela 1d — Genitor inferido por parentes: parentes considerados e dosagem de cada um, e distribuição "
+                "da dosagem do genitor só com os genótipos e depois do condicionamento pela situação clínica dele",
+                "A penetrância é compartilhada pela família: o condicionamento atualiza ao mesmo tempo a dosagem do "
+                "genitor e a penetrância do gene (colunas a priori e a posteriori).",
+            )
+        )
     mediana_c9_antes = next((l.dist.mediana for l in loci if l.gene == genotipo.GENE_EXPANSAO), None)
     if hip is not None and hip.antecipacao:
         loci = repeticoes.aplicar_antecipacao(loci, hip.antecipacao)
@@ -326,6 +440,7 @@ def executar(
             "p_manifesta_mc",
             "p_manifesta_q025",
             "p_manifesta_q975",
+            "p_manifesta_sem_limite",
             "idade_mediana_exata",
             "idade_mediana_mc",
             "idade_p10_mc",
@@ -347,6 +462,7 @@ def executar(
         "p_manifesta_mc": comb["p_manifesta_qualquer_mc"],
         "p_manifesta_q025": comb["p_manifesta_qualquer_q025"],
         "p_manifesta_q975": comb["p_manifesta_qualquer_q975"],
+        "p_manifesta_sem_limite": comb["p_manifesta_qualquer_sem_limite"],
         "idade_mediana_exata": np.nan,
         "idade_mediana_mc": comb["idade_mediana_primeiro_inicio"],
         "idade_p10_mc": np.nan,
@@ -354,24 +470,32 @@ def executar(
     }
     tabelas.append(
         relatorio.salvar_tabela(
-            risco,
+            risco.rename(columns={"p_manifesta_sem_limite": COLUNA_SEM_LIMITE}),
             saida / "tabelas",
             "tabela_03_risco_vitalicio",
-            "Tabela 3 — Probabilidade de transmissão (portador), penetrância e risco vitalício de manifestação por lócus e combinado, com intervalo de credibilidade de 95% (incerteza da penetrância) e idade de início",
+            f"Tabela 3 — Probabilidade de transmissão (portador), penetrância e risco vitalício de manifestação (até o horizonte de {horizonte:.0f} anos) por lócus e combinado, com intervalo de credibilidade de 95% (incerteza da penetrância) e idade de início",
+            f'p_manifesta_* = risco vitalício: probabilidade de manifestar até os {horizonte:.0f} anos. A coluna "{COLUNA_SEM_LIMITE}" é '
+            "F(∞) = P(portador)·E[π], usada só nas verificações de coerência.",
         )
     )
 
     # Camada 3: sobrevivência
     curvas = sobrevivencia.curvas_analiticas(res, horizonte)
     curvas.to_csv(saida / "curvas.csv", index=False)
-    cond = sobrevivencia.tabela_risco_condicional(res, horizonte=horizonte)
+    cond = sobrevivencia.tabela_risco_condicional(res, idades_atuais=_idades_tabela_4(idade_atual), horizonte=horizonte)
     tabelas.append(
         relatorio.salvar_tabela(
             cond,
             saida / "tabelas",
             "tabela_04_risco_condicional",
-            "Tabela 4 — Risco condicional à idade atual sem sintomas: P(portador | assintomático), risco nos próximos 10 e 20 anos e risco vitalício residual, com banda de 95%",
+            f"Tabela 4 — Risco condicional à idade atual sem sintomas: P(portador | assintomático), risco nos próximos 10 e 20 anos e risco vitalício residual (até os {horizonte:.0f} anos), com banda de 95%",
         )
+    )
+    # indicadores principais condicionados à idade atual (mesmo cálculo exato da Tabela 4, na idade do atendido)
+    condicionado = (
+        sobrevivencia.indicadores_condicionados(res, idade_atual, horizonte)
+        if idade_atual is not None and idade_atual > 0
+        else None
     )
     km = sobrevivencia.tabela_km(res, horizonte)
     tabelas.append(
@@ -402,6 +526,21 @@ def executar(
                 "teste de riscos proporcionais e S(t) por Cox, cura mista, Kaplan-Meier e curva analítica",
             )
         )
+    tab_tornado = avaliacao.tornado(vetor, par, sexo, horizonte, idade_atual) if tornado else None
+    if tab_tornado is not None and not tab_tornado.empty:
+        fora = tab_tornado.attrs.get("fora_do_tornado") or []
+        tabelas.append(
+            relatorio.salvar_tabela(
+                tab_tornado,
+                saida / "tabelas",
+                "tabela_20_tornado",
+                "Tabela 20 — Sensibilidade tipo tornado: um parâmetro por vez dentro da faixa publicada, com a variação do "
+                + ("risco vitalício residual" if idade_atual is not None else "risco vitalício combinado")
+                + " e da idade mediana de início",
+                "Valores exatos; toda faixa vem de fonte publicada (coluna `fonte`). Fora do tornado, por não haver "
+                "incerteza publicada: " + ("; ".join(fora) if fora else "nenhum gene deste caso") + ".",
+            )
+        )
     extra = ""
     if idade_atual is not None:
         res_c = res.condicionar_idade(idade_atual)
@@ -414,10 +553,20 @@ def executar(
                 f"Tabela 4b — Risco condicional não paramétrico (Kaplan-Meier) para um descendente assintomático aos {idade_atual:.0f} anos",
             )
         )
+        ex_c = condicionado or sobrevivencia.indicadores_condicionados(res, idade_atual, horizonte)
+        rr, ini = ex_c["risco_residual"], ex_c["inicio"]
         extra = (
-            f" Condicionando ao descendente assintomático aos {idade_atual:.0f} anos (rejeição de {_n(res.n - res_c.n)} sorteios), "
-            f"P(portador de ≥ 1 lócus) passa de {_p(res.portador.any(axis=1).mean())} para {_p(res_c.portador.any(axis=1).mean())} e o risco vitalício residual é "
-            f"{_p(res_c.manifesta_qualquer.mean())}."
+            f" Condicionando ao descendente assintomático aos {idade_atual:.0f} anos, P(portador de ≥ 1 lócus) passa de "
+            f"{_p(comb['p_portador_qualquer_exato'])} para {_p(ex_c['p_portador'])} e o risco vitalício residual (até os {horizonte:.0f} anos) é "
+            f"{_p(rr['valor'])} [{_p(rr['q025'])}–{_p(rr['q975'])}]"
+            + (
+                f"; idade provável de início a partir dessa idade: mediana {ini['mediana']:.1f} anos "
+                f"(25–75 %: {ini['q25']:.1f}–{ini['q75']:.1f})"
+                if ini.get("mediana") is not None
+                else ""
+            )
+            + f". Valores exatos, os mesmos da Tabela 4 e dos indicadores; conferência por rejeição de {_n(res.n - res_c.n)} sorteios do "
+            f"Monte Carlo: {_p(res_c.portador.any(axis=1).mean())} e {_p(res_c.manifesta_qualquer_h.mean())}."
         )
 
     # Figuras
@@ -443,19 +592,34 @@ def executar(
                     cox["curvas"], saida / "figuras" / "figura_09_cox_vs_cura_mista.png"
                 )
             )
+        if tab_tornado is not None and not tab_tornado.empty:
+            figs.append(
+                relatorio.figura_tornado({rotulo or "caso": tab_tornado}, saida / "figuras" / "figura_12_tornado.png")
+            )
 
     # Texto do relatório
     linhas = [
-        f"- **{l.variante}** ({l.heranca}; dosagens mãe/pai {l.dosagem_mae}/{l.dosagem_pai}): P(portador) = {_p(l.p_portador_exato)} (MC {_p(l.p_portador_mc)}); "
-        f"penetrância média {_p(l.penetrancia_media)} [{_p(l.penetrancia_q025)}–{_p(l.penetrancia_q975)}]; risco vitalício {_p(l.p_manifesta_exato)} "
+        f"- **{l.variante}** ({l.heranca}; dosagens mãe/pai {_dose_txt(l.dosagem_mae)}/{_dose_txt(l.dosagem_pai)}): P(portador) = {_p(l.p_portador_exato)} (MC {_p(l.p_portador_mc)}); "
+        f"penetrância média {_p(l.penetrancia_media)} [{_p(l.penetrancia_q025)}–{_p(l.penetrancia_q975)}]; risco vitalício (até os {horizonte:.0f} anos) {_p(l.p_manifesta_exato)} "
         f"[{_p(l.p_manifesta_q025)}–{_p(l.p_manifesta_q975)}]; idade mediana de início {l.idade_mediana_exata:.1f} anos (p10–p90 MC: {l.idade_p10_mc:.0f}–{l.idade_p90_mc:.0f})."
         for _, l in resumo.iterrows()
     ]
     linhas.append(
-        f"- **Combinado (qualquer lócus, independência)**: P(portador de ≥ 1) = {_p(comb['p_portador_qualquer_exato'])}; risco vitalício {_p(comb['p_manifesta_qualquer_exato'])} "
+        f"- **Combinado (qualquer lócus, independência)**: P(portador de ≥ 1) = {_p(comb['p_portador_qualquer_exato'])}; risco vitalício (até os {horizonte:.0f} anos) {_p(comb['p_manifesta_qualquer_exato'])} "
         f"[{_p(comb['p_manifesta_qualquer_q025'])}–{_p(comb['p_manifesta_qualquer_q975'])}]; idade mediana do primeiro início {comb['idade_mediana_primeiro_inicio']:.1f} anos."
     )
-    secoes.append(("Resultado", "\n".join(linhas) + extra + nota_descarte + nota_regra))
+    limite_inferior = familia is not None and any(
+        familia.lado(n) is not None and familia.lado(n).situacao == "afetado" for n in parentes_mod.LADOS
+    )
+    nota_limite = (
+        f" Resultado rotulado como {parentes_mod.LIMITE_INFERIOR_AFETADO} (o genitor sem exame é afetado, o que "
+        "torna a variante nele mais provável do que o cálculo considera)."
+        if limite_inferior and inferidos
+        else ""
+    )
+    secoes.append(("Resultado", "\n".join(linhas) + extra + nota_limite + nota_descarte + nota_regra))
+    if familia is not None:
+        secoes.append(("Genitor inferido por parentes", parentes_mod.texto_relatorio(vetor, loci)))
     if transmissao is not None:
         secoes.append(
             (
@@ -465,6 +629,23 @@ def executar(
         )
     if cox is not None:
         secoes.append(("Comparação com o modelo de Cox (CoxPHFitter)", cox["texto"]))
+    if tab_tornado is not None and not tab_tornado.empty:
+        topo = tab_tornado.iloc[0]
+        fora = tab_tornado.attrs.get("fora_do_tornado") or []
+        secoes.append(
+            (
+                "Sensibilidade tipo tornado",
+                "Um parâmetro por vez, dentro da faixa publicada, com os demais no valor de base (Tabela 20"
+                + (", Figura 12" if figuras else "")
+                + f"). Maior efeito no risco: {topo.parametro}, de {_p(min(topo.risco_baixo, topo.risco_alto))} a "
+                f"{_p(max(topo.risco_baixo, topo.risco_alto))} (base {_p(topo.risco_base)}). "
+                + (
+                    "Fora do tornado, por não haver incerteza publicada: " + "; ".join(fora) + "."
+                    if fora
+                    else "Todos os genes do caso têm faixa publicada."
+                ),
+            )
+        )
     desvio_max = float(np.nanmax(ader[["desvio_manifesta_pymc_em_ep", "desvio_manifesta_numpy_em_ep"]].values))
     # o modelo de cura mista só é ajustado com ≥ 10 eventos e ≥ 1 censura por lócus (sobrevivencia.ajustar_mistura_cura):
     # com N pequeno a Lifelines pode não ajustar nenhum lócus e a coluna erro_rel_pi não existe
@@ -497,12 +678,19 @@ def executar(
                 excecoes.append(
                     f"{l.gene} {l.variante}: {exc.get('nota', '')} (confirmar: {str(exc.get('confirmar', True)).lower()})"
                 )
+    info_parentes = parentes_mod.resumo_metadados(vetor, loci) if familia is not None else None
     secoes.append(
         (
             "Limitações desta execução",
             f"Parâmetros provisórios (confirmar: true) em: {', '.join(provis) or 'nenhum'}. Independência entre lóci; sem fatores modificadores; "
             "penetrância populacional de coortes europeias/norte-americanas; dados sintéticos."
-            + (" Aproximação de penetrância: " + "; ".join(excecoes) + "." if excecoes else ""),
+            + (" Aproximação de penetrância: " + "; ".join(excecoes) + "." if excecoes else "")
+            + (
+                " Genitor inferido por parentes: só genótipos entram (o fenótipo de parente sem teste genético fica "
+                "fora) e a variante dos parentes é suposta herdada."
+                if inferidos
+                else ""
+            ),
         )
     )
     rel = relatorio.escrever_relatorio(saida, f"Relatório do artefato — {rotulo or 'caso'}", secoes, tabelas, figs)
@@ -512,6 +700,10 @@ def executar(
         horizonte=horizonte,
         tabela_variantes=str(tabela_variantes or anotacao.CAMINHO_TABELA),
         loci=[l.rotulo for l in loci],
+        indicadores_condicionados=condicionado,
+        parentes=info_parentes,
+        limite_inferior=bool(limite_inferior and inferidos),
+        sorteios_rejeitados=(res.sorteados - res.n) if res.sorteados is not None else None,
         tempo_total_s=round(time.perf_counter() - t_ini, 2),
         **meta_comum,
     )
@@ -524,6 +716,10 @@ def executar(
         "res_cruzado": res_x,
         "resumo": resumo,
         "combinado": comb,
+        "condicionado": condicionado,
+        "horizonte": horizonte,
+        "parentes": info_parentes,
+        "limite_inferior": bool(limite_inferior and inferidos),
         "aderencia": ader,
         "curvas": curvas,
         "tabelas": tabelas,
@@ -531,6 +727,7 @@ def executar(
         "indicadores": ind,
         "transmissao_c9orf72": transmissao,
         "cox": cox,
+        "tornado": tab_tornado,
     }
 
 
@@ -545,8 +742,16 @@ def avaliar(
     n_coerencia: int = 10_000,
     config=None,
     base_clinvar=None,
+    metricas: bool = True,
+    mundos: int = 200,
+    por_estrato: int = 10,
+    seed_coorte: int | None = None,
 ) -> dict:
-    """Avaliação transversal dos cenários: estabilidade, tempo, coerência, calibração e sensibilidade (Tabelas 5 a 9).
+    """Avaliação transversal dos cenários: estabilidade, tempo, coerência, calibração e sensibilidade (Tabelas 5 a 9) e,
+    com `metricas`, a verificação com famílias sintéticas de desfecho conhecido (Tabelas 12 a 20; Figuras 10 a 12):
+    calibração, discriminação, erro da idade de início, cobertura, divergência entre curvas, robustez a erros no VCF e
+    tornado. `mundos` e `por_estrato` dimensionam a coorte; `seed_coorte` é a semente própria dela, independente da
+    semente das previsões (padrão: derivada de `seed`).
     Cenários sem lócus de risco na base de anotação usada (ex.: variante com classificação conflitante no ClinVar) são pulados e listados.
     """
     saida = Path(saida)
@@ -559,6 +764,7 @@ def avaliar(
     tabela = anotacao.tabela_anotacao(base_real=base_clinvar, regra=par.regra_conflitante)
     regioes = ingestao.carregar_regioes()
     brutos, resumos, tempos, coer, sens, recs, pulados = [], [], [], [], [], [], []
+    vetores, loci_por_cenario, res_por_cenario = {}, {}, {}
     for num in numeros:
         c = cenarios.cenario_por_numero(num)
         mae = anotacao.anotar(
@@ -586,6 +792,7 @@ def avaliar(
         t.insert(0, "cenario", rot)
         tempos.append(t)
         res = simular_pymc(loci, n=n_coerencia, seed=seed)
+        vetores[rot], loci_por_cenario[rot], res_por_cenario[rot] = vetor, loci, res
         co = avaliacao.coerencia(res, par.horizonte_anos)
         co.insert(0, "cenario", rot)
         coer.append(co)
@@ -621,14 +828,15 @@ def avaliar(
             par.tabela_calibracao(),
             saida / "tabelas",
             "tabela_06_calibracao",
-            "Tabela 6 — Calibração das priors Beta de penetrância e das distribuições de idade de início a partir da literatura",
-            "valor_provisorio = sim: parâmetro marcado com confirmar: true no YAML, a validar pela autora.",
+            "Tabela 6 — Calibração das distribuições de penetrância (Beta e log-normal truncada em 1) e das distribuições de idade de início a partir da literatura",
+            "valor_provisorio = sim: parâmetro marcado com confirmar: true no YAML, a validar pela autora. "
+            "massa_truncada_lognormal: fração da log-normal acima de 1, retirada pelo truncamento.",
         ),
         relatorio.salvar_tabela(
             pd.concat(coer, ignore_index=True),
             saida / "tabelas",
             "tabela_07_coerencia",
-            "Tabela 7 — Coerência das curvas: F(∞) exato vs Kaplan-Meier, medianas de início (exata vs Weibull da Lifelines), parâmetros recuperados pelo modelo de cura mista e idade do pico de h(t) por lócus e para o risco combinado",
+            "Tabela 7 — Coerência das curvas: risco vitalício exato (até o horizonte) vs Kaplan-Meier, fração que manifesta em algum momento (sem limite de idade) vs a recuperada pelo modelo de cura mista, medianas de início (exata vs Weibull da Lifelines), parâmetros recuperados e idade do pico de h(t) por lócus e para o risco combinado",
             "A faixa de incidência populacional 60–75 anos (FELDMAN et al., 2022) é comparada só com o pico do risco combinado (linha 'qualquer lócus'); "
             "o pico de cada variante é propriedade da sua distribuição de início e não é critério de aprovação.",
         ),
@@ -642,7 +850,7 @@ def avaliar(
             pd.concat(sens, ignore_index=True),
             saida / "tabelas",
             "tabela_09_sensibilidade",
-            "Tabela 9 — Análise de sensibilidade: risco vitalício e idade mediana sob a calibração pela literatura, sob os parâmetros do exemplo do orientador e sob penetrância de coorte familiar para o C9orf72",
+            "Tabela 9 — Análise de sensibilidade: risco vitalício e idade mediana sob a calibração pela literatura, sob a distribuição alternativa da penetrância (log-normal truncada em 1), sob os parâmetros do exemplo do orientador e sob penetrância de coorte familiar para o C9orf72",
         ),
     ]
     figs = [
@@ -650,6 +858,27 @@ def avaliar(
         relatorio.figura_curvas_inicio(par, saida / "figuras" / "figura_03_curvas_inicio.png"),
         relatorio.figura_estabilidade(resumo, saida / "figuras" / "figura_07_estabilidade.png"),
     ]
+    verificacao = None
+    if metricas:
+        verificacao = _verificacao(
+            saida,
+            dir_cenarios,
+            [n for n in numeros if n not in pulados],
+            par,
+            tabela,
+            regioes,
+            vetores,
+            loci_por_cenario,
+            res_por_cenario,
+            sexo,
+            n_coerencia,
+            seed,
+            mundos,
+            por_estrato,
+            seed_coorte if seed_coorte is not None else seed + 104_729,
+        )
+        tabelas += verificacao["tabelas"]
+        figs += verificacao["figuras"]
     tt = pd.concat(tempos)
     fontes = tabela.attrs.get("fontes", {})
     co_all = pd.concat(coer, ignore_index=True)
@@ -671,6 +900,8 @@ def avaliar(
             f"Tempo médio PyMC para N = {_n(max(ns))}: {tt[(tt.motor == 'pymc') & (tt.n == max(ns))].tempo_medio_s.mean():.2f} s; NumPy: {tt[(tt.motor == 'numpy') & (tt.n == max(ns))].tempo_medio_s.mean():.3f} s.",
         ),
     ]
+    if verificacao is not None:
+        secoes += verificacao["secoes"]
     rel = relatorio.escrever_relatorio(saida, "Avaliação do artefato (TCC 4.5)", secoes, tabelas, figs)
     relatorio.escrever_metadados(
         saida,
@@ -683,6 +914,7 @@ def avaliar(
         cenarios_pulados=pulados,
         base_anotacao=fontes,
         saida_limpa=removidos,
+        verificacao=verificacao["metadados"] if verificacao is not None else None,
     )
     return {
         "saida": saida,
@@ -694,7 +926,254 @@ def avaliar(
         "tabelas": tabelas,
         "figuras": figs,
         "pulados": pulados,
+        "verificacao": verificacao["dados"] if verificacao is not None else None,
     }
+
+
+def _verificacao(
+    saida: Path,
+    dir_cenarios: Path,
+    numeros: list,
+    par,
+    tabela,
+    regioes,
+    vetores: dict,
+    loci_por_cenario: dict,
+    res_por_cenario: dict,
+    sexo: str,
+    n: int,
+    seed: int,
+    mundos: int,
+    por_estrato: int,
+    seed_coorte: int,
+) -> dict:
+    """Verificação com famílias sintéticas de desfecho conhecido (Tabelas 12 a 20 e Figuras 10 a 12 da avaliação)."""
+    tmp = saida / "_verificacao_tmp"
+    h = float(par.horizonte_anos)
+    # um cenário com genitor sem exame entra na mistura, para que a coorte cubra também a extensão de parentes
+    casos = dict(vetores)
+    caso_p = cenarios.gerar_cenarios_parentes(tmp / "parentes")[0]
+    familia = parentes_mod.Familia.de(caso_p["parentes"])
+    lidos = {}
+    for lado in ("mae", "pai"):
+        caminho = caso_p[f"vcf_{lado}"] or cenarios.escrever_vcf_sem_variantes(
+            tmp / "parentes" / f"_{lado}_sem_exame.vcf", f"{lado.upper()}_SEM_EXAME"
+        )
+        lidos[lado] = anotacao.anotar(
+            ingestao.ler_vcf(caminho, regioes, par.filtro_qualidade), tabela, par.limiar_repeticoes
+        )
+    rot_p = f"cenário de parentes {caso_p['numero']}"
+    casos[rot_p] = parentes_mod.vetor_familia(
+        lidos["mae"],
+        lidos["pai"],
+        par,
+        caso_p["laudo_c9orf72"],
+        tabela,
+        familia,
+        parentes_mod.ler_familia(familia, par, tabela, regioes),
+        {lado: caso_p[f"vcf_{lado}"] is not None for lado in ("mae", "pai")},
+    )
+    loci_casos = dict(loci_por_cenario)
+    loci_casos[rot_p] = loci_de_vetor(casos[rot_p], par, sexo=sexo)
+    estratos = avaliacao.montar_estratos(casos, par)
+    verd = avaliacao.verdades(par)
+    comp, bri, cal, disc, erro, bandas, diverg, curvas_cal = [], [], [], [], [], [], [], {}
+    for k, v in enumerate(verd):
+        coorte = avaliacao.coorte_de_mundos(estratos, par, v, mundos=mundos, por_estrato=por_estrato, seed=seed_coorte)
+        comp.append(avaliacao.descricao_coorte(estratos, coorte, v))
+        for destino, tab in (
+            (bri, avaliacao.brier(coorte)),
+            (cal, avaliacao.curva_calibracao(coorte)),
+            (disc, avaliacao.discriminacao(coorte)),
+            (erro, avaliacao.erro_idade_inicio(coorte)),
+        ):
+            tab.insert(0, "verdade", v.rotulo)
+            destino.append(tab)
+        curvas_cal[v.rotulo] = cal[-1]
+        bandas.append(
+            avaliacao.cobertura_bandas(
+                loci_casos,
+                par,
+                v,
+                sexo=sexo,
+                mundos=mundos,
+                n_banda=n,
+                seed_banda=seed,
+                seed_mundos=seed_coorte + 1 + k,
+            )
+        )
+        for rot, vetor in vetores.items():
+            if v.nome == "modelo":  # sorteios do próprio artefato contra a curva teórica do modelo
+                d = avaliacao.divergencia_curvas(
+                    res_por_cenario[rot], None, h, "sorteios do artefato (verdade = modelo)"
+                )
+            else:  # mundo alternativo simulado contra a curva teórica do modelo
+                alt = simular_numpy(avaliacao.loci_da_verdade(vetor, par, v, sexo, h), n=n, seed=seed_coorte + 50 + k)
+                d = avaliacao.divergencia_curvas(alt, loci_por_cenario[rot], h, v.rotulo)
+            d.insert(0, "cenario", rot)
+            diverg.append(d)
+    cob_mc = avaliacao.cobertura_monte_carlo(loci_casos, n=n, repeticoes=mundos, seed=seed_coorte + 10_000)
+    robustez = avaliacao.robustez_vcf(dir_cenarios, numeros, par, tabela, tmp / "robustez", sexo)
+    tornados = {rot: avaliacao.tornado(vetor, par, sexo, h) for rot, vetor in vetores.items()}
+    fora = sorted({x for t in tornados.values() for x in t.attrs.get("fora_do_tornado", [])})
+    tab_tornado = pd.concat([t.assign(cenario=rot) for rot, t in tornados.items()], ignore_index=True)
+    tab_tornado = tab_tornado[["cenario"] + [c for c in tab_tornado.columns if c != "cenario"]]
+    shutil.rmtree(tmp, ignore_errors=True)
+    dados = {
+        "coorte": pd.concat(comp, ignore_index=True),
+        "brier": pd.concat(bri, ignore_index=True),
+        "calibracao": pd.concat(cal, ignore_index=True),
+        "discriminacao": pd.concat(disc, ignore_index=True),
+        "erro_idade": pd.concat(erro, ignore_index=True),
+        "cobertura_mc": cob_mc,
+        "cobertura_bandas": pd.concat(bandas, ignore_index=True),
+        "divergencia": pd.concat(diverg, ignore_index=True),
+        "robustez": robustez,
+        "tornado": tab_tornado,
+    }
+    nota_verificacao = "Verificação, não validação: " + avaliacao.ENQUADRAMENTO
+    t_dir = saida / "tabelas"
+    tabelas = [
+        relatorio.salvar_tabela(
+            dados["coorte"],
+            t_dir,
+            "tabela_12_coorte_verificacao",
+            f"Tabela 12 — Coorte sintética de verificação: {mundos} mundos, {por_estrato} pessoas sorteadas por estrato e mundo (cenário × sexo × idade atual de 0 a 70 anos) e desfecho verdadeiro conhecido, por verdade e cenário",
+            nota_verificacao
+            + " Entram na coorte as pessoas que chegam sem sintomas à idade atual (e, com genitor inferido, as de "
+            "famílias compatíveis com a evidência), de modo que cada mundo pesa pelo quanto é compatível com o que se "
+            f"observa. Semente própria da coorte: {seed_coorte} (independente da semente das previsões, {seed}).",
+        ),
+        relatorio.salvar_tabela(
+            dados["brier"],
+            t_dir,
+            "tabela_13_brier",
+            "Tabela 13 — Brier score das previsões a 10 e 20 anos a partir da idade atual e até o horizonte, com verdade = modelo e com verdades alternativas",
+            "brier_referencia = p̄(1 − p̄), de quem prevê a prevalência para todos; habilidade = 1 − Brier/referência.",
+        ),
+        relatorio.salvar_tabela(
+            dados["calibracao"],
+            t_dir,
+            "tabela_14_calibracao_decis",
+            "Tabela 14 — Curva de calibração: risco previsto médio contra fração observada por decil de risco previsto",
+        ),
+        relatorio.salvar_tabela(
+            dados["discriminacao"],
+            t_dir,
+            "tabela_15_discriminacao",
+            "Tabela 15 — Discriminação: C-index de Harrell e AUC dependente do tempo a 10 e 20 anos",
+            "Tempo contado a partir da idade atual, com censura no horizonte. A verdade sintética não tem censura além "
+            "do horizonte e as idades atuais vão até 70 anos, por isso a AUC não precisa de ponderação pela censura.",
+        ),
+        relatorio.salvar_tabela(
+            dados["erro_idade"],
+            t_dir,
+            "tabela_16_erro_idade_inicio",
+            "Tabela 16 — Erro absoluto médio da idade de início prevista (mediana condicional à idade atual) entre quem manifesta, por gene, com o piso teórico",
+            "Piso teórico: desvio absoluto médio da distribuição de início em torno da sua mediana, condicionado à idade "
+            "atual. Um modelo perfeito não fica abaixo dele, porque a idade de início é aleatória; razões um pouco "
+            "abaixo de 1 são flutuação amostral (compare com `erro_padrao_anos`). Nos casos com dois lóci, a "
+            "distribuição de cada gene é a do início daquele gene quando ele é o primeiro.",
+        ),
+        relatorio.salvar_tabela(
+            dados["cobertura_mc"],
+            t_dir,
+            "tabela_17_cobertura_monte_carlo",
+            f"Tabela 17 — Cobertura dos intervalos de 95 % do Monte Carlo: fração de {mundos} sementes em que o intervalo de P(portador) e de P(manifesta) contém o valor exato",
+        ),
+        relatorio.salvar_tabela(
+            dados["cobertura_bandas"],
+            t_dir,
+            "tabela_17b_cobertura_bandas",
+            "Tabela 17b — Cobertura das bandas de F(t): fração dos mundos em que o F(t) empírico do mundo cai dentro da banda de 95 % do artefato, aos 50, 60 e 70 anos",
+            "Com verdade = modelo a cobertura fica perto de 95 % por construção (um pouco abaixo, pelo ruído amostral do "
+            "F empírico de cada mundo); com a verdade alternativa aparece a subcobertura. `cobertura_sem_ruido_amostral` "
+            "usa a F exata de cada mundo no lugar da empírica e mostra quanto da diferença é só ruído, que pesa mais "
+            "onde a banda é estreita (genitor inferido). Com genitor inferido, cada mundo pesa pela probabilidade de a "
+            "família ser compatível com a evidência.",
+        ),
+        relatorio.salvar_tabela(
+            dados["divergencia"],
+            t_dir,
+            "tabela_18_divergencia_curvas",
+            "Tabela 18 — Divergência entre curvas: distância de Kolmogorov-Smirnov entre o F(t) empírico e o teórico em [0, horizonte] e distância de Wasserstein (anos) entre as distribuições de idade de início dos que manifestam",
+            "ks_referencia_amostral = 1,36/√N: ordem de grandeza do KS só por flutuação amostral.",
+        ),
+        relatorio.salvar_tabela(
+            dados["robustez"],
+            t_dir,
+            "tabela_19_robustez_vcf",
+            "Tabela 19 — Robustez a erros no VCF: variação de P(portador de ≥ 1 lócus) e do risco vitalício sob perturbações controladas, e o que o artefato reporta em cada caso",
+        ),
+        relatorio.salvar_tabela(
+            dados["tornado"],
+            t_dir,
+            "tabela_20_tornado",
+            "Tabela 20 — Sensibilidade tipo tornado: um parâmetro por vez dentro da faixa publicada, com a variação do risco vitalício combinado e da idade mediana de início",
+            "Toda faixa vem de fonte publicada (coluna `fonte`). Fora do tornado, por não haver incerteza publicada: "
+            + ("; ".join(fora) if fora else "nenhum gene dos cenários avaliados")
+            + ".",
+        ),
+    ]
+    f_dir = saida / "figuras"
+    figuras = [
+        relatorio.figura_calibracao(curvas_cal, f_dir / "figura_10_calibracao.png"),
+        relatorio.figura_robustez(robustez, f_dir / "figura_11_robustez_vcf.png"),
+        relatorio.figura_tornado(tornados, f_dir / "figura_12_tornado.png"),
+    ]
+    modelo = verd[0].rotulo
+    b = dados["brier"][dados["brier"].verdade == modelo].set_index("previsao")
+    dsc = dados["discriminacao"][dados["discriminacao"].verdade == modelo]
+    ei = dados["erro_idade"][dados["erro_idade"].verdade == modelo]
+    comb = ei[ei.gene.str.startswith("combinado")]
+    cb = dados["cobertura_bandas"]
+    leitura = (
+        f"Com verdade = modelo: Brier até o horizonte {b.loc['até o horizonte', 'brier']:.4f} (referência "
+        f"{b.loc['até o horizonte', 'brier_referencia']:.4f}); C-index {dsc.valor.iloc[0]:.3f}; AUC a 10 e 20 anos "
+        f"{dsc.valor.iloc[1]:.3f} e {dsc.valor.iloc[2]:.3f}; cobertura média dos intervalos do Monte Carlo "
+        f"{cob_mc.cobertura_p_manifesta.mean():.1%} (esperado 95 %); cobertura média das bandas de F(t) "
+        f"{cb[cb.verdade == modelo].cobertura_da_banda.mean():.1%} "
+        f"({cb[cb.verdade == modelo].cobertura_sem_ruido_amostral.mean():.1%} sem o ruído amostral do F empírico)"
+        + (
+            f"; erro absoluto médio da idade de início {comb.erro_absoluto_medio_anos.iloc[0]:.1f} anos para um piso "
+            f"teórico de {comb.piso_teorico_anos.iloc[0]:.1f}"
+            if len(comb)
+            else ""
+        )
+        + ". "
+        + " ".join(
+            f"Com a {v.rotulo}: Brier até o horizonte "
+            f"{dados['brier'][(dados['brier'].verdade == v.rotulo) & (dados['brier'].previsao == 'até o horizonte')].brier.iloc[0]:.4f} "
+            f"e cobertura média das bandas {cb[cb.verdade == v.rotulo].cobertura_da_banda.mean():.1%}."
+            for v in verd[1:]
+        )
+    )
+    secoes = [
+        ("Verificação com famílias sintéticas de desfecho conhecido", avaliacao.ENQUADRAMENTO + " " + leitura),
+        (
+            "Como ler as métricas de verificação",
+            "Calibração (Tabelas 13 e 14, Figura 10): o risco previsto bate com a fração observada quando a verdade é o "
+            "modelo e se afasta quando não é. Discriminação (Tabela 15): só existe porque a coorte mistura cenários, "
+            "sexos e idades; dentro de um só cenário todos têm a mesma previsão. Idade de início (Tabela 16): o erro é "
+            "comparado com o piso teórico, que nenhum modelo vence. Cobertura (Tabelas 17 e 17b): intervalos do Monte "
+            "Carlo e bandas de F(t). Divergência (Tabela 18): distância entre curvas empíricas e teóricas. Robustez "
+            "(Tabela 19, Figura 11): efeito de erros controlados no VCF, com o que o artefato declara. Tornado "
+            "(Tabela 20, Figura 12): um parâmetro por vez, sempre dentro de faixa publicada.",
+        ),
+    ]
+    metadados = {
+        "enquadramento": avaliacao.ENQUADRAMENTO,
+        "mundos": mundos,
+        "pessoas_por_estrato": por_estrato,
+        "estratos": len(estratos),
+        "seed_coorte": seed_coorte,
+        "seed_previsoes": seed,
+        "idades_atuais": list(avaliacao.IDADES_COORTE),
+        "verdades": [{"nome": v.nome, "rotulo": v.rotulo, "descricao": v.descricao} for v in verd],
+        "cenarios_na_coorte": list(casos),
+        "fora_do_tornado": fora,
+    }
+    return {"tabelas": tabelas, "figuras": figuras, "secoes": secoes, "dados": dados, "metadados": metadados}
 
 
 def tudo(
@@ -708,6 +1187,10 @@ def tudo(
     idade_atual: float | None = 30.0,
     base_clinvar=None,
     comparar_cox: bool = True,
+    metricas: bool = True,
+    mundos: int = 200,
+    por_estrato: int = 10,
+    seed_coorte: int | None = None,
 ) -> dict:
     """Gera os cenários, executa cada um para os dois sexos (com o laudo do C9orf72 de cada cenário), avalia e escreve o índice `README.md` em `saida`."""
     saida = Path(saida)
@@ -752,6 +1235,7 @@ def tudo(
                         "p_portador": l.p_portador_exato,
                         "p_manifesta": l.p_manifesta_exato,
                         "ic95": f"{l.p_manifesta_q025:.3f}–{l.p_manifesta_q975:.3f}",
+                        COLUNA_SEM_LIMITE: l.p_manifesta_sem_limite,
                         "idade_mediana": l.idade_mediana_exata,
                     }
                 )
@@ -766,6 +1250,7 @@ def tudo(
                     "p_portador": cb["p_portador_qualquer_exato"],
                     "p_manifesta": cb["p_manifesta_qualquer_exato"],
                     "ic95": f"{cb['p_manifesta_qualquer_q025']:.3f}–{cb['p_manifesta_qualquer_q975']:.3f}",
+                    COLUNA_SEM_LIMITE: cb["p_manifesta_qualquer_sem_limite"],
                     "idade_mediana": cb["idade_mediana_primeiro_inicio"],
                 }
             )
@@ -779,7 +1264,7 @@ def tudo(
         cons,
         saida / "tabelas",
         "tabela_03_consolidada",
-        "Tabela 3 (consolidada) — Probabilidade de transmissão, risco vitalício de manifestação (IC 95%) e idade mediana de início por cenário, lócus e sexo do descendente",
+        "Tabela 3 (consolidada) — Probabilidade de transmissão, risco vitalício de manifestação até o horizonte (IC 95%), fração que manifesta em algum momento (sem limite de idade) e idade mediana de início por cenário, lócus e sexo do descendente",
     )
     av = avaliar(
         saida / "sinteticos",
@@ -790,6 +1275,10 @@ def tudo(
         config=config,
         n_coerencia=n,
         base_clinvar=base_clinvar,
+        metricas=metricas,
+        mundos=mundos,
+        por_estrato=por_estrato,
+        seed_coorte=seed_coorte,
     )
     fontes = anotacao.tabela_anotacao(base_real=base_clinvar).attrs.get("fontes", {})
     com_figura = [
@@ -821,7 +1310,7 @@ def tudo(
         "",
         "## Avaliação transversal",
         "",
-        "- [`avaliacao/relatorio.md`](avaliacao/relatorio.md) (Tabelas 5 a 9; Figuras 2, 3 e 7)",
+        "- [`avaliacao/relatorio.md`](avaliacao/relatorio.md) (Tabelas 5 a 9 e 12 a 20; Figuras 2, 3, 7 e 10 a 12)",
         "",
         "## Tabela consolidada",
         "",

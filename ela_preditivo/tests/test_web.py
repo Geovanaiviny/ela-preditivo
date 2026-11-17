@@ -22,7 +22,7 @@ from ela_preditivo.web.api import COOKIE_SESSAO, criar_app, exigencia_da_rota, r
 from ela_preditivo.web.config import Configuracao, gerar_chave
 from ela_preditivo.web import pacientes as mod_pacientes
 from ela_preditivo.web import pesquisa as mod_pesquisa
-from ela_preditivo.web.modelos import AnalisePaciente, Consentimento, Paciente, Sessao, Usuario
+from ela_preditivo.web.modelos import AnalisePaciente, Consentimento, Paciente, Parente, Sessao, Usuario
 from ela_preditivo.web.seguranca import Cifra, hash_token, mascarar_cpf, validar_cpf
 
 DIR_STATIC = Path(__file__).resolve().parents[1] / "src" / "ela_preditivo" / "web" / "static"
@@ -375,8 +375,10 @@ def test_arquivo_do_banco_nao_contem_nome_de_paciente_em_claro(plataforma, medic
 
 
 def test_consentimento_nunca_pre_marcado_revogavel_e_menor_exige_responsavel(plataforma, medico):
+    novo = medico.post("/api/pacientes", json=registro_pessoa("Pessoa Menor de Teste", "2012-05-05", "F", "MENOR-1"))
+    assert novo.status_code == 201, novo.text
     pacientes = medico.get("/api/pacientes").json()["pacientes"]
-    menor = next(p for p in pacientes if p["nome"].startswith("Elisa"))
+    menor = next(p for p in pacientes if p["id"] == novo.json()["id"])
     adulto = next(p for p in pacientes if p["nome"].startswith("Ana"))
     casal = next(p for p in pacientes if p["nome"].startswith("Fernanda"))
     ficha = medico.get(f"/api/pacientes/{menor['id']}").json()
@@ -452,7 +454,7 @@ def test_consentimento_nunca_pre_marcado_revogavel_e_menor_exige_responsavel(pla
     with plataforma["app"].state.sessoes() as bd:
         p = bd.get(Paciente, menor["id"])
         assert p.codigo_pesquisa and len(p.codigo_pesquisa) == 32 and p.codigo_pesquisa not in r.text
-        for dado in (menor["nome"], "DEMO-0005", "2010-09-08"):
+        for dado in (menor["nome"], "MENOR-1", "2012-05-05"):
             assert dado not in p.codigo_pesquisa
     # duplicado ativo é recusado; revogar na mesma tela, com efeito imediato
     r = medico.post(
@@ -651,6 +653,7 @@ def test_nenhum_dado_pessoal_em_url_nem_no_armazenamento_do_navegador(plataforma
                 "paciente_id",
                 "consentimento_id",
                 "descendente_id",
+                "parente_id",
                 "papel",
                 "ident",
                 "nome",
@@ -767,6 +770,7 @@ def test_auditoria_registra_cada_acao_sem_nome_e_a_verificacao_detecta_adulterac
             "cox": "0",
             "paciente_id": str(p["id"]),
             "descendente_id": str(p["descendentes"][0]["id"]),
+            "confirma_assintomatico": "1",
         },
     )
     assert r.status_code == 201, r.text
@@ -954,6 +958,7 @@ def test_analise_por_upload_e_por_cenario_so_para_quem_executou(plataforma, medi
                 "sexo": "M",
                 "idade_atual": "40",
                 "c9_antecipacao": "2",
+                "confirma_assintomatico": "1",
             },
             files={"vcf_mae": ("Ana Ficticia Lima.vcf", fm, "text/plain"), "vcf_pai": ("pai.vcf", fp, "text/plain")},
         )
@@ -1015,6 +1020,7 @@ def test_analise_por_upload_e_por_cenario_so_para_quem_executou(plataforma, medi
             "descendente_id": str(d["id"]),
             "sexo": "M",
             "idade_atual": "99",
+            "confirma_assintomatico": "1",
         },
     )
     assert r.status_code == 201, r.text
@@ -1200,7 +1206,7 @@ def test_analise_pela_ficha_usa_anexos_grava_resumo_e_declara_suposicao(platafor
     pacientes = medico.get("/api/pacientes").json()["pacientes"]
     ana = next(p for p in pacientes if p["nome"].startswith("Ana"))
     did = ana["descendentes"][0]["id"]
-    base = {"n": "300", "motor": "numpy", "cox": "0", "paciente_id": str(ana["id"])}
+    base = {"n": "300", "motor": "numpy", "cox": "0", "paciente_id": str(ana["id"]), "confirma_assintomatico": "1"}
     # VCFs dos anexos, laudo da ficha, sexo e idade do descendente; o formulário não pode sobrepor
     r = medico.post(
         "/api/analises", data={**base, "descendente_id": str(did), "sexo": "M", "idade_atual": "5", "c9orf72_mae": "45"}
@@ -1221,14 +1227,25 @@ def test_analise_pela_ficha_usa_anexos_grava_resumo_e_declara_suposicao(platafor
     }
     assert res["entrada"]["laudo_c9orf72"] == (laudos or None) and res["c9orf72_indeterminado"] is (len(laudos) < 2)
     assert res["entrada"]["suposicoes"] == {} and res["entrada"]["resumo_id"]
-    pr = res["principais"]
-    assert pr["transmissao"] == 0.5 and 0 < pr["vida"]["q025"] < pr["vida"]["valor"] < pr["vida"]["q975"] < 1
-    assert set(pr["F"]) == {"50", "60", "70"} and pr["inicio"]["q25"] < pr["inicio"]["q75"]
+    # pessoa com idade: os três indicadores valem a partir dessa idade, sem sintomas (e não desde o nascimento)
+    pr, idade_ana = res["principais"], ana["descendentes"][0]["idade"]
+    assert pr["condicionado"] is True and pr["idade_referencia"] == idade_ana and pr["F"] == {}
+    assert 0.45 < pr["transmissao"] < 0.5 and 0 < pr["vida"]["q025"] < pr["vida"]["valor"] < pr["vida"]["q975"] < 1
+    assert set(pr["janelas"]) == {"10", "20"}
+    assert 0 < pr["janelas"]["10"]["valor"] < pr["janelas"]["20"]["valor"] < pr["vida"]["valor"]
+    assert idade_ana < pr["inicio"]["q25"] < pr["inicio"]["mediana"] < pr["inicio"]["q75"]
+    assert res["entrada"]["assintomatico_confirmado"] is True and res["entrada"]["assintomatico_confirmado_em"]
     assert ana["nome"] not in r.text and "Maria" not in res["relatorio_md"]
     ficha = medico.get(f"/api/pacientes/{ana['id']}").json()
-    assert (
-        ficha["n_analises"] >= 1 and "SOD1" in ficha["genes_de_risco"] and ficha["ultima_analise"]["p_portador"] == 0.5
-    )
+    ult = ficha["ultima_analise"]
+    assert ficha["n_analises"] >= 1 and "SOD1" in ficha["genes_de_risco"]
+    assert ult["condicionado"] is True and ult["idade_referencia"] == idade_ana
+    assert ult["p_portador"] == pr["transmissao"] and ult["p_manifesta"] == pr["vida"]["valor"]
+    assert ult["idade_mediana"] == pr["inicio"]["mediana"] and ult["assintomatico_confirmado"] is True
+    # sem a confirmação de que a pessoa não tem sintomas, a análise não roda
+    sem_conf = {k: v for k, v in base.items() if k != "confirma_assintomatico"}
+    r_sem = medico.post("/api/analises", data={**sem_conf, "descendente_id": str(did)})
+    assert r_sem.status_code == 422 and "confirma_assintomatico" in r_sem.json()["campos"]
     assert ficha["ultima_analise"]["id"] == res["entrada"]["resumo_id"]  # outros testes do módulo já analisaram Ana
     assert (
         ficha["analises"][-1]["resumo"]["loci"][0]["gene"] == "SOD1"
@@ -1237,6 +1254,10 @@ def test_analise_pela_ficha_usa_anexos_grava_resumo_e_declara_suposicao(platafor
     with plataforma["app"].state.sessoes() as bd:
         a = bd.execute(select(AnalisePaciente).where(AnalisePaciente.paciente_id == ana["id"])).scalars().first()
         assert a and b"SOD1" not in a.resumo_cifrado.encode() and a.vcf_hash_mae and a.descendente_id == did
+        ultima = (
+            bd.execute(select(AnalisePaciente).where(AnalisePaciente.id == res["entrada"]["resumo_id"])).scalars().one()
+        )
+        assert ultima.assintomatico_confirmado is True and ultima.assintomatico_confirmado_em is not None
     # genitor sem VCF: exige a suposição; os dois sem VCF: não roda; a suposição fica no resultado e no resumo
     casal = next(p for p in pacientes if p["nome"].startswith("Fernanda"))
     r = medico.post("/api/analises", data={**base, "paciente_id": str(casal["id"])})
@@ -1256,6 +1277,9 @@ def test_analise_pela_ficha_usa_anexos_grava_resumo_e_declara_suposicao(platafor
     )
     assert res["entrada"]["laudo_c9orf72"] == {"mae": 45, "pai": cenarios.LAUDO_NORMAL}
     assert res["principais"]["transmissao"] == 0.5 and not res["c9orf72_indeterminado"]
+    # futuro filho: indicadores desde o nascimento, sem pessoa a confirmar
+    assert res["principais"]["condicionado"] is False and set(res["principais"]["F"]) == {"50", "60", "70"}
+    assert res["entrada"]["assintomatico_confirmado"] is None
     assert [x["variante"] for x in res["resumo"]] == ["C9orf72 expansão GGGGCC"] and res["suposicoes_texto"][
         "nao_portador"
     ]
@@ -1278,7 +1302,9 @@ def test_analise_pela_ficha_usa_anexos_grava_resumo_e_declara_suposicao(platafor
         assert r.json()["entrada"]["sexo"] == d["sexo"]
     ficha = medico.get(f"/api/pacientes/{fam['id']}").json()
     assert [c["descendente_nome"] for c in ficha["comparativo"]] == [d["nome"] for d in fam["descendentes"]]
-    assert all(c["p_portador"] == 0.25 for c in ficha["comparativo"])  # SOD1 recessivo, pais heterozigotos
+    # SOD1 recessivo, pais heterozigotos: 0,25 ao nascer; menor para quem chegou à idade atual sem sintomas
+    assert all(c["condicionado"] and 0.1 < c["p_portador"] < 0.25 for c in ficha["comparativo"])
+    assert [c["idade_referencia"] for c in ficha["comparativo"]] == [d["idade"] for d in fam["descendentes"]]
     # cenário de exemplo com registro só em demonstração
     d2 = Path(str(plataforma["cfg"].bd.parent)) / "prod"
     cfg2 = Configuracao(chave=plataforma["cfg"].chave, bd=d2 / "bd.sqlite3", dir_vcfs=d2 / "vcfs", demonstracao=False)
@@ -1417,6 +1443,7 @@ def test_pesquisador_ve_so_casos_liberados_pseudonimizados_com_filtros_totais_e_
             "cox": "0",
             "paciente_id": str(carla["id"]),
             "descendente_id": str(carla["descendentes"][0]["id"]),
+            "confirma_assintomatico": "1",
         },
     )
     assert r.status_code == 201, r.text
@@ -1518,7 +1545,16 @@ def test_ajuda_publica_descreve_os_tres_casos_e_nenhum_aviso_experimental_na_int
     assert [c["tipo"] for c in a["casos"]] == ["PESSOA", "CASAL", "FAMILIA"] and a["casos"][1]["rotulo"].startswith(
         "Caso 2"
     )
-    assert len(a["fora_do_escopo"]) == 3 and len(a["usos"]) == 3 and a["encarregado"]["nome"] and a["fluxo"]
+    assert len(a["fora_do_escopo"]) == 6 and len(a["usos"]) == 3 and a["encarregado"]["nome"] and a["fluxo"]
+    # fora do escopo declarado: sintomáticos, números agregados da família, fenótipo de parente sem genótipo e
+    # ancestralidade; o genótipo de parentes entra, e a independência entre genes continua assumida e declarada
+    fora = " ".join(a["fora_do_escopo"]).lower()
+    for termo in ("sintomátic", "pelo menos um filho", "sem genótipo", "ancestralidade"):
+        assert termo in fora, termo
+    assert "parentes" in a["limitacao"] and "independência entre os genes" in a["limitacao"]
+    assert "parente testado" in " ".join(a["fluxo"]) and "não apresenta sintomas" in " ".join(a["fluxo"])
+    priv = anon.get("/api/privacidade").text
+    assert "parente" in priv and "sem sintomas" in priv and "sem nenhum dado clínico" in priv
     s = anon.get("/api/sistema").json()
     assert s["marca"] == "EloSense" and s["marca_subtitulo"]
     assert s["ambiente"] == "homologacao" and s["demonstracao"] is True and "homologação" in s["selo_demonstracao"]
@@ -1638,7 +1674,14 @@ def test_documentos_cifrados_e_resultados_completos_guardados(plataforma, medico
     # resultado completo guardado: reabrir, figura, pacote; lista de análises; 404 para outro médico
     r = medico.post(
         "/api/analises",
-        data={"n": "300", "motor": "numpy", "cox": "0", "paciente_id": str(pid), "descendente_id": str(did)},
+        data={
+            "n": "300",
+            "motor": "numpy",
+            "cox": "0",
+            "paciente_id": str(pid),
+            "descendente_id": str(did),
+            "confirma_assintomatico": "1",
+        },
     )
     assert r.status_code == 201, r.text
     arm = r.json()["armazenada"]
@@ -1683,6 +1726,7 @@ def test_documentos_cifrados_e_resultados_completos_guardados(plataforma, medico
             "cox": "0",
             "paciente_id": str(pid2),
             "descendente_id": str(r.json()["descendentes"][0]["id"]),
+            "confirma_assintomatico": "1",
         },
     )
     assert r.status_code == 201, r.text
@@ -1728,7 +1772,7 @@ def test_auditoria_sob_pedidos_simultaneos(plataforma, medico):
 def test_genitor_sem_laudo_deixa_o_c9orf72_indeterminado_na_analise(plataforma, medico):
     """Na plataforma, genitor com VCF e sem laudo do C9orf72 → lócus descartado, resultado parcial declarado;
     com o laudo normal dos dois registrado, o lócus volta ao cálculo."""
-    base = {"n": "300", "motor": "numpy", "cox": "0"}
+    base = {"n": "300", "motor": "numpy", "cox": "0", "confirma_assintomatico": "1"}
     sem = medico.post("/api/pacientes", json=registro_pessoa("Pessoa Sem Laudo", "1990-05-05", "F", "SL-1"))
     assert sem.status_code == 201, sem.text
     pid, did = sem.json()["id"], sem.json()["descendentes"][0]["id"]
@@ -1763,3 +1807,415 @@ def test_genitor_sem_laudo_deixa_o_c9orf72_indeterminado_na_analise(plataforma, 
     assert r.status_code == 201, r.text
     assert r.json()["c9orf72_indeterminado"] is False and r.json()["metadados"]["loci_descartados"] == []
     assert r.json()["entrada"]["laudo_c9orf72"] == {"mae": cenarios.LAUDO_NORMAL, "pai": cenarios.LAUDO_NORMAL}
+
+
+def test_indicadores_condicionados_confirmacao_e_horizonte_pela_api(plataforma, medico, pesquisador):
+    """Análise de pessoa com idade exige a confirmação de assintomático e devolve os três indicadores condicionados;
+    sem idade (futuro filho) valem desde o nascimento; "risco vitalício" é o mesmo número em toda parte."""
+    base = {"modo": "cenario", "n": "400", "motor": "numpy", "cox": "0"}
+    # cenário 1, mulher de 55 anos sem sintomas: 39,3 % de chance de portar e 11,3 % de risco daqui em diante
+    r = medico.post("/api/analises", data={**base, "cenario": "1", "sexo": "F", "idade_atual": "55"})
+    assert r.status_code == 422 and "confirma_assintomatico" in r.json()["campos"]
+    r = medico.post(
+        "/api/analises", data={**base, "cenario": "1", "sexo": "F", "idade_atual": "55", "confirma_assintomatico": "1"}
+    )
+    assert r.status_code == 201, r.text
+    res = r.json()
+    pr = res["principais"]
+    assert pr["condicionado"] is True and pr["idade_referencia"] == 55 and pr["horizonte"] == 90
+    assert pr["transmissao"] == pytest.approx(0.3930, abs=5e-5) and pr["vida"]["valor"] == pytest.approx(
+        0.1130, abs=5e-5
+    )
+    assert set(pr["janelas"]) == {"10", "20"} and pr["F"] == {} and 55 < pr["inicio"]["mediana"] < 90
+    assert res["metadados"]["indicadores_condicionados"]["idade_referencia"] == 55
+    assert res["entrada"]["assintomatico_confirmado"] is True
+    # o relatório traz os mesmos números (49,... não: 39,3 % e 11,3 %)
+    assert "para 39.3%" in res["relatorio_md"] and "é 11.3%" in res["relatorio_md"]
+    t4 = next(t for t in res["tabelas"] if t["nome"] == "tabela_04_risco_condicional")
+    linha = next(l for l in t4["linhas"] if l["idade_atual"] == 55)
+    assert linha["p_portador_condicional"] == pytest.approx(pr["transmissao"])
+    assert linha["risco_vitalicio"] == pytest.approx(pr["vida"]["valor"])
+    # sem idade: futuro filho, sem confirmação, indicadores desde o nascimento
+    r = medico.post("/api/analises", data={**base, "cenario": "5", "sexo": "F"})
+    assert r.status_code == 201, r.text
+    res5 = r.json()
+    pr5 = res5["principais"]
+    assert pr5["condicionado"] is False and pr5["idade_referencia"] is None and set(pr5["F"]) == {"50", "60", "70"}
+    assert res5["entrada"]["assintomatico_confirmado"] is None
+    # FUS no cenário 5: 0,0918 na Tabela 3 e na Tabela 4 (idade 0); o indicador combinado bate com as duas tabelas
+    t3 = next(t for t in res5["tabelas"] if t["nome"] == "tabela_03_risco_vitalicio")
+    t4 = next(t for t in res5["tabelas"] if t["nome"] == "tabela_04_risco_condicional")
+    col = "fração que manifesta em algum momento (sem limite de idade)"
+    fus3 = next(l for l in t3["linhas"] if l["variante"].startswith("FUS"))
+    fus4 = next(l for l in t4["linhas"] if l["unidade"].startswith("FUS") and l["idade_atual"] == 0)
+    assert fus3["p_manifesta_exato"] == pytest.approx(0.0918, abs=5e-5) and fus3[col] == pytest.approx(0.0960, abs=5e-5)
+    assert fus4["risco_vitalicio"] == pytest.approx(fus3["p_manifesta_exato"], abs=1e-9)
+    comb3 = next(l for l in t3["linhas"] if l["variante"] == "qualquer lócus")
+    comb4 = next(l for l in t4["linhas"] if l["unidade"] == "qualquer lócus" and l["idade_atual"] == 0)
+    assert pr5["vida"]["valor"] == pytest.approx(comb3["p_manifesta_exato"]) == pytest.approx(comb4["risco_vitalicio"])
+    assert col in t3["colunas"]
+    # resumo guardado na ficha, lista de análises e painel usam os valores condicionados, com a idade de referência
+    ana = next(p for p in medico.get("/api/pacientes").json()["pacientes"] if p["nome"].startswith("Ana"))
+    did = ana["descendentes"][0]["id"]
+    r = medico.post(
+        "/api/analises",
+        data={
+            "n": "400",
+            "motor": "numpy",
+            "cox": "0",
+            "paciente_id": str(ana["id"]),
+            "descendente_id": str(did),
+            "confirma_assintomatico": "1",
+        },
+    )
+    assert r.status_code == 201, r.text
+    pra, aid = r.json()["principais"], r.json()["entrada"]["resumo_id"]
+    idade = ana["descendentes"][0]["idade"]
+    ficha = medico.get(f"/api/pacientes/{ana['id']}").json()
+    guardado = next(a for a in ficha["analises"] if a["id"] == aid)
+    assert guardado["assintomatico_confirmado"] is True and guardado["assintomatico_confirmado_em"]
+    resumo = guardado["resumo"]
+    assert resumo["condicionado"] is True and resumo["idade_referencia"] == idade
+    assert resumo["transmissao"] == pra["transmissao"] and resumo["vida"] == pra["vida"]
+    assert resumo["janelas"] == pra["janelas"] and resumo["inicio"] == pra["inicio"]
+    locus = resumo["loci"][0]
+    assert locus["p_portador"] == 0.5 and locus["p_portador_condicional"] == pytest.approx(pra["transmissao"])
+    assert locus["risco_residual"] == pytest.approx(pra["vida"]["valor"])
+    lista = medico.get("/api/pacientes/analises").json()["analises"]
+    item = next(a for a in lista if a["id"] == aid)
+    assert item["condicionado"] is True and item["idade_referencia"] == idade
+    assert item["p_portador"] == pra["transmissao"] and item["p_manifesta"] == pra["vida"]["valor"]
+    painel = medico.get("/api/pacientes/painel").json()
+    recente = next(a for a in painel["analises_recentes"] if a["id"] == aid)
+    assert recente["idade_referencia"] == idade and recente["p_manifesta"] == pra["vida"]["valor"]
+    # o pesquisador recebe a referência só por década, nunca a idade exata; o CSV traz os valores condicionados
+    casos = pesquisador.get("/api/pesquisa/casos").json()["casos"]
+    visto = [d["analise"] for c in casos for d in c["descendentes"] if d["analise"] and d["analise"]["condicionado"]]
+    assert visto and all("idade_referencia" not in a and "idade_na_analise" not in a for a in visto)
+    assert all(re.fullmatch(r"\d+–\d+|100\+", a["faixa_idade_referencia"]) for a in visto)
+    csv = pesquisador.post("/api/pesquisa/casos/exportar", json={}).text.lstrip("\ufeff").splitlines()
+    cab = csv[0].split(";")
+    assert {"faixa_idade_referencia", "risco_10_anos", "risco_20_anos", "p_manifesta_vida"} <= set(cab)
+    i_ref, i_10 = cab.index("faixa_idade_referencia"), cab.index("risco_10_anos")
+    assert any(l.split(";")[i_ref] and l.split(";")[i_10] for l in csv[1:])
+
+
+def test_demonstracao_nao_tem_menor_de_idade():
+    hoje = _dt.date.today()
+    for r in demo.REGISTROS_FICTICIOS:
+        for d in r["descendentes"]:
+            nasc = _dt.date.fromisoformat(d["nascimento"])
+            idade = hoje.year - nasc.year - ((hoje.month, hoje.day) < (nasc.month, nasc.day))
+            assert idade >= 18, d["nome"]
+        assert "enor de idade" not in r["observacoes"]
+
+
+# ---------------------------------------------------------------------------
+# Genitor sem exame inferido por parentes: situação clínica, parentes testados, filho já testado, LGPD
+# ---------------------------------------------------------------------------
+def anexar_parente(
+    cliente, pid: int, papel: str, parentesco: str, arquivo: str | None = None, laudo: str | None = None
+):
+    dados = {"parentesco": parentesco}
+    if laudo is not None:
+        dados["laudo_c9orf72"] = laudo
+    if arquivo is None:
+        return cliente.post(f"/api/pacientes/{pid}/genitores/{papel}/parentes", data=dados)
+    with open(SINT / arquivo, "rb") as f:
+        return cliente.post(
+            f"/api/pacientes/{pid}/genitores/{papel}/parentes",
+            data=dados,
+            files={"vcf": ("Nome Do Parente.vcf", f, "text/plain")},
+        )
+
+
+def test_demonstracao_traz_genitor_inferido_por_parentes_e_filho_testado(plataforma, medico):
+    pacientes = medico.get("/api/pacientes").json()["pacientes"]
+    heitor = next(p for p in pacientes if p["nome"].startswith("Heitor"))
+    assert heitor["genitores_inferidos"] == ["PAI"] and heitor["pode_analisar"] and heitor["n_parentes"] == 1
+    ficha = medico.get(f"/api/pacientes/{heitor['id']}").json()
+    pai = ficha["genitores"]["PAI"]
+    assert pai["vcf"]["presente"] is False and pai["inferido_por_parentes"] is True
+    assert pai["situacao_clinica"] == "FALECIDO_SEM_ELA" and pai["idade_situacao"] == 60 and pai["situacao_rotulo"]
+    assert [(x["parentesco"], x["rotulo"], x["vcf"]["presente"]) for x in pai["parentes"]] == [
+        ("MAE_DO_GENITOR", "Avó paterna", True)
+    ]
+    assert "PARENTE" in [e["titular"] for e in ficha["pesquisa"]["exigidos"]]  # o parente também é titular
+    base = {"n": "500", "motor": "numpy", "cox": "0", "confirma_assintomatico": "1"}
+    did = ficha["descendentes"][0]["id"]
+    r = medico.post("/api/analises", data={**base, "paciente_id": str(heitor["id"]), "descendente_id": str(did)})
+    assert r.status_code == 201, r.text
+    res = r.json()
+    # avó heterozigota, pai falecido sem ELA aos 60: 17,92 % de chance de o neto portar, ao nascer
+    assert res["resumo"][0]["p_portador_exato"] == pytest.approx(0.1792, abs=5e-5)
+    assert res["resumo"][0]["p_manifesta_exato"] == pytest.approx(0.0935, abs=1e-4)
+    assert res["principais"]["condicionado"] and res["principais"]["transmissao"] < 0.1792  # 38 anos sem sintomas
+    inf = res["parentes"]
+    assert inf["genitores"]["pai"]["situacao"] == "falecido_sem_ela" and inf["penetrancia_compartilhada"] is True
+    locus = inf["loci_inferidos"][0]
+    assert locus["p_genitor_portador_genotipos"] == pytest.approx(0.5)
+    assert locus["p_genitor_portador_condicionada"] == pytest.approx(0.3585, abs=5e-4)
+    assert inf["suposicoes"] and res["texto_inferencia"] and res["limite_inferior"] is False
+    assert res["aviso_parceiro_inferido"] is None and res["entrada"]["parentes"]["PAI"]["inferido"] is True
+    assert "tabela_01d_genitor_inferido" in {t["nome"] for t in res["tabelas"]}
+    assert "Genitor inferido por parentes" in {s["titulo"] for s in res["secoes"]}
+    assert res["vetor"][0]["genitor_inferido"] == "pai" and res["vetor"][0]["dosagem_pai"] is None
+    assert res["entrada"]["suposicoes"] == {}  # nada foi assumido: a dosagem do pai é inferida
+    for nome in ("Heitor", "Otávio", "Tereza", "DEMO-0007"):
+        assert nome not in r.text, nome
+    pasta = plataforma["app"].state.analises.obter(
+        res["id"], medico.get("/api/contas/quem-sou-eu").json()["usuario"]["id"]
+    )["pasta"]
+    assert not list(pasta.glob("*.vcf")) and not list(pasta.glob("*.vcf.gz"))  # VCFs dos parentes também são apagados
+    guardado = medico.get(f"/api/pacientes/{heitor['id']}").json()["analises"][-1]["resumo"]
+    assert guardado["parentes"]["loci_inferidos"] and guardado["parentes"]["pessoas"][0] == {
+        "parente": "avó paterna",
+        "com_vcf": True,
+        "com_laudo": True,
+    }
+    # família com filho já testado: ele é evidência e sai da lista de pessoas em risco
+    fam = next(p for p in pacientes if p["nome"] == "Família Fictícia Teles")
+    testada, jonas = fam["descendentes"]
+    assert testada["testado"] is True and jonas["testado"] is False and fam["genitores_inferidos"] == ["PAI"]
+    r = medico.post("/api/analises", data={**base, "paciente_id": str(fam["id"]), "descendente_id": str(testada["id"])})
+    assert r.status_code == 422 and "já fez o teste" in r.json()["campos"]["descendente_id"]
+    r = medico.post("/api/analises", data={**base, "paciente_id": str(fam["id"]), "descendente_id": str(jonas["id"])})
+    assert r.status_code == 201, r.text
+    locus = r.json()["parentes"]["loci_inferidos"][0]
+    assert locus["p_genitor_portador_genotipos"] == pytest.approx(1 / 3)  # avó portadora; mãe e filha negativas
+    assert "filho(a) já testado(a): 0" in locus["parentes_e_dosagens"]
+    assert r.json()["entrada"]["parentes"]["filhos_testados"] == 1
+    assert any("suposta herdada" in s for s in r.json()["parentes"]["suposicoes"])
+
+
+def test_parentes_situacao_clinica_e_filho_testado_pela_api(plataforma, medico, pesquisador, admin):
+    normal = str(cenarios.LAUDO_NORMAL)
+    corpo = registro_pessoa(
+        "Pessoa Com Avó Testada",
+        "1986-07-07",
+        "F",
+        "PAR-1",
+        mae=genitor("Mãe Testada Par", "1960-02-02", normal),
+        pai=genitor("Pai Sem Exame Par", "1958-03-03"),
+    )
+    r = medico.post("/api/pacientes", json=corpo)
+    assert r.status_code == 201, r.text
+    pid, did = r.json()["id"], r.json()["descendentes"][0]["id"]
+    assert r.json()["pode_analisar"] is False and r.json()["genitores"]["PAI"]["parentes"] == []
+    assert anexar_cenario(medico, pid, "MAE", 1).status_code == 201  # mãe testada, sem a variante
+    base = {"n": "500", "motor": "numpy", "cox": "0", "confirma_assintomatico": "1", "paciente_id": str(pid)}
+    analisar = lambda **extra: medico.post(
+        "/api/analises", data={**base, "descendente_id": str(did), **extra}
+    )  # noqa: E731
+    r = analisar()
+    assert r.status_code == 422 and "parente testado" in r.json()["campos"]["vcf_pai"]
+    # validação do parente: parentesco, e VCF ou laudo
+    r = anexar_parente(medico, pid, "PAI", "PRIMO", "cenario_1_pai.vcf")
+    assert r.status_code == 422 and "parentesco" in r.json()["campos"]
+    r = anexar_parente(medico, pid, "PAI", "MAE_DO_GENITOR")
+    assert r.status_code == 422 and "vcf" in r.json()["campos"]
+    r = anexar_parente(medico, pid, "PAI", "MAE_DO_GENITOR", laudo="abc")
+    assert r.status_code == 422 and "laudo_c9orf72" in r.json()["campos"]
+    r = anexar_parente(medico, pid, "MAE", "MAE_DO_GENITOR", "cenario_1_pai.vcf")  # a mãe tem VCF: é observada
+    assert r.status_code == 422 and "já tem VCF" in r.json()["campos"]["parentesco"]
+    antes = len(list(plataforma["cfg"].dir_vcfs.glob("*.bin")))
+    r = anexar_parente(medico, pid, "PAI", "MAE_DO_GENITOR", "cenario_1_pai.vcf", laudo=normal)  # avó heterozigota
+    assert r.status_code == 201, r.text
+    pai = r.json()["genitores"]["PAI"]
+    assert pai["inferido_por_parentes"] is True and r.json()["pode_analisar"] is True
+    xid = pai["parentes"][0]["id"]
+    assert pai["parentes"][0]["laudo_c9orf72"] == normal and pai["parentes"][0]["vcf"]["hash_curto"]
+    assert "Nome Do Parente" not in r.text and "vcf_arquivo" not in r.text
+    arquivos_vcf = list(plataforma["cfg"].dir_vcfs.glob("*.bin"))
+    assert len(arquivos_vcf) == antes + 1 and all(b"##fileformat" not in a.read_bytes() for a in arquivos_vcf)
+    assert anexar_parente(medico, pid, "PAI", "MAE_DO_GENITOR", "cenario_1_pai.vcf").status_code == 422  # já existe
+    # a situação clínica do genitor sem exame é obrigatória quando há parente
+    r = analisar()
+    assert r.status_code == 422 and "situacao_pai" in r.json()["campos"]
+    sit = f"/api/pacientes/{pid}/genitores/PAI/situacao"
+    assert medico.put(sit, json={"situacao": "DOENTE"}).status_code == 422
+    assert "idade" in medico.put(sit, json={"situacao": "FALECIDO_SEM_ELA"}).json()["campos"]
+    r = medico.put(sit, json={"situacao": "VIVO_ASSINTOMATICO"})  # vivo: idade pela data de nascimento
+    assert (
+        r.status_code == 200 and r.json()["genitores"]["PAI"]["idade_situacao"] == r.json()["genitores"]["PAI"]["idade"]
+    )
+    r = medico.put(sit, json={"situacao": "FALECIDO_SEM_ELA", "idade": 60})
+    assert r.status_code == 200 and r.json()["genitores"]["PAI"]["situacao_clinica"] == "FALECIDO_SEM_ELA"
+    with plataforma["app"].state.sessoes() as bd:
+        g = bd.get(Paciente, pid).genitor("PAI")
+        assert "FALECIDO" not in g.situacao_clinica_cifrada  # dado de saúde cifrado em repouso
+    r = analisar()
+    assert r.status_code == 201, r.text
+    res = r.json()
+    assert res["resumo"][0]["p_portador_exato"] == pytest.approx(0.1792, abs=5e-5) and not res["c9orf72_indeterminado"]
+    assert (
+        res["metadados"]["parentes"]["genitores"]["pai"]["idade"] == 60 and res["metadados"]["sorteios_rejeitados"] > 0
+    )
+    # Hardy-Weinberg pedido, mas a tabela curada não tem frequência: volta à suposição de não portador, registrada
+    r = analisar(prior_avos="hardy_weinberg")
+    assert r.status_code == 201 and r.json()["entrada"]["prior_avos"] == "hardy_weinberg"
+    assert r.json()["parentes"]["loci_inferidos"][0]["prior_dos_avos_sem_exame"] == "suposto não portador"
+    assert analisar(prior_avos="uniforme").status_code == 422
+    # genitor afetado: sem condicionamento, resultado rotulado como limite inferior
+    assert (
+        medico.put(sit, json={"situacao": "AFETADO", "idade": 55}).json()["genitores"]["PAI"]["idade_situacao"] is None
+    )
+    r = analisar()
+    assert r.status_code == 201 and r.json()["limite_inferior"] is True and r.json()["texto_limite_inferior"]
+    assert r.json()["resumo"][0]["p_portador_exato"] == pytest.approx(0.25)
+    assert medico.put(sit, json={"situacao": "FALECIDO_SEM_ELA", "idade": 60}).status_code == 200
+    assert analisar().status_code == 201  # a última análise guardada volta a ser a do pai falecido sem ELA aos 60
+    # RBAC e isolamento: só o médico dono mexe nos parentes
+    assert anexar_parente(pesquisador, pid, "PAI", "IRMAO_DO_GENITOR", "cenario_1_mae.vcf").status_code == 403
+    assert admin.put(sit, json={"situacao": "AFETADO"}).status_code == 403
+    outro = novo_medico_verificado(plataforma, admin, "medico.parentes@teste.local", CPF(108))
+    assert anexar_parente(outro, pid, "PAI", "IRMAO_DO_GENITOR", "cenario_1_mae.vcf").status_code == 404
+    assert outro.request("DELETE", f"/api/pacientes/{pid}/parentes/{xid}").status_code == 404
+    assert outro.put(sit, json={"situacao": "AFETADO"}).status_code == 404
+    # pesquisa: o parente é titular; sem o consentimento dele o caso não é liberado
+    cons = f"/api/pacientes/{pid}/consentimentos"
+    for titular, extra in (("MAE", {}), ("PAI", {}), ("DESCENDENTE", {"descendente_id": did})):
+        r = medico.post(cons, json={"titular": titular, "confirmado": True, "versao_termo": VERSAO_TERMO, **extra})
+        assert r.status_code == 201, r.text
+    assert r.json()["liberado_para_pesquisa"] is False
+    assert [e["titular"] for e in r.json()["pesquisa"]["exigidos"] if not e["consentido"]] == ["PARENTE"]
+    r = medico.post(
+        cons, json={"titular": "PARENTE", "parente_id": xid, "confirmado": True, "versao_termo": VERSAO_TERMO}
+    )
+    assert r.status_code == 422 and "nome_titular" in r.json()["campos"]
+    r = medico.post(
+        cons,
+        json={
+            "titular": "PARENTE",
+            "nome_titular": "Avó Que Consentiu",
+            "confirmado": True,
+            "versao_termo": VERSAO_TERMO,
+        },
+    )
+    assert r.status_code == 422 and "parente_id" in r.json()["campos"]
+    r = medico.post(
+        cons,
+        json={
+            "titular": "PARENTE",
+            "parente_id": xid,
+            "nome_titular": "Avó Que Consentiu",
+            "confirmado": True,
+            "versao_termo": VERSAO_TERMO,
+        },
+    )
+    assert r.status_code == 201 and r.json()["liberado_para_pesquisa"] is True
+    casos = pesquisador.get("/api/pesquisa/casos").json()["casos"]
+    caso = next(c for c in casos if c["genitores"]["PAI"]["parentes"] == ["MAE_DO_GENITOR"] and c["n_analises"])
+    assert caso["descendentes"][0]["analise"]["inferido_por_parentes"] is True
+    det = pesquisador.get(f"/api/pesquisa/casos/{caso['codigo']}").json()["descendentes"][0]["analise"]
+    assert det["parentes"]["genitores"]["pai"] == {
+        "situacao": "falecido_sem_ela",
+        "faixa_idade": "60–69",
+        "limite_inferior": False,
+    }
+    assert det["parentes"]["loci_inferidos"] and "Avó Que Consentiu" not in json.dumps(det, ensure_ascii=False)
+    # um irmão a mais, com laudo apenas; depois remoção: o arquivo cifrado e o consentimento saem juntos
+    r = anexar_parente(medico, pid, "PAI", "IRMAO_DO_GENITOR", laudo=normal)
+    assert r.status_code == 201 and len(r.json()["genitores"]["PAI"]["parentes"]) == 2
+    assert r.json()["liberado_para_pesquisa"] is False  # parente novo: falta o consentimento dele
+    yid = r.json()["genitores"]["PAI"]["parentes"][1]["id"]
+    assert medico.request("DELETE", f"/api/pacientes/{pid}/parentes/{yid}").json()["liberado_para_pesquisa"] is True
+    r = medico.request("DELETE", f"/api/pacientes/{pid}/parentes/{xid}")
+    assert (
+        r.status_code == 200
+        and r.json()["genitores"]["PAI"]["parentes"] == []
+        and r.json()["genitores_inferidos"] == []
+    )
+    assert len(list(plataforma["cfg"].dir_vcfs.glob("*.bin"))) == antes
+    with plataforma["app"].state.sessoes() as bd:
+        assert bd.execute(select(Parente).where(Parente.paciente_id == pid)).scalars().all() == []
+        assert not [c for c in bd.get(Paciente, pid).consentimentos if c.titular == "PARENTE"]
+    assert medico.request("DELETE", f"/api/pacientes/{pid}/parentes/{xid}").status_code == 404
+    assert analisar().status_code == 422
+    acoes = acoes_auditadas(plataforma)
+    assert {"parente_adicionado", "parente_removido"} <= {a["acao"] for a in acoes}
+    for a in acoes:
+        if a["acao"] in ("parente_adicionado", "parente_removido", "paciente_editado"):
+            assert "Avó" not in (a["detalhe"] or "") and "FALECIDO" not in (a["detalhe"] or "")
+    # VCF de filho já testado: só no caso de família
+    r = medico.post(f"/api/pacientes/{pid}/descendentes/{did}/vcf", files={"vcf": ("f.vcf", b"x", "text/plain")})
+    assert r.status_code == 422 and "caso 3" in r.json()["campos"]["vcf"]
+    fam = next(p for p in medico.get("/api/pacientes").json()["pacientes"] if "Ramos" in p["nome"])
+    fid = fam["descendentes"][0]["id"]
+    with open(SINT / "cenario_4_mae.vcf", "rb") as f:
+        r = medico.post(
+            f"/api/pacientes/{fam['id']}/descendentes/{fid}/vcf", files={"vcf": ("Filho.vcf", f, "text/plain")}
+        )
+    assert r.status_code == 201 and r.json()["descendentes"][0]["testado"] is True
+    r = medico.request("DELETE", f"/api/pacientes/{fam['id']}/descendentes/{fid}/vcf")
+    assert r.status_code == 200 and r.json()["descendentes"][0]["testado"] is False
+    assert medico.request("DELETE", f"/api/pacientes/{fam['id']}/descendentes/{fid}/vcf").status_code == 404
+    # opções da interface
+    op = medico.get("/api/pacientes/opcoes").json()
+    assert [s["valor"] for s in op["situacoes_genitor"]] == [
+        "VIVO_ASSINTOMATICO",
+        "FALECIDO_SEM_ELA",
+        "AFETADO",
+        "DESCONHECIDA",
+    ]
+    assert len(op["parentescos"]) == 3 and op["inferencia_por_parentes"] and op["aviso_parceiro_inferido"]
+
+
+def test_casal_com_parceiro_inferido_avisa_o_profissional(plataforma, medico):
+    corpo = {
+        "tipo": "CASAL",
+        "prontuario": "PAR-2",
+        "mae": genitor("Parceira Testada", "1992-01-01", str(cenarios.LAUDO_NORMAL)),
+        "pai": genitor("Parceiro Sem Teste", "1990-01-01"),
+        "descendentes": [],
+    }
+    r = medico.post("/api/pacientes", json=corpo)
+    assert r.status_code == 201, r.text
+    pid = r.json()["id"]
+    assert anexar_cenario(medico, pid, "MAE", 1).status_code == 201
+    r = anexar_parente(medico, pid, "PAI", "PAI_DO_GENITOR", "cenario_1_pai.vcf", laudo=str(cenarios.LAUDO_NORMAL))
+    assert r.status_code == 201 and r.json()["genitores"]["PAI"]["parentes"][0]["rotulo"] == "Pai do parceiro"
+    assert (
+        medico.put(f"/api/pacientes/{pid}/genitores/PAI/situacao", json={"situacao": "DESCONHECIDA"}).status_code == 200
+    )
+    r = medico.post(
+        "/api/analises", data={"n": "400", "motor": "numpy", "cox": "0", "paciente_id": str(pid), "sexo_filho": "F"}
+    )
+    assert r.status_code == 201, r.text
+    res = r.json()
+    assert res["aviso_parceiro_inferido"] == textos.AVISO_PARCEIRO_INFERIDO  # revela a chance de o parceiro portar
+    assert res["principais"]["condicionado"] is False and res["principais"]["transmissao"] == pytest.approx(0.25)
+    assert res["parentes"]["loci_inferidos"][0]["genitor_inferido"] == "pai"
+    # excluir o registro apaga também o VCF do parente
+    antes = len(list(plataforma["cfg"].dir_vcfs.glob("*.bin")))
+    nome = medico.get(f"/api/pacientes/{pid}").json()["nome"]
+    assert medico.request("DELETE", f"/api/pacientes/{pid}", json={"confirmacao_nome": nome}).status_code == 200
+    assert len(list(plataforma["cfg"].dir_vcfs.glob("*.bin"))) == antes - 2
+
+
+def test_tornado_e_opcao_da_analise_desligada_por_padrao(plataforma, medico):
+    dados = {"modo": "cenario", "cenario": "5", "n": "400", "motor": "numpy", "cox": "0", "sexo": "F"}
+    dados |= {"idade_atual": "40", "confirma_assintomatico": "1"}
+    r = medico.post("/api/analises", data=dados)
+    assert r.status_code == 201, r.text
+    sem = r.json()
+    assert sem["tornado"] is None and sem["entrada"]["tornado"] is False and sem["metadados"]["tornado"] is False
+    assert "tabela_20_tornado" not in {t["nome"] for t in sem["tabelas"]}
+    r = medico.post("/api/analises", data=dados | {"tornado": "1"})
+    assert r.status_code == 201, r.text
+    com = r.json()
+    assert com["entrada"]["tornado"] is True and com["metadados"]["tornado"] is True
+    assert "tabela_20_tornado" in {t["nome"] for t in com["tabelas"]}
+    assert "figura_12_tornado.png" in {f["nome"] for f in com["figuras"]}
+    assert any(s["titulo"] == "Sensibilidade tipo tornado" for s in com["secoes"])
+    linhas = com["tornado"]["linhas"]
+    assert linhas[0]["parametro"] == "penetrância do TARDBP" and all(l["fonte"] for l in linhas)
+    # FUS não tem incerteza publicada para a idade de início: fica fora e isso é dito
+    assert len(com["tornado"]["fora"]) == 1 and "FUS" in com["tornado"]["fora"][0]
+    assert not any("idade de início do FUS" in l["parametro"] for l in linhas)
+    # a opção não altera os indicadores
+    assert com["principais"]["vida"] == sem["principais"]["vida"] and com["principais"]["condicionado"] is True
+    assert com["principais"]["transmissao"] == sem["principais"]["transmissao"]
+    # no formulário a opção existe e só vem marcada se o profissional marcar
+    js = (DIR_STATIC / "app.js").read_text(encoding="utf-8")
+    assert "nome: 'tornado'" in js and "marcado: valores.tornado === true" in js

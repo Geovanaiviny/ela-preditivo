@@ -29,7 +29,11 @@ SEXOS = ("M", "F")
 TIPOS_ATENDIMENTO = ("PESSOA", "CASAL", "FAMILIA")
 MOMENTOS = ("ANTES_DO_TESTE", "APOS_LAUDO", "ACOMPANHAMENTO")
 PAPEIS_GENITOR = ("MAE", "PAI")
-TITULARES = ("MAE", "PAI", "DESCENDENTE", "RESPONSAVEL")
+TITULARES = ("MAE", "PAI", "DESCENDENTE", "RESPONSAVEL", "PARENTE")
+# Parentes testados de um genitor sem exame (avô, avó e tios do atendido) e situação clínica desse genitor
+PARENTESCOS = ("PAI_DO_GENITOR", "MAE_DO_GENITOR", "IRMAO_DO_GENITOR")
+SITUACOES_GENITOR = ("VIVO_ASSINTOMATICO", "FALECIDO_SEM_ELA", "AFETADO", "DESCONHECIDA")
+MAXIMO_IRMAOS_POR_GENITOR = 6
 TIPOS_DOCUMENTO = ("PRONTUARIO", "LAUDO_C9ORF72")
 BASE_LEGAL_ATENDIMENTO = "LGPD, art. 11, II, f: tutela da saúde, em procedimento realizado por profissional de saúde"
 DOCUMENTOS = ("AVISO_PRIVACIDADE", "TERMO_USO")
@@ -170,9 +174,16 @@ class Paciente(Base):
     documentos: Mapped[list["Documento"]] = relationship(
         back_populates="paciente", cascade="all, delete-orphan", lazy="selectin", order_by="Documento.id"
     )
+    parentes: Mapped[list["Parente"]] = relationship(
+        back_populates="paciente", cascade="all, delete-orphan", lazy="selectin", order_by="Parente.id"
+    )
 
     def genitor(self, papel: str) -> "Genitor | None":
         return next((g for g in self.genitores if g.papel == papel), None)
+
+    def parentes_de(self, papel: str) -> list["Parente"]:
+        """Parentes testados ligados ao genitor `papel` (MAE ou PAI)."""
+        return [x for x in self.parentes if x.papel_genitor == papel]
 
 
 class Genitor(Base):
@@ -191,6 +202,9 @@ class Genitor(Base):
     vcf_tamanho: Mapped[int | None] = mapped_column(Integer, default=None)
     vcf_hash: Mapped[str | None] = mapped_column(String(64), default=None)
     vcf_enviado_em: Mapped[_dt.datetime | None] = mapped_column(DateTime, default=None)
+    # situação clínica do genitor sem exame (dado de saúde, cifrado): JSON {"situacao": ..., "idade": ...}, usado só
+    # quando a dosagem dele é inferida por parentes
+    situacao_clinica_cifrada: Mapped[str | None] = mapped_column(Text, default=None)
     atualizado_em: Mapped[_dt.datetime] = mapped_column(DateTime)
 
     paciente: Mapped[Paciente] = relationship(back_populates="genitores")
@@ -200,8 +214,36 @@ class Genitor(Base):
         return self.vcf_arquivo is not None
 
 
+class Parente(Base):
+    """Parente testado de um genitor que não pôde ser testado: pai, mãe ou irmão dele (avô, avó ou tio do atendido).
+    Guarda só o parentesco, o VCF cifrado em disco (mesmas regras do VCF dos genitores), o laudo do C9orf72 e as datas;
+    nenhum nome nem documento. É titular de dado genético sensível."""
+
+    __tablename__ = "parentes"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    paciente_id: Mapped[int] = mapped_column(ForeignKey("pacientes.id", ondelete="CASCADE"), index=True)
+    papel_genitor: Mapped[str] = mapped_column(String(3))  # genitor ao qual se liga: MAE | PAI
+    parentesco: Mapped[str] = mapped_column(String(20))  # PAI_DO_GENITOR | MAE_DO_GENITOR | IRMAO_DO_GENITOR
+    laudo_c9orf72_cifrado: Mapped[str | None] = mapped_column(Text, default=None)
+    vcf_arquivo: Mapped[str | None] = mapped_column(String(80), default=None)
+    vcf_tamanho: Mapped[int | None] = mapped_column(Integer, default=None)
+    vcf_hash: Mapped[str | None] = mapped_column(String(64), default=None)
+    vcf_enviado_em: Mapped[_dt.datetime | None] = mapped_column(DateTime, default=None)
+    criado_em: Mapped[_dt.datetime] = mapped_column(DateTime)
+    atualizado_em: Mapped[_dt.datetime] = mapped_column(DateTime)
+
+    paciente: Mapped[Paciente] = relationship(back_populates="parentes")
+
+    @property
+    def tem_vcf(self) -> bool:
+        return self.vcf_arquivo is not None
+
+
 class Descendente(Base):
-    """Pessoa cujo risco é estimado: o atendido (PESSOA) ou cada filho (FAMILIA). CASAL não tem descendente."""
+    """Pessoa cujo risco é estimado: o atendido (PESSOA) ou cada filho (FAMILIA). CASAL não tem descendente. No caso
+    de família, um filho que já fez o teste pode ter o VCF próprio anexado: entra como evidência sobre o genitor sem
+    exame e deixa de ser analisado como pessoa em risco."""
 
     __tablename__ = "descendentes"
 
@@ -211,9 +253,17 @@ class Descendente(Base):
     nome_cifrado: Mapped[str] = mapped_column(Text)
     data_nascimento_cifrada: Mapped[str] = mapped_column(Text)
     sexo: Mapped[str] = mapped_column(String(1))
+    vcf_arquivo: Mapped[str | None] = mapped_column(String(80), default=None)  # VCF próprio (filho já testado)
+    vcf_tamanho: Mapped[int | None] = mapped_column(Integer, default=None)
+    vcf_hash: Mapped[str | None] = mapped_column(String(64), default=None)
+    vcf_enviado_em: Mapped[_dt.datetime | None] = mapped_column(DateTime, default=None)
     atualizado_em: Mapped[_dt.datetime] = mapped_column(DateTime)
 
     paciente: Mapped[Paciente] = relationship(back_populates="descendentes")
+
+    @property
+    def tem_vcf(self) -> bool:
+        return self.vcf_arquivo is not None
 
 
 class Documento(Base):
@@ -246,8 +296,11 @@ class Consentimento(Base):
     descendente_id: Mapped[int | None] = mapped_column(
         ForeignKey("descendentes.id", ondelete="CASCADE"), default=None, index=True
     )
+    parente_id: Mapped[int | None] = mapped_column(
+        ForeignKey("parentes.id", ondelete="CASCADE"), default=None, index=True
+    )
     finalidade: Mapped[str] = mapped_column(String(30), default="PESQUISA")
-    titular: Mapped[str] = mapped_column(String(20))  # MAE | PAI | DESCENDENTE | RESPONSAVEL
+    titular: Mapped[str] = mapped_column(String(20))  # MAE | PAI | DESCENDENTE | RESPONSAVEL | PARENTE
     nome_titular_cifrado: Mapped[str] = mapped_column(Text)
     versao_termo: Mapped[str] = mapped_column(String(20))
     concedido_em: Mapped[_dt.datetime] = mapped_column(DateTime)
@@ -282,6 +335,10 @@ class AnalisePaciente(Base):
     cox: Mapped[bool] = mapped_column(Boolean, default=False)
     sexo: Mapped[str | None] = mapped_column(String(1), default=None)
     idade_na_analise: Mapped[int | None] = mapped_column(Integer, default=None)
+    # confirmação do profissional de que a pessoa analisada não apresentava sintomas de ELA: só o booleano e a data,
+    # nenhum dado clínico (None = futuro filho de um casal, sem pessoa analisada)
+    assintomatico_confirmado: Mapped[bool | None] = mapped_column(Boolean, default=None)
+    assintomatico_confirmado_em: Mapped[_dt.datetime | None] = mapped_column(DateTime, default=None)
     suposicoes: Mapped[str | None] = mapped_column(Text, default=None)  # JSON sem dado pessoal
     vcf_hash_mae: Mapped[str | None] = mapped_column(String(64), default=None)
     vcf_hash_pai: Mapped[str | None] = mapped_column(String(64), default=None)

@@ -11,6 +11,7 @@
   const ROTULO_SEXO = { M: 'Masculino', F: 'Feminino' };
   const UFS = 'AC AL AP AM BA CE DF ES GO MA MT MS MG PA PB PR PE PI RJ RN RS RO RR SC SP SE TO'.split(' ');
   const PAPEIS_GENITOR = ['MAE', 'PAI'];
+  const ROTULO_SITUACAO_GENITOR = { vivo_assintomatico: 'vivo, sem sintomas', falecido_sem_ela: 'falecido sem ELA', afetado: 'teve ou tem ELA', desconhecido: 'situação desconhecida' };
 
   // ---------------------------------------------------------------------------------------------
   // Utilitários de DOM (sempre textContent: nunca HTML vindo de dados)
@@ -407,7 +408,11 @@
     if (p.pesquisa_situacao === 'PENDENTE') return chip('Consentimentos pendentes', 'chip-aviso', 'relogio');
     return chip('Sem consentimento para pesquisa', 'chip-neutro');
   }
-  function chipVcfs(p) { return p.vcfs_completos ? chip('VCFs completos', 'chip-ok', 'dna') : chip(`VCFs ${p.vcfs_presentes}/2`, 'chip-aviso', 'dna'); }
+  function chipVcfs(p) {
+    if (p.vcfs_completos) return chip('VCFs completos', 'chip-ok', 'dna');
+    const inferidos = (p.genitores_inferidos || []).length;
+    return chip(`VCFs ${p.vcfs_presentes}/2${inferidos ? ' · genitor inferido por parentes' : ''}`, inferidos ? 'chip-azul' : 'chip-aviso', 'dna');
+  }
   function vazio(texto, ic) { return el('div', { class: 'cartao vazio' }, icone(ic || 'info'), el('p', { text: texto })); }
 
   // ---------------------------------------------------------------------------------------------
@@ -823,7 +828,7 @@
         : el('div', { class: 'vazio' }, icone('pacientes'), el('p', { text: 'Nenhum registro ainda. Comece por "Novo paciente".' })));
     const analises = el('div', { class: 'cartao' }, el('div', { class: 'cabecalho-tela' }, el('div', { class: 'titulos' }, el('h2', { text: 'Análises recentes' })), linkBotao('Ver todas', '#/analises', { classe: 'botao-link botao-pequeno', icone: 'seta-dir' })), d.analises_recentes.length ? el('ul', { class: 'lista-simples' }, d.analises_recentes.map((a) => el('li', {},
       el('div', {}, el('a', { href: a.tem_resultado ? `#/analises/${a.paciente_id}/${a.id}` : `#/pacientes/${a.paciente_id}`, text: a.registro }), el('div', { class: 'pequeno texto-suave', text: `${a.pessoa} · ${fmtData(a.executado_em)}` })),
-      el('div', { class: 'chips' }, (a.genes_de_risco.length ? a.genes_de_risco : ['sem lócus']).map((g) => chip(g, g === 'sem lócus' ? 'chip-neutro' : 'chip-azul')), chip(`vida ${fmtPct(a.p_manifesta)}`, 'chip-neutro'), a.com_suposicao ? chip('suposição', 'chip-aviso') : null)))) : el('p', { class: 'texto-suave', text: 'Nenhuma análise executada ainda.' }));
+      el('div', { class: 'chips' }, (a.genes_de_risco.length ? a.genes_de_risco : ['sem lócus']).map((g) => chip(g, g === 'sem lócus' ? 'chip-neutro' : 'chip-azul')), chip(a.condicionado ? `a partir dos ${fmtNum(a.idade_referencia, 0)} anos: ${fmtPct(a.p_manifesta)}` : `vida ${fmtPct(a.p_manifesta)}`, 'chip-neutro'), a.com_suposicao ? chip('suposição', 'chip-aviso') : null)))) : el('p', { class: 'texto-suave', text: 'Nenhuma análise executada ainda.' }));
     const pend = el('div', { class: 'cartao' }, el('h2', { text: 'Pendências' }));
     if (!d.pendencias.sem_vcf.length && !d.pendencias.sem_analise.length) pend.append(el('p', { class: 'texto-suave' }, icone('check'), ' Nenhuma pendência: todos os registros têm os dois VCFs e ao menos uma análise.'));
     if (d.pendencias.sem_vcf.length) pend.append(el('h3', { text: 'Sem os dois VCFs' }), el('ul', { class: 'lista-simples' }, d.pendencias.sem_vcf.map((p) => el('li', {}, el('a', { href: `#/pacientes/${p.id}`, text: p.nome }), chip(`VCFs ${p.vcfs_presentes}/2`, 'chip-aviso')))));
@@ -1173,10 +1178,16 @@
   // ---------------------------------------------------------------------------------------------
   // Médico: ficha do registro
   // ---------------------------------------------------------------------------------------------
+  function refAnalise(a) { // a que os três valores se referem: desde o nascimento ou a partir da idade atual, sem sintomas
+    if (!a) return '';
+    if (a.condicionado && a.idade_referencia !== null && a.idade_referencia !== undefined) return `a partir dos ${fmtNum(a.idade_referencia, 0)} anos, sem sintomas`;
+    if (a.condicionado && a.faixa_idade_referencia) return `a partir da idade atual (faixa ${a.faixa_idade_referencia} anos), sem sintomas`;
+    return 'desde o nascimento';
+  }
   function linhaRisco(a, rotuloPessoa) {
     if (!a) return null;
     const ini = a.inicio || {};
-    return { pessoa: rotuloPessoa, herdou: fmtPct(a.p_portador), vida: `${fmtPct(a.p_manifesta)} [${fmtPct(a.q025)}–${fmtPct(a.q975)}]`, inicio: a.sem_locus ? '—' : `${fmtNum(a.idade_mediana, 0)} anos (25–75 %: ${fmtNum(ini.q25, 0)}–${fmtNum(ini.q75, 0)})`, quando: fmtData(a.executado_em, true), suposicao: a.com_suposicao ? 'sim' : 'não', sexo: a.sexo ? ROTULO_SEXO[a.sexo] : 'não informado', id: a.id, tem_resultado: a.tem_resultado };
+    return { pessoa: rotuloPessoa, referencia: refAnalise(a), herdou: fmtPct(a.p_portador), vida: `${fmtPct(a.p_manifesta)} [${fmtPct(a.q025)}–${fmtPct(a.q975)}]`, inicio: a.sem_locus ? '—' : `${fmtNum(a.idade_mediana, 0)} anos (25–75 %: ${fmtNum(ini.q25, 0)}–${fmtNum(ini.q75, 0)})`, quando: fmtData(a.executado_em, true), suposicao: a.com_suposicao ? 'sim' : 'não', sexo: a.sexo ? ROTULO_SEXO[a.sexo] : 'não informado', id: a.id, tem_resultado: a.tem_resultado };
   }
   async function telaFicha(area, params) {
     const id = Number(params[0]);
@@ -1186,14 +1197,14 @@
     definirTitulo(`Ficha: ${p.nome}`);
     definirTrilha([['Área clínica'], ['Pacientes', '#/pacientes'], ['Ficha']]);
     const faltam = PAPEIS_GENITOR.filter((g) => !p.genitores[g].vcf.presente);
-    const podeAnalisar = faltam.length < 2;
+    const podeAnalisar = p.pode_analisar !== undefined ? p.pode_analisar : faltam.length < 2;
     const acoes = [
       linkBotao('Nova análise', podeAnalisar ? `#/analise?paciente=${p.id}` : '#', { icone: 'frasco' }),
       linkBotao('Editar', `#/pacientes/${p.id}/editar`, { classe: 'botao-secundario', icone: 'editar' }),
       botao('Exportar (JSON)', { classe: 'botao-secundario', icone: 'baixar', onclick: async () => { try { const d = await api('POST', `/api/pacientes/${p.id}/exportar`); baixarJson(d, `registro-${p.id}.json`); avisar('sucesso', 'Exportação gerada (direito de acesso e portabilidade).'); } catch (e) { avisar('erro', e.message); } } }),
       botao('Excluir', { classe: 'botao-perigo', icone: 'lixeira', onclick: () => renderExclusao() }),
     ];
-    if (!podeAnalisar) { acoes[0].setAttribute('aria-disabled', 'true'); acoes[0].addEventListener('click', (ev) => { ev.preventDefault(); avisar('aviso', 'Anexe o VCF de ao menos um genitor no cartão "Genitores" para analisar.'); }); }
+    if (!podeAnalisar) { acoes[0].setAttribute('aria-disabled', 'true'); acoes[0].addEventListener('click', (ev) => { ev.preventDefault(); avisar('aviso', 'Anexe no cartão "Genitores" o VCF de ao menos um genitor, ou o de um parente de um genitor sem exame, para analisar.'); }); }
     const subt = [`Prontuário ${p.prontuario}`, p.momento_rotulo || null, p.tipo === 'PESSOA' && p.descendentes[0] ? `${p.descendentes[0].idade} anos, ${ROTULO_SEXO[p.descendentes[0].sexo]}` : null].filter(Boolean).join(' · ');
     area.append(cabecalhoTela({ titulo: p.nome, subtitulo: subt, chips: [chipTipo(p), chipVcfs(p), chipPesquisa(p)], acoes }));
     const areaExclusao = el('div');
@@ -1226,8 +1237,64 @@
       conf.input.focus();
     }
   }
+  function blocoSemExame(p, papel, g, op) { // genitor sem VCF: situação clínica dele e parentes testados
+    const caixa = el('div', { class: 'bloco-sem-exame' }, el('h4', { text: 'Genitor sem exame: parentes testados' }),
+      el('p', { class: 'pequeno texto-suave', text: 'Se este genitor não pôde ser testado (faleceu, não está disponível ou não quer fazer o teste), anexe o VCF e o laudo do pai, da mãe ou de um irmão dele. A dosagem do genitor passa a ser inferida e condicionada à situação clínica dele.' }));
+    const situacao = campo({ nome: `situacao_${papel}`, rotulo: 'Situação clínica do genitor', tipo: 'select', valor: g.situacao_clinica || '', opcoes: [['', 'Não informada'], ...(op.situacoes_genitor || []).map((s) => [s.valor, s.rotulo])] });
+    const idade = campo({ nome: `idade_${papel}`, rotulo: 'Idade (atual, ou ao falecer)', tipo: 'number', opcional: true, valor: g.idade_situacao === null || g.idade_situacao === undefined ? '' : g.idade_situacao, atributos: { min: 0, max: 120, step: 1 }, dica: 'Vivo sem sintomas: vazio usa a idade pela data de nascimento. Falecido sem ELA: idade ao falecer.' });
+    const salvar = botao('Salvar situação', { classe: 'botao-secundario botao-pequeno', icone: 'check', onclick: async () => {
+      try { await api('PUT', `/api/pacientes/${p.id}/genitores/${papel}/situacao`, { json: { situacao: situacao.valor() || null, idade: String(idade.valor()).trim() === '' ? null : Number(idade.valor()) } }); estado.avisoPendente = 'Situação clínica do genitor atualizada.'; aoMudarRota(); }
+      catch (e) { aplicarErros({ situacao, idade }, e.campos, Object.keys(e.campos || {}).length ? null : e.message); }
+    } });
+    caixa.append(el('div', { class: 'grade-campos' }, situacao.no, idade.no), el('div', { class: 'acoes' }, salvar));
+    if (g.inferido_por_parentes && !g.situacao_clinica) caixa.append(el('div', { class: 'chips' }, chip('Informe a situação clínica para analisar', 'chip-aviso', 'alerta')));
+    if (g.parentes.length) caixa.append(tabela([
+      { rotulo: 'Parente', chave: 'rotulo' },
+      { rotulo: 'VCF', valor: (x) => (x.vcf.presente ? el('div', {}, chip('VCF anexado', 'chip-ok', 'dna'), el('div', { class: 'pequeno texto-suave', text: `${fmtBytes(x.vcf.tamanho)} · hash ${x.vcf.hash_curto}` })) : chip('Sem VCF', 'chip-neutro')) },
+      { rotulo: 'Laudo C9orf72', valor: (x) => (x.laudo_c9orf72 ? `${x.laudo_c9orf72} repetições` : 'sem laudo') },
+      { rotulo: 'Ação', valor: (x) => botao('Remover', { classe: 'botao-perigo botao-pequeno', icone: 'lixeira', ariaLabel: `Remover parente: ${x.rotulo}`, onclick: async () => { if (!window.confirm(`Remover ${x.rotulo}? O VCF cifrado e o consentimento desse parente serão apagados.`)) return; try { await api('DELETE', `/api/pacientes/${p.id}/parentes/${x.id}`); estado.avisoPendente = 'Parente removido.'; aoMudarRota(); } catch (e) { avisar('erro', e.message); } } }) }], g.parentes, { legenda: `Parentes testados (${g.rotulo})` }));
+    const area = el('div');
+    const abrir = botao('Adicionar parente testado', { classe: 'botao-pequeno', icone: 'mais', onclick: () => {
+      limpar(area);
+      const parentesco = campo({ nome: `parentesco_${papel}`, rotulo: 'Parentesco com este genitor', tipo: 'select', obrigatorio: true, opcoes: (op.parentescos || []).map((x) => [x.valor, x.rotulo]) });
+      const arquivo = campo({ nome: `vcf_parente_${papel}`, rotulo: 'VCF do parente', tipo: 'file', opcional: true, dica: 'Arquivo .vcf (ou .vcf.gz), GRCh38. Fica cifrado em disco, sem download.', atributos: { accept: '.vcf,.gz' } });
+      const laudo = campo({ nome: `laudo_parente_${papel}`, rotulo: 'Laudo do C9orf72 do parente', opcional: true, dica: 'Nº de repetições (ex.: 45) ou os dois alelos (12,45). Sem laudo, o C9orf72 desse parente não entra.', atributos: { inputmode: 'numeric' } });
+      const campos = { parentesco, vcf: arquivo, laudo_c9orf72: laudo };
+      const form = el('form', { novalidate: true, onsubmit: async (ev) => {
+        ev.preventDefault();
+        const fd = new FormData(); fd.append('parentesco', parentesco.valor());
+        if (arquivo.input.files.length) fd.append('vcf', arquivo.input.files[0]);
+        if (laudo.valor().trim()) fd.append('laudo_c9orf72', laudo.valor().trim());
+        try { await api('POST', `/api/pacientes/${p.id}/genitores/${papel}/parentes`, { form: fd }); estado.avisoPendente = 'Parente testado adicionado.'; aoMudarRota(); }
+        catch (e) { aplicarErros(campos, e.campos, Object.keys(e.campos || {}).length ? null : e.message); }
+      } }, el('div', { class: 'grade-campos' }, parentesco.no, arquivo.no, laudo.no),
+        el('p', { class: 'pequeno texto-suave', text: 'O parente também é titular de dado genético: envie só com a autorização dele. Nenhum nome é guardado; o caso só vai para pesquisa com o consentimento dele.' }),
+        el('div', { class: 'acoes' }, botao('Cancelar', { classe: 'botao-secundario botao-pequeno', onclick: () => limpar(area) }), botao('Adicionar', { tipo: 'submit', classe: 'botao-pequeno', icone: 'check' })));
+      area.append(form);
+      parentesco.input.focus();
+    } });
+    caixa.append(el('div', { class: 'acoes' }, abrir), area);
+    return caixa;
+  }
+  function celulaTeste(p, d) { // filho que já fez o teste (caso de família): o VCF dele é evidência sobre o genitor sem exame
+    const entrada = el('input', { type: 'file', accept: '.vcf,.gz', class: 'sr-only', id: `vcf-desc-${d.id}`, 'aria-label': `Arquivo VCF de ${d.nome} (filho já testado)` });
+    entrada.addEventListener('change', async () => {
+      if (!entrada.files.length) return;
+      const fd = new FormData(); fd.append('vcf', entrada.files[0]);
+      const aviso = avisar('info', `Enviando e validando o VCF de ${d.nome}…`);
+      try { await api('POST', `/api/pacientes/${p.id}/descendentes/${d.id}/vcf`, { form: fd }); aviso.remove(); estado.avisoPendente = 'VCF do filho já testado anexado: ele entra como evidência e sai da lista de pessoas em risco.'; aoMudarRota(); }
+      catch (e) { aviso.remove(); avisar('erro', (e.campos && e.campos.vcf) || e.message); entrada.value = ''; }
+    });
+    if (d.testado) return el('div', {}, el('div', { class: 'chips' }, chip('Já testado: evidência', 'chip-ok', 'dna')), el('div', { class: 'pequeno texto-suave', text: `${fmtBytes(d.vcf.tamanho)} · hash ${d.vcf.hash_curto}` }),
+      botao('Remover VCF', { classe: 'botao-perigo botao-pequeno', icone: 'lixeira', ariaLabel: `Remover o VCF de ${d.nome}`, onclick: async () => { if (!window.confirm(`Remover o VCF de ${d.nome}? Essa pessoa volta a ser analisada como pessoa em risco.`)) return; try { await api('DELETE', `/api/pacientes/${p.id}/descendentes/${d.id}/vcf`); estado.avisoPendente = 'VCF removido.'; aoMudarRota(); } catch (e) { avisar('erro', e.message); } } }));
+    return el('div', {}, el('label', { for: entrada.id, class: 'botao botao-secundario botao-pequeno' }, icone('upload'), 'Anexar VCF (já testado)'), entrada);
+  }
+  function resumoInferido(g) { // texto curto de um genitor inferido por parentes, para a tela de análise
+    const quem = g.parentes.map((x) => `${x.rotulo}${x.vcf.presente ? ' (VCF' : ' (sem VCF'}${x.laudo_c9orf72 ? `, laudo ${x.laudo_c9orf72})` : ', sem laudo)'}`).join('; ');
+    return quem || 'filho(a) já testado(a)';
+  }
   function cartaoGenitores(p, op) {
-    const cartao = el('div', { class: 'cartao' }, el('h2', { text: p.tipo === 'CASAL' ? 'Casal: parceira e parceiro' : 'Genitores' }), el('p', { class: 'texto-suave', text: 'Nome, nascimento, laudo do C9orf72 e VCF de cada genitor. O VCF fica cifrado em disco, nunca pode ser baixado e é decifrado só durante a análise.' }));
+    const cartao = el('div', { class: 'cartao' }, el('h2', { text: p.tipo === 'CASAL' ? 'Casal: parceira e parceiro' : 'Genitores' }), el('p', { class: 'texto-suave', text: 'Nome, nascimento, laudo do C9orf72 e VCF de cada genitor. O VCF fica cifrado em disco, nunca pode ser baixado e é decifrado só durante a análise. Para um genitor que não pôde ser testado, informe a situação clínica dele e adicione parentes testados.' }));
     const grade = el('div', { class: 'grade-2' });
     for (const papel of PAPEIS_GENITOR) {
       const g = p.genitores[papel];
@@ -1248,10 +1315,10 @@
           el('label', { for: `vcf-${papel}`, class: 'botao botao-secundario botao-pequeno' }, icone('upload'), 'Substituir'), entrada,
           botao('Remover', { classe: 'botao-perigo botao-pequeno', icone: 'lixeira', ariaLabel: `Remover VCF: ${g.rotulo}`, onclick: async () => { if (!window.confirm(`Remover o VCF (${g.rotulo})? O arquivo cifrado será apagado.`)) return; try { await api('DELETE', `/api/pacientes/${p.id}/genitores/${papel}/vcf`); estado.avisoPendente = 'VCF removido.'; aoMudarRota(); } catch (e) { avisar('erro', e.message); } } }));
       } else {
-        estadoVcf.append(chip('Sem VCF', 'chip-aviso', 'alerta'), el('span', { class: 'detalhe', text: g.laudo_informado ? 'Só o laudo do C9orf72 será considerado, com a suposição declarada.' : 'Sem exame: a análise exigirá a suposição de não portador.' }),
+        estadoVcf.append(chip('Sem VCF', 'chip-aviso', 'alerta'), el('span', { class: 'detalhe', text: g.inferido_por_parentes ? 'Sem exame: o genótipo será inferido pelos parentes testados.' : (g.laudo_informado ? 'Só o laudo do C9orf72 será considerado, com a suposição declarada.' : 'Sem exame: a análise exigirá um parente testado ou a suposição de não portador.') }),
           el('label', { for: `vcf-${papel}`, class: 'botao botao-pequeno' }, icone('upload'), 'Anexar VCF'), entrada);
       }
-      bloco.append(estadoVcf, el('div', { class: 'acoes' }, botao('Editar dados', { classe: 'botao-link botao-pequeno', icone: 'editar', onclick: () => editarGenitor(p, papel, g, op, bloco) })));
+      bloco.append(estadoVcf, g.vcf.presente ? null : blocoSemExame(p, papel, g, op), el('div', { class: 'acoes' }, botao('Editar dados', { classe: 'botao-link botao-pequeno', icone: 'editar', onclick: () => editarGenitor(p, papel, g, op, bloco) })));
       grade.append(bloco);
     }
     cartao.append(grade);
@@ -1291,18 +1358,19 @@
   function cartaoDescendentes(p) {
     const cartao = el('div', { class: 'cartao tabela-cartao' });
     const cab = el('div', { class: 'cabecalho-tabela' }, el('h2', { text: p.tipo === 'FAMILIA' ? 'Filhos' : 'Pessoa atendida' }));
-    const podeAnalisar = PAPEIS_GENITOR.some((g) => p.genitores[g].vcf.presente);
+    const podeAnalisar = p.pode_analisar !== undefined ? p.pode_analisar : PAPEIS_GENITOR.some((g) => p.genitores[g].vcf.presente);
     const acoes = el('div', { class: 'acoes acoes-compactas' });
     if (p.tipo === 'FAMILIA') {
       acoes.append(botao('Adicionar filho(a)', { classe: 'botao-secundario botao-pequeno', icone: 'mais', onclick: () => formDescendente(p, null, cartao) }));
-      if (p.descendentes.length > 1 && podeAnalisar) acoes.append(linkBotao('Analisar todos', `#/analise?paciente=${p.id}&descendente=todos`, { classe: 'botao-pequeno', icone: 'frasco' }));
+      if (p.descendentes.filter((d) => !d.testado).length > 1 && podeAnalisar) acoes.append(linkBotao('Analisar todos', `#/analise?paciente=${p.id}&descendente=todos`, { classe: 'botao-pequeno', icone: 'frasco' }));
     }
     cab.append(acoes);
     cartao.append(cab, tabela([
       { rotulo: 'Nome', valor: (d) => el('div', {}, el('strong', { text: d.nome }), d.menor_de_idade ? el('div', {}, chip('menor de idade', 'chip-aviso')) : null) },
       { rotulo: 'Idade', valor: (d) => `${d.idade} anos`, num: true }, { rotulo: 'Sexo', valor: (d) => ROTULO_SEXO[d.sexo] },
       { rotulo: 'Última análise', valor: (d) => (d.ultima_analise ? el('div', {}, el('div', { class: 'pequeno', text: fmtData(d.ultima_analise.executado_em, true) }), el('div', { class: 'chips' }, d.ultima_analise.genes_de_risco.map((g) => chip(g, 'chip-azul'))), el('div', { class: 'pequeno texto-suave', text: `herdou ${fmtPct(d.ultima_analise.p_portador)} · vida ${fmtPct(d.ultima_analise.p_manifesta)}` })) : el('span', { class: 'texto-suave', text: 'Sem análise' })) },
-      { rotulo: 'Ações', valor: (d) => el('div', { class: 'acoes acoes-compactas' }, linkBotao('Analisar', podeAnalisar ? `#/analise?paciente=${p.id}&descendente=${d.id}` : '#', { classe: 'botao-pequeno', icone: 'frasco' }), botao('Editar', { classe: 'botao-secundario botao-pequeno', icone: 'editar', ariaLabel: `Editar ${d.nome}`, onclick: () => formDescendente(p, d, cartao) }),
+      ...(p.tipo === 'FAMILIA' ? [{ rotulo: 'Teste próprio', valor: (d) => celulaTeste(p, d) }] : []),
+      { rotulo: 'Ações', valor: (d) => el('div', { class: 'acoes acoes-compactas' }, d.testado ? null : linkBotao('Analisar', podeAnalisar ? `#/analise?paciente=${p.id}&descendente=${d.id}` : '#', { classe: 'botao-pequeno', icone: 'frasco' }), botao('Editar', { classe: 'botao-secundario botao-pequeno', icone: 'editar', ariaLabel: `Editar ${d.nome}`, onclick: () => formDescendente(p, d, cartao) }),
         p.tipo === 'FAMILIA' && p.descendentes.length > 1 ? botao('Remover', { classe: 'botao-perigo botao-pequeno', icone: 'lixeira', ariaLabel: `Remover ${d.nome}`, onclick: async () => { if (!window.confirm(`Remover ${d.nome} deste registro? As análises e consentimentos dessa pessoa serão apagados.`)) return; try { await api('DELETE', `/api/pacientes/${p.id}/descendentes/${d.id}`); estado.avisoPendente = 'Descendente removido.'; aoMudarRota(); } catch (e) { avisar('erro', e.message); } } }) : null) }], p.descendentes, { blocos: true }));
     return cartao;
   }
@@ -1321,7 +1389,7 @@
     if (!p.analises.length) { cartao.append(el('p', { class: 'texto-suave', text: 'Nenhuma análise executada ainda. O resumo de cada análise fica guardado aqui, cifrado; o resultado completo fica disponível por duas horas após a execução.' })); return cartao; }
     const comp = p.comparativo.map((a) => linhaRisco(a, a.descendente_nome));
     cartao.append(el('h3', { text: 'Última análise de cada pessoa: as três respostas' }), tabela([
-      { rotulo: 'Pessoa', chave: 'pessoa' }, { rotulo: 'Sexo', chave: 'sexo' }, { rotulo: '1. Herdou / transmissão', chave: 'herdou', num: true }, { rotulo: '2. Manifestação ao longo da vida [95 %]', chave: 'vida', num: true }, { rotulo: '3. Idade provável de início', chave: 'inicio' }, { rotulo: 'Suposição', chave: 'suposicao' }, { rotulo: 'Quando', chave: 'quando' }, { rotulo: 'Resultado', valor: (c) => (c.tem_resultado ? linkBotao('Abrir', `#/analises/${p.id}/${c.id}`, { classe: 'botao-pequeno', icone: 'grafico' }) : '—') }], comp, { blocos: true }));
+      { rotulo: 'Pessoa', chave: 'pessoa' }, { rotulo: 'Sexo', chave: 'sexo' }, { rotulo: 'Referência', chave: 'referencia' }, { rotulo: '1. Herdou / transmissão', chave: 'herdou', num: true }, { rotulo: '2. Manifestação (vida ou daqui em diante) [95 %]', chave: 'vida', num: true }, { rotulo: '3. Idade provável de início', chave: 'inicio' }, { rotulo: 'Suposição', chave: 'suposicao' }, { rotulo: 'Quando', chave: 'quando' }, { rotulo: 'Resultado', valor: (c) => (c.tem_resultado ? linkBotao('Abrir', `#/analises/${p.id}/${c.id}`, { classe: 'botao-pequeno', icone: 'grafico' }) : '—') }], comp, { blocos: true }));
     cartao.append(el('details', {}, el('summary', { text: `Todas as análises (${p.analises.length})` }), tabela([
       { rotulo: 'Quando', valor: (a) => fmtData(a.executado_em) }, { rotulo: 'Pessoa', valor: (a) => (a.descendente_id === null ? 'Futuro filho' : (p.descendentes.find((d) => d.id === a.descendente_id) || {}).nome || `descendente ${a.descendente_id}`) },
       { rotulo: 'Modo', valor: (a) => `${a.modo} · ${a.motor} · N=${fmtNum(a.n, 0)} · semente ${a.semente}${a.hipoteses ? ' · hipóteses' : ''}${a.cox ? ' · Cox' : ''}` },
@@ -1332,7 +1400,7 @@
   }
   function renderConsentimentos(p) {
     const cartao = el('div', { class: 'cartao' }, el('h2', { text: 'Consentimentos para pesquisa' }),
-      el('p', { text: 'Separado do atendimento, específico e destacado; nunca vem pré-marcado; revogar é tão simples quanto conceder e tem efeito imediato (art. 8º, §5º). Como os dados genéticos são dos genitores, a liberação exige o consentimento de cada genitor e de cada descendente (ou responsável, se menor de 18).' }));
+      el('p', { text: 'Separado do atendimento, específico e destacado; nunca vem pré-marcado; revogar é tão simples quanto conceder e tem efeito imediato (art. 8º, §5º). Como os dados genéticos são dos genitores e, quando anexados, de parentes deles, a liberação exige o consentimento de cada genitor, de cada parente testado e de cada descendente (ou responsável, se menor de 18).' }));
     cartao.append(tabela([{ rotulo: 'Titular', valor: (e) => e.rotulo }, { rotulo: 'Situação', valor: (e) => chip(e.consentido ? 'Consentimento ativo' : 'Sem consentimento', e.consentido ? 'chip-ok' : 'chip-neutro', e.consentido ? 'check' : null) }], p.pesquisa.exigidos, { legenda: 'Consentimentos exigidos para liberar o caso' }));
     const ativos = p.consentimentos.filter((c) => c.ativo), historico = p.consentimentos.filter((c) => !c.ativo);
     const nomeDesc = (c) => (c.descendente_id === null ? '' : ` (${(p.descendentes.find((d) => d.id === c.descendente_id) || {}).nome || ''})`);
@@ -1341,7 +1409,7 @@
     if (historico.length) cartao.append(el('details', {}, el('summary', { text: `Consentimentos revogados (${historico.length})` }), tabela([{ rotulo: 'Titular', valor: (c) => `${c.titular_rotulo}${nomeDesc(c)}` }, { rotulo: 'Quem consentiu', chave: 'nome_titular' }, { rotulo: 'Concedido', valor: (c) => fmtData(c.concedido_em) }, { rotulo: 'Revogado', valor: (c) => fmtData(c.revogado_em) }], historico)));
     const pendentes = p.pesquisa.exigidos.filter((e) => !e.consentido);
     if (pendentes.length) {
-      const opcoes = pendentes.map((e) => [`${e.titular}:${e.descendente_id === null ? '' : e.descendente_id}`, e.rotulo]);
+      const opcoes = pendentes.map((e) => [`${e.titular}:${e.descendente_id === null ? '' : e.descendente_id}:${e.parente_id === null || e.parente_id === undefined ? '' : e.parente_id}`, e.rotulo]);
       const titular = campo({ nome: 'titular', rotulo: 'Titular que consente', tipo: 'select', obrigatorio: true, opcoes });
       const nomeT = campo({ nome: 'nome_titular', rotulo: 'Nome de quem consentiu', obrigatorio: true, dica: 'Preenchido com o nome do cadastro quando houver; confira. Para menor de 18 anos é obrigatória a identificação do responsável legal (art. 14, §1º).', atributos: { autocomplete: 'off' } });
       const preencher = () => {
@@ -1360,8 +1428,8 @@
           if (nomeT.valor().trim().length < 3) erros.nome_titular = 'Informe o nome de quem consentiu.';
           if (!confirmado.valor()) erros.confirmado = 'Marque a declaração de consentimento.';
           if (Object.keys(erros).length) { aplicarErros(campos, erros); return; }
-          const [t, did] = titular.valor().split(':');
-          try { const np = await api('POST', `/api/pacientes/${p.id}/consentimentos`, { json: { titular: t, descendente_id: did ? Number(did) : null, nome_titular: nomeT.valor().trim(), confirmado: true, versao_termo: p.termo_consentimento.versao } }); avisar('sucesso', np.liberado_para_pesquisa ? 'Consentimento registrado. Caso liberado para pesquisa (pseudonimizado).' : 'Consentimento registrado.'); cartao.replaceWith(renderConsentimentos(np)); }
+          const [t, did, xid] = titular.valor().split(':');
+          try { const np = await api('POST', `/api/pacientes/${p.id}/consentimentos`, { json: { titular: t, descendente_id: did ? Number(did) : null, parente_id: xid ? Number(xid) : null, nome_titular: nomeT.valor().trim(), confirmado: true, versao_termo: p.termo_consentimento.versao } }); avisar('sucesso', np.liberado_para_pesquisa ? 'Consentimento registrado. Caso liberado para pesquisa (pseudonimizado).' : 'Consentimento registrado.'); cartao.replaceWith(renderConsentimentos(np)); }
           catch (e) { aplicarErros(campos, e.campos, Object.keys(e.campos).length ? null : e.message); }
         } }, el('div', { class: 'grade-campos' }, titular.no, nomeT.no), confirmado.no, el('div', { class: 'acoes' }, botao('Registrar consentimento', { tipo: 'submit', icone: 'check' })))));
     } else cartao.append(el('p', { class: 'texto-suave', text: 'Todos os titulares exigidos já consentiram.' }));
@@ -1380,9 +1448,10 @@
     const dPai = campo({ nome: 'c9_delta_pai', rotulo: 'c9_delta_pai: variação de repetições do alelo paterno na transmissão', tipo: 'number', opcional: true, atributos: { step: 1, min: -200, max: 200 } });
     const ant = campo({ nome: 'c9_antecipacao', rotulo: 'c9_antecipacao: antecipação da idade de início (anos)', tipo: 'number', opcional: true, atributos: { step: 0.5, min: 0, max: 40 } });
     const hipoteses = el('details', {}, el('summary', { text: 'Hipóteses experimentais (transmissão do C9orf72 por repetições)' }), el('p', { class: 'pequeno texto-suave', text: 'Sem base na literatura citada no TCC; servem para explorar sensibilidade, não para estimar risco. Vazio = modelo por dosagem (padrão). O delta só se aplica a alelos a partir da faixa intermediária (≥ 24).' }), el('div', { class: 'grade-campos' }, dMae.no, dPai.no, ant.no));
-    const no = el('div', {}, el('div', { class: 'grade-campos grade-campos-3' }, n.no, semente.no, motor.no), cox.no, hipoteses);
+    const tornado = marcacao({ nome: 'tornado', rotulo: 'Sensibilidade tipo tornado: um parâmetro por vez, dentro das faixas publicadas (Tabela 20, Figura 12)', marcado: valores.tornado === true });
+    const no = el('div', {}, el('div', { class: 'grade-campos grade-campos-3' }, n.no, semente.no, motor.no), cox.no, tornado.no, hipoteses);
     const campos = { n, semente, motor, c9_delta_mae: dMae, c9_delta_pai: dPai, c9_antecipacao: ant };
-    return { no, campos, preencher(fd) { for (const c of [n, semente, motor, dMae, dPai, ant]) if (String(c.valor()).trim() !== '') fd.append(c.nome, String(c.valor()).trim()); fd.append('cox', cox.valor() ? '1' : '0'); } };
+    return { no, campos, preencher(fd) { for (const c of [n, semente, motor, dMae, dPai, ant]) if (String(c.valor()).trim() !== '') fd.append(c.nome, String(c.valor()).trim()); fd.append('cox', cox.valor() ? '1' : '0'); fd.append('tornado', tornado.valor() ? '1' : '0'); } };
   }
   function caixaProgresso() {
     const texto = el('span', { text: '' });
@@ -1411,8 +1480,9 @@
     const c9p = campo({ nome: 'c9orf72_pai', rotulo: 'Laudo do C9orf72 do pai', opcional: true, dica: 'Mesmo formato. Vazio = sem laudo.', atributos: { inputmode: 'numeric' } });
     const sexo = campo({ nome: 'sexo', rotulo: 'Sexo do descendente', tipo: 'select', valor: '', opcoes: [['', 'Não informado'], ['F', 'Feminino'], ['M', 'Masculino']] });
     const idade = campo({ nome: 'idade_atual', rotulo: 'Idade atual sem sintomas (anos)', tipo: 'number', opcional: true, dica: 'Condiciona o risco ao descendente assintomático nessa idade. Vazio para um futuro filho.', atributos: { min: 0, max: 120, step: 1 } });
+    const confirma = marcacao({ nome: 'confirma_assintomatico', rotulo: 'Confirmo que a pessoa analisada não apresenta sintomas de ELA' });
     const sim = camposSimulacao();
-    const campos = { vcf_mae: vcfMae, vcf_pai: vcfPai, cenario, c9orf72_mae: c9m, c9orf72_pai: c9p, sexo, idade_atual: idade, ...sim.campos };
+    const campos = { vcf_mae: vcfMae, vcf_pai: vcfPai, cenario, c9orf72_mae: c9m, c9orf72_pai: c9p, sexo, idade_atual: idade, confirma_assintomatico: confirma, ...sim.campos };
     const prog = caixaProgresso();
     const enviar = botao('Executar análise', { tipo: 'submit', icone: 'frasco' });
     const form = el('form', { novalidate: true, onsubmit: async (ev) => {
@@ -1420,11 +1490,13 @@
       const erros = {};
       if (mVcf.valor()) { if (!vcfMae.input.files.length) erros.vcf_mae = 'Envie o VCF da mãe.'; if (!vcfPai.input.files.length) erros.vcf_pai = 'Envie o VCF do pai.'; }
       for (const c of [c9m, c9p]) if (c.valor().trim() && !/^\s*\d+\s*([,; ]\s*\d+\s*)?$/.test(c.valor())) erros[c.nome] = 'Use um número (45) ou dois (12,45).';
+      if (Number(idade.valor()) > 0 && !confirma.valor()) erros.confirma_assintomatico = 'Confirme que a pessoa analisada não apresenta sintomas de ELA.';
       if (Object.keys(erros).length) { aplicarErros(campos, erros); return; }
       const fd = new FormData();
       fd.append('modo', mVcf.valor() ? 'vcf' : 'cenario');
       if (mVcf.valor()) { fd.append('vcf_mae', vcfMae.input.files[0]); fd.append('vcf_pai', vcfPai.input.files[0]); } else fd.append('cenario', cenario.valor());
       for (const c of [c9m, c9p, sexo, idade]) if (String(c.valor()).trim() !== '') fd.append(c.nome, String(c.valor()).trim());
+      if (confirma.valor()) fd.append('confirma_assintomatico', '1');
       sim.preencher(fd);
       enviar.disabled = true; prog.mostrar('Executando as três camadas (ingestão e anotação, rede bayesiana e Monte Carlo, sobrevivência)… isso leva alguns segundos.'); form.setAttribute('aria-busy', 'true');
       try {
@@ -1434,7 +1506,7 @@
       } catch (e) { aplicarErros(campos, e.campos, Object.keys(e.campos).length ? null : e.message); }
       finally { enviar.disabled = false; prog.esconder(); form.removeAttribute('aria-busy'); }
     } }, secaoNumerada(1, 'Origem dos dados genéticos', modo, blocoVcf, blocoCen), secaoNumerada(2, 'Laudo laboratorial do C9orf72', el('div', { class: 'grade-campos' }, c9m.no, c9p.no)),
-      secaoNumerada(3, 'Descendente', el('div', { class: 'grade-campos' }, sexo.no, idade.no)), secaoNumerada(4, 'Simulação', sim.no), prog.caixa, el('div', { class: 'acoes acoes-direita' }, enviar));
+      secaoNumerada(3, 'Descendente', el('div', { class: 'grade-campos' }, sexo.no, idade.no), confirma.no, dica('Obrigatória quando a idade atual é informada: o condicionamento pela idade só vale para quem não manifestou a doença. Com a idade, os três indicadores valem a partir dela, sem sintomas.')), secaoNumerada(4, 'Simulação', sim.no), prog.caixa, el('div', { class: 'acoes acoes-direita' }, enviar));
     area.append(duasColunas(el('div', { class: 'cartao' }, form), cartaoApoio('Sobre a análise', ['Use esta tela só para simulações sem registro. Para um atendimento, cadastre o paciente: os VCFs ficam cifrados na ficha e o resumo de cada análise é guardado.', 'Os arquivos enviados aqui são apagados ao fim da execução.', 'O resultado traz as três respostas: se herdou (transmissão), a chance de manifestação por idade com banda de 95 % e a idade provável de início.'])));
   }
   async function analiseDoRegistro(area, pacienteId, descParam) {
@@ -1447,11 +1519,18 @@
     // 01 dados genéticos
     const blocos = el('div', { class: 'grade-2' });
     const assumir = {};
+    const inferidos = []; // genitores sem VCF cujo genótipo será inferido por parentes
     const camposSup = {};
     for (const papel of PAPEIS_GENITOR) {
       const g = p.genitores[papel];
       const bloco = el('div', { class: 'bloco-genitor' }, el('h3', {}, icone('pessoa'), g.rotulo), el('dl', { class: 'lista-definicao' }, el('dt', { text: 'Nome' }), el('dd', { text: g.nome }), el('dt', { text: 'Laudo C9orf72' }), g.laudo_c9orf72 ? el('dd', { text: `${g.laudo_c9orf72} repetições (da ficha)` }) : el('dd', {}, el('div', { class: 'chips' }, chip('Não testado: C9orf72 indeterminado', 'chip-aviso', 'alerta')), el('div', { class: 'pequeno texto-suave', text: 'Sem o laudo, o lócus do C9orf72 sai do cálculo e o resultado é parcial para esse gene. Registre o nº de repetições na ficha.' }))));
       if (g.vcf.presente) bloco.append(el('div', { class: 'vcf-estado' }, chip('VCF anexado', 'chip-ok', 'dna'), el('span', { class: 'detalhe', text: `${fmtBytes(g.vcf.tamanho)} · hash ${g.vcf.hash_curto}` })));
+      else if (g.inferido_por_parentes) {
+        inferidos.push(papel);
+        bloco.append(el('div', { class: 'vcf-estado' }, chip('Sem VCF: genótipo inferido por parentes', 'chip-azul', 'dna'), el('span', { class: 'detalhe', text: resumoInferido(g) })),
+          el('dl', { class: 'lista-definicao' }, el('dt', { text: 'Situação clínica' }), g.situacao_clinica ? el('dd', { text: `${g.situacao_rotulo}${g.idade_situacao !== null && g.idade_situacao !== undefined ? `, ${g.idade_situacao} anos` : ''}` }) : el('dd', {}, el('div', { class: 'chips' }, chip('Não informada: obrigatória para analisar', 'chip-aviso', 'alerta')), linkBotao('Informar na ficha', `#/pacientes/${p.id}`, { classe: 'botao-secundario botao-pequeno', icone: 'editar' }))),
+          el('p', { class: 'pequeno texto-suave', text: op.inferencia_por_parentes || '' }));
+      }
       else {
         const m = marcacao({ nome: `assumir_${papel}`, rotulo: `Assumir que ${g.nome} não tem variante de risco (sem exame). ${g.laudo_informado ? 'O laudo do C9orf72 informado continua valendo.' : 'Sem laudo, assume-se também laudo normal do C9orf72.'}` });
         assumir[papel] = m; camposSup[`assumir_${papel}`] = m;
@@ -1459,9 +1538,11 @@
       }
       blocos.append(bloco);
     }
-    const semVcf = PAPEIS_GENITOR.filter((g) => !p.genitores[g].vcf.presente);
-    const secao1 = secaoNumerada(1, 'Dados genéticos (da ficha)', blocos);
+    const semVcf = PAPEIS_GENITOR.filter((g) => !p.genitores[g].vcf.presente && !p.genitores[g].inferido_por_parentes);
+    const priorAvos = inferidos.length ? campo({ nome: 'prior_avos', rotulo: 'Avô ou avó sem exame', tipo: 'select', valor: 'nao_portador', opcoes: [['nao_portador', 'Suposto não portador (padrão; declarado no resultado)'], ['hardy_weinberg', 'Prior de Hardy-Weinberg com a frequência alélica da base de anotação']], dica: 'Sem frequência na base para a variante, vale a suposição de não portador. Com tio testado e avós sem exame, a prior de Hardy-Weinberg entra sempre que houver frequência.' }) : null;
+    const secao1 = secaoNumerada(1, 'Dados genéticos (da ficha)', blocos, priorAvos ? priorAvos.no : null, inferidos.length && p.tipo === 'CASAL' ? el('div', { class: 'alerta alerta-aviso' }, icone('alerta'), el('p', { text: op.aviso_parceiro_inferido || '' })) : null);
     // 02 descendente / futuro filho
+    const emRisco = p.descendentes.filter((d) => !d.testado); // filho que já fez o teste é evidência, não pessoa em risco
     let alvoCampo = null, sexoFilho = null;
     let secao2;
     if (p.tipo === 'CASAL') {
@@ -1471,9 +1552,11 @@
       const d = p.descendentes[0];
       secao2 = secaoNumerada(2, 'Pessoa atendida', el('dl', { class: 'lista-definicao' }, el('dt', { text: 'Nome' }), el('dd', { text: d.nome }), el('dt', { text: 'Sexo' }), el('dd', { text: ROTULO_SEXO[d.sexo] }), el('dt', { text: 'Idade atual (sem sintomas)' }), el('dd', { text: `${d.idade} anos` })), dica('Sexo e idade vêm do cadastro e condicionam o risco à pessoa assintomática nessa idade.'));
     } else {
-      alvoCampo = campo({ nome: 'descendente_id', rotulo: 'Filho(a) a analisar', tipo: 'select', obrigatorio: true, valor: descParam || (p.descendentes[0] ? String(p.descendentes[0].id) : ''), opcoes: [...p.descendentes.map((d) => [String(d.id), `${d.nome} (${d.idade} anos, ${ROTULO_SEXO[d.sexo]})`]), ['todos', `Todos os filhos (${p.descendentes.length}), um por vez`]] });
-      secao2 = secaoNumerada(2, 'Filho(a)', alvoCampo.no, dica('Cada filho recebe a própria análise, com seu sexo e idade; o comparativo fica na ficha.'));
+      alvoCampo = campo({ nome: 'descendente_id', rotulo: 'Filho(a) a analisar', tipo: 'select', obrigatorio: true, valor: descParam || (emRisco[0] ? String(emRisco[0].id) : ''), opcoes: [...emRisco.map((d) => [String(d.id), `${d.nome} (${d.idade} anos, ${ROTULO_SEXO[d.sexo]})`]), ['todos', `Todos os filhos em risco (${emRisco.length}), um por vez`]] });
+      secao2 = secaoNumerada(2, 'Filho(a)', alvoCampo.no, dica(`Cada filho recebe a própria análise, com seu sexo e idade; o comparativo fica na ficha.${emRisco.length < p.descendentes.length ? ' Filho que já fez o teste entra como evidência sobre o genitor sem exame e não é analisado.' : ''}`));
     }
+    const confirma = p.tipo === 'CASAL' ? null : marcacao({ nome: 'confirma_assintomatico', rotulo: p.tipo === 'FAMILIA' ? 'Confirmo que a pessoa analisada não apresenta sintomas de ELA (vale para cada filho analisado nesta execução)' : 'Confirmo que a pessoa analisada não apresenta sintomas de ELA' });
+    if (confirma) secao2.append(confirma.no, dica('O condicionamento pela idade só vale para quem não manifestou a doença. Só a confirmação e a data ficam guardadas, sem nenhum dado clínico.'));
     // 03 simulação (+ cenário de exemplo quando em demonstração)
     const sim = camposSimulacao();
     let cenario = null, mCen = null;
@@ -1487,18 +1570,21 @@
     const secao3 = secaoNumerada(3, 'Simulação', sim.no, mCen ? el('div', {}, mCen.no, cenario.no) : null);
     const prog = caixaProgresso();
     const enviar = botao(p.tipo === 'CASAL' ? 'Analisar transmissão' : 'Executar análise', { tipo: 'submit', icone: 'frasco' });
-    const campos = { ...sim.campos, ...camposSup, descendente_id: alvoCampo, sexo_filho: sexoFilho, cenario, modo: mCen };
+    const campos = { ...sim.campos, ...camposSup, descendente_id: alvoCampo, sexo_filho: sexoFilho, cenario, modo: mCen, confirma_assintomatico: confirma, prior_avos: priorAvos };
     const form = el('form', { novalidate: true, onsubmit: async (ev) => {
       ev.preventDefault();
       const erros = {};
       const usaCenario = mCen && mCen.valor();
       const assumidos = PAPEIS_GENITOR.filter((g) => assumir[g] && assumir[g].valor());
+      if (confirma && !confirma.valor()) erros.confirma_assintomatico = 'Confirme que a pessoa analisada não apresenta sintomas de ELA.';
+      const semSituacao = inferidos.filter((g) => !p.genitores[g].situacao_clinica);
+      if (!usaCenario && semSituacao.length) { avisar('erro', `Informe na ficha a situação clínica de: ${semSituacao.map((g) => p.genitores[g].rotulo).join(' e ')} (genitor sem exame com parente testado).`); return; }
       if (!usaCenario) {
         for (const g of semVcf) if (!assumidos.includes(g)) erros[`assumir_${g}`] = 'Marque a suposição ou anexe o VCF na ficha.';
         if (semVcf.length === 2) erros.assumir_MAE = 'É preciso o VCF de ao menos um genitor.';
       }
       if (Object.keys(erros).length) { aplicarErros(campos, erros); return; }
-      const alvos = p.tipo === 'CASAL' ? [null] : p.tipo === 'PESSOA' ? [p.descendentes[0]] : (alvoCampo.valor() === 'todos' ? p.descendentes : [p.descendentes.find((d) => String(d.id) === alvoCampo.valor())]);
+      const alvos = p.tipo === 'CASAL' ? [null] : p.tipo === 'PESSOA' ? [p.descendentes[0]] : (alvoCampo.valor() === 'todos' ? emRisco : [p.descendentes.find((d) => String(d.id) === alvoCampo.valor())]);
       const sexos = p.tipo === 'CASAL' && !sexoFilho.valor() ? ['F', 'M'] : [sexoFilho ? sexoFilho.valor() : null];
       const execucoes = [];
       for (const d of alvos) for (const s of sexos) execucoes.push({ d, s });
@@ -1515,6 +1601,8 @@
           if (d) fd.append('descendente_id', String(d.id));
           if (s) fd.append('sexo_filho', s);
           if (assumidos.length) fd.append('assumir_nao_portador', assumidos.join(','));
+          if (confirma && confirma.valor()) fd.append('confirma_assintomatico', '1');
+          if (priorAvos && !usaCenario) fd.append('prior_avos', priorAvos.valor());
           sim.preencher(fd);
           const r = await api('POST', '/api/analises', { form: fd });
           estado.analises[r.id] = { resultado: r, paciente: { id: p.id, nome: p.nome, prontuario: p.prontuario, tipo: p.tipo, tipo_rotulo: p.tipo_rotulo }, descendente: d ? { id: d.id, nome: d.nome, idade: d.idade, sexo: d.sexo } : null };
@@ -1526,7 +1614,7 @@
       } catch (e) { aplicarErros(campos, e.campos, Object.keys(e.campos).length ? null : e.message); if (ids.length) avisar('aviso', `${ids.length} análise(s) concluída(s) antes do erro; veja o histórico na ficha.`, { acumular: true }); }
       finally { enviar.disabled = false; prog.esconder(); form.removeAttribute('aria-busy'); }
     } }, secao1, secao2, secao3, prog.caixa, el('div', { class: 'acoes acoes-direita' }, enviar));
-    const apoio = cartaoApoio('Sobre a análise', [p.linha_risco, 'VCFs e laudos vêm da ficha; nada é reenviado. Os arquivos são decifrados só durante a execução.', 'O resumo (genes de risco, probabilidades, idade provável de início e suposições) fica guardado na ficha; o resultado completo fica disponível por duas horas.', 'Resultado: 1. se herdou (transmissão); 2. chance de manifestação por idade com banda de 95 %; 3. idade provável de início.']);
+    const apoio = cartaoApoio('Sobre a análise', [p.linha_risco, 'VCFs e laudos vêm da ficha; nada é reenviado. Os arquivos são decifrados só durante a execução.', 'O resumo (genes de risco, probabilidades, idade provável de início e suposições) fica guardado na ficha; o resultado completo fica disponível por duas horas.', 'Resultado: 1. se herdou (transmissão); 2. chance de manifestação com banda de 95 %; 3. idade provável de início. Para uma pessoa com idade informada, os três valem a partir dessa idade, sem sintomas.']);
     area.append(duasColunas(el('div', { class: 'cartao' }, form), apoio));
   }
 
@@ -1574,7 +1662,7 @@
         { rotulo: 'Registro', classe: 'registro', valor: (a) => el('div', {}, el('a', { href: `#/pacientes/${a.paciente_id}`, text: a.registro }), el('div', { class: 'pequeno texto-suave', text: `${a.tipo_curto} · prontuário ${a.prontuario}` })) },
         { rotulo: 'Pessoa', valor: (a) => el('div', {}, a.pessoa, el('div', { class: 'pequeno texto-suave', text: `${a.sexo ? ROTULO_SEXO[a.sexo] : 'sexo não informado'}${a.idade_na_analise !== null ? `, ${a.idade_na_analise} anos` : ''}` })) },
         { rotulo: 'Genes', valor: (a) => el('div', { class: 'chips' }, a.sem_locus ? chip('nenhum lócus', 'chip-neutro') : a.genes_de_risco.map((x) => chip(x, 'chip-azul')), a.com_suposicao ? chip('suposição', 'chip-aviso') : null, a.hipoteses ? chip('hipóteses', 'chip-neutro') : null) },
-        { rotulo: 'Herdou', valor: (a) => fmtPct(a.p_portador), num: true }, { rotulo: 'Vida [95 %]', valor: (a) => `${fmtPct(a.p_manifesta)} [${fmtPct(a.q025)}–${fmtPct(a.q975)}]`, num: true }, { rotulo: 'Início', valor: (a) => (a.sem_locus ? '—' : `${fmtNum(a.idade_mediana, 0)} anos`), num: true },
+        { rotulo: 'Referência', valor: (a) => refAnalise(a) }, { rotulo: 'Herdou', valor: (a) => fmtPct(a.p_portador), num: true }, { rotulo: 'Manifestação [95 %]', valor: (a) => `${fmtPct(a.p_manifesta)} [${fmtPct(a.q025)}–${fmtPct(a.q975)}]`, num: true }, { rotulo: 'Início', valor: (a) => (a.sem_locus ? '—' : `${fmtNum(a.idade_mediana, 0)} anos`), num: true },
         { rotulo: 'Execução', valor: (a) => `${a.modo} · ${a.motor} · N=${fmtNum(a.n, 0)}` },
         { rotulo: 'Ações', valor: (a) => el('div', { class: 'acoes acoes-compactas' }, a.tem_resultado ? linkBotao('Abrir resultado', `#/analises/${a.paciente_id}/${a.id}`, { classe: 'botao-pequeno', icone: 'grafico' }) : el('span', { class: 'texto-suave pequeno', text: 'resultado não guardado' }), linkBotao('Repetir', `#/analise?paciente=${a.paciente_id}${a.descendente_id !== null ? `&descendente=${a.descendente_id}` : ''}`, { classe: 'botao-secundario botao-pequeno', icone: 'frasco' })) }], itens, { blocos: true })));
     };
@@ -1628,6 +1716,15 @@
     const sup = faixaSuposicao(r);
     if (sup) raiz.append(sup);
     if (r.c9orf72_indeterminado) raiz.append(el('div', { class: 'alerta alerta-aviso' }, icone('alerta'), el('p', {}, el('strong', { text: 'Resultado parcial: o C9orf72 não foi avaliado. ' }), r.texto_c9orf72_indeterminado || 'Falta o laudo do C9orf72 de um genitor; o lócus ficou indeterminado e saiu do cálculo.')));
+    const inf = r.parentes && r.parentes.loci_inferidos && r.parentes.loci_inferidos.length ? r.parentes : null;
+    if (inf) { // genitor sem exame inferido por parentes: o que entrou e as suposições usadas
+      const quem = (inf.pessoas || []).map((x) => x.parente).join(', ');
+      const gens = Object.entries(inf.genitores || {}).map(([lado, g]) => `${lado === 'mae' ? 'mãe/parceira' : 'pai/parceiro'}: ${ROTULO_SITUACAO_GENITOR[g.situacao] || g.situacao}${g.idade !== null && g.idade !== undefined && (g.situacao === 'vivo_assintomatico' || g.situacao === 'falecido_sem_ela') ? ` aos ${fmtNum(g.idade, 0)} anos` : ''}`).join('; ');
+      raiz.append(el('div', { class: 'alerta alerta-info' }, icone('info'), el('div', {}, el('p', {}, el('strong', { text: 'Genitor sem exame inferido por parentes. ' }), r.texto_inferencia || ''), el('p', { class: 'pequeno', text: `Parentes considerados: ${quem || '—'}. Situação clínica: ${gens || '—'}.` }),
+        (inf.suposicoes || []).length ? el('details', {}, el('summary', { text: 'Suposições usadas' }), el('ul', {}, inf.suposicoes.map((s) => el('li', { text: s })))) : null)));
+      if (r.limite_inferior) raiz.append(el('div', { class: 'alerta alerta-aviso' }, icone('alerta'), el('p', {}, el('strong', { text: 'Limite inferior. ' }), r.texto_limite_inferior || '')));
+      if (r.aviso_parceiro_inferido) raiz.append(el('div', { class: 'alerta alerta-aviso' }, icone('alerta'), el('p', { text: r.aviso_parceiro_inferido })));
+    }
     const pr = r.principais || {};
     const base = r.base_url || `/api/analises/${r.id}`;
     const fig = (nome, legenda) => el('figure', { class: 'figura' }, el('img', { src: `${base}/figuras/${nome}`, alt: legenda }), el('figcaption', { text: legenda }));
@@ -1638,17 +1735,24 @@
     const comb = r.curvas && (r.curvas['qualquer lócus'] || r.curvas[unidades[0]]);
     const transmissaoRotulo = ent.tipo === 'CASAL' ? '1. Probabilidade de transmissão' : '1. Probabilidade de ter herdado';
     const ini = pr.inicio || {};
+    const cond = !!pr.condicionado;
+    const refTxt = cond ? `A partir dos ${fmtNum(pr.idade_referencia, 0)} anos, sem sintomas` : '';
+    const horizonteTxt = fmtNum(pr.horizonte || (r.metadados && r.metadados.horizonte) || 90, 0);
+    const jan = pr.janelas || {};
     const indicadores = el('div', { class: 'indicadores' },
-      indicador({ icone: 'transmissao', rotulo: transmissaoRotulo, valor: fmtPct(pr.transmissao), detalhe: 'Herdar ao menos uma variante de risco (P portador ≥ 1)', destaque: true }),
-      indicador({ icone: 'escudo', rotulo: '2. Manifestação ao longo da vida', valor: fmtPct(pr.vida ? pr.vida.valor : null), detalhe: pr.vida ? `Intervalo de 95 %: ${fmtPct(pr.vida.q025)}–${fmtPct(pr.vida.q975)}` : '', destaque: true }),
-      ...['50', '60', '70'].map((a) => indicador({ icone: 'pessoa', rotulo: `Aos ${a} anos`, valor: fmtPct(pr.F && pr.F[a] ? pr.F[a].valor : (r.sem_locus ? 0 : null)), detalhe: pr.F && pr.F[a] ? `Intervalo de 95 %: ${fmtPct(pr.F[a].q025)}–${fmtPct(pr.F[a].q975)}` : '' })),
-      indicador({ icone: 'calendario', rotulo: '3. Idade provável de início', valor: r.sem_locus ? '—' : `${fmtNum(ini.mediana, 0)} anos`, detalhe: r.sem_locus ? 'Sem lócus de risco' : `Mediana; faixa de 25–75 %: ${fmtNum(ini.q25, 0)}–${fmtNum(ini.q75, 0)} anos`, destaque: true }));
+      indicador({ icone: 'transmissao', rotulo: transmissaoRotulo, valor: fmtPct(pr.transmissao), detalhe: cond ? `${refTxt}: portar ao menos uma variante de risco` : 'Herdar ao menos uma variante de risco (P portador ≥ 1)', destaque: true }),
+      indicador({ icone: 'escudo', rotulo: cond ? '2. Manifestação daqui em diante' : '2. Manifestação ao longo da vida', valor: fmtPct(pr.vida ? pr.vida.valor : null), detalhe: pr.vida ? `${cond ? `${refTxt}, até os ${horizonteTxt} anos` : `Até os ${horizonteTxt} anos`}. Intervalo de 95 %: ${fmtPct(pr.vida.q025)}–${fmtPct(pr.vida.q975)}` : '', destaque: true }),
+      ...(cond
+        ? ['10', '20'].map((j) => indicador({ icone: 'pessoa', rotulo: `Nos próximos ${j} anos`, valor: fmtPct(jan[j] ? jan[j].valor : (r.sem_locus ? 0 : null)), detalhe: jan[j] ? `${refTxt}. Intervalo de 95 %: ${fmtPct(jan[j].q025)}–${fmtPct(jan[j].q975)}` : refTxt }))
+        : ['50', '60', '70'].map((a) => indicador({ icone: 'pessoa', rotulo: `Aos ${a} anos`, valor: fmtPct(pr.F && pr.F[a] ? pr.F[a].valor : (r.sem_locus ? 0 : null)), detalhe: pr.F && pr.F[a] ? `Intervalo de 95 %: ${fmtPct(pr.F[a].q025)}–${fmtPct(pr.F[a].q975)}` : '' }))),
+      indicador({ icone: 'calendario', rotulo: '3. Idade provável de início', valor: r.sem_locus || ini.mediana === null || ini.mediana === undefined ? '—' : `${fmtNum(ini.mediana, 0)} anos`, detalhe: r.sem_locus ? 'Sem lócus de risco' : (ini.mediana === null || ini.mediana === undefined ? `${cond ? `${refTxt}: ` : ''}sem risco restante até o horizonte` : `${cond ? `${refTxt}, entre quem vai manifestar: mediana` : 'Mediana'}; faixa de 25–75 %: ${fmtNum(ini.q25, 0)}–${fmtNum(ini.q75, 0)} anos`), destaque: true }));
     const limitacoes = el('div', { class: 'cartao' }, el('h2', { text: 'Limitações do modelo' }), el('div', { class: 'linhas-info' },
-      dica('Não considera ancestralidade.'), dica('Não considera histórico familiar além dos genótipos dos genitores.'), dica('Assume independência entre os genes.'),
+      dica('Não considera ancestralidade.'), dica('Usa só genótipos: dos genitores e, quando um deles não pôde ser testado, de parentes dele. O fenótipo de parente sem teste genético não entra.'), dica('Vale para pessoa sem sintomas; não calcula números agregados da família.'), dica('Assume independência entre os genes.'),
       ...(r.limitacoes.parametros_provisorios.length ? [dica(`Parâmetros provisórios (a confirmar pela autora): ${r.limitacoes.parametros_provisorios.join(', ')}.`)] : [])), el('p', { class: 'pequeno texto-suave', text: r.limitacoes.texto }));
     const barra = el('div', { class: 'barra-inferior' },
       el('span', { class: 'item' }, icone('frasco'), `Entrada: ${ent.modo === 'cenario' ? `cenário ${ent.cenario}` : 'VCFs'}; laudo C9orf72: ${ent.laudo_c9orf72 ? Object.entries(ent.laudo_c9orf72).map(([k, v]) => `${k} ${Array.isArray(v) ? v.join(',') : v}`).join('; ') : 'não informado'}`),
-      el('span', { class: 'item' }, icone('modelo'), `N = ${fmtNum(ent.n, 0)} · semente ${ent.semente} · motor ${ent.motor}${ent.hipoteses_c9orf72 ? ' · hipóteses experimentais' : ''}${ent.comparar_cox ? ' · Cox' : ''}`),
+      el('span', { class: 'item' }, icone('modelo'), `N = ${fmtNum(ent.n, 0)} · semente ${ent.semente} · motor ${ent.motor}${ent.hipoteses_c9orf72 ? ' · hipóteses experimentais' : ''}${ent.comparar_cox ? ' · Cox' : ''}${ent.tornado ? ' · tornado' : ''}`),
+      ent.assintomatico_confirmado ? el('span', { class: 'item' }, icone('check'), `Sem sintomas: confirmado pelo profissional${ent.assintomatico_confirmado_em ? ` em ${fmtData(ent.assintomatico_confirmado_em)}` : ''}`) : null,
       el('button', { type: 'button', class: 'botao botao-link', onclick: () => raizAbas.selecionar(5) }, 'Ver metadados e verificações ', icone('seta-dir')));
     const resumoAba = () => {
       const d = el('div', {}, indicadores);
@@ -1658,7 +1762,7 @@
       }
       const tabelaF = tabelaAlternativa('probabilidade acumulada por idade, banda de 95 % e S(t)', comb.t, [{ rotulo: 'F(t)', y: comb.F }, { rotulo: 'F 2,5 %', y: comb.F_q025 }, { rotulo: 'F 97,5 %', y: comb.F_q975 }, { rotulo: 'S(t)', y: comb.S }]);
       const grafico = graficoLinhas({ titulo: 'Probabilidade acumulada por idade', descricao: 'Gráfico de linhas da probabilidade acumulada de manifestação F(t) por idade, com banda de credibilidade de 95 %; os dados estão na tabela abaixo.', x: comb.t, series: [{ nome: 'Estimativa', y: comb.F, classe: 'curva' }], banda: { inferior: comb.F_q025, superior: comb.F_q975, nome: 'Intervalo de 95 %' }, tabela: tabelaF });
-      d.append(el('div', { class: 'duas-colunas' }, el('div', {}, grafico), el('div', {}, limitacoes)));
+      d.append(el('div', { class: 'duas-colunas' }, el('div', {}, grafico, cond ? el('p', { class: 'pequeno texto-suave', text: `A curva mostra o risco acumulado desde o nascimento. Os indicadores acima valem a partir dos ${fmtNum(pr.idade_referencia, 0)} anos, sem sintomas; a aba "Risco por idade" traz a tabela completa.` }) : null), el('div', {}, limitacoes)));
       d.append(el('h2', { text: 'Por lócus de risco' }), el('div', { class: 'grade' }, r.resumo.map((l) => el('div', { class: 'cartao' }, el('h3', { text: l.variante }), el('p', { class: 'pequeno texto-suave', text: `${l.heranca}; dosagens mãe/pai ${l.dosagem_mae}/${l.dosagem_pai}` }),
         el('div', { class: 'grade' }, medida(fmtPct(l.p_portador_exato), 'herdou'), medida(fmtPct(l.p_manifesta_exato), `risco vitalício [${fmtPct(l.p_manifesta_q025)}–${fmtPct(l.p_manifesta_q975)}]`), medida(`${fmtNum(l.idade_mediana_exata, 1)} anos`, 'idade mediana de início'))))),
         el('div', {}, secao('Resultado'), tab('tabela_03_risco_vitalicio'), r.transmissao_c9orf72 ? secao('Transmissão do C9orf72') : null), barra);
@@ -1666,7 +1770,7 @@
     };
     const raizAbas = abas([
       { rotulo: 'Resumo', icone: 'grafico', conteudo: resumoAba },
-      { rotulo: 'Variantes e qualidade', icone: 'dna', conteudo: () => el('div', {}, secao('Qualidade dos dados'), tab('tabela_01_variantes_anotadas'), tab('tabela_01b_vetor_dosagem'), tab('tabela_01c_transmissao_c9orf72')) },
+      { rotulo: 'Variantes e qualidade', icone: 'dna', conteudo: () => el('div', {}, secao('Qualidade dos dados'), tab('tabela_01_variantes_anotadas'), tab('tabela_01b_vetor_dosagem'), secao('Genitor inferido por parentes'), tab('tabela_01d_genitor_inferido'), tab('tabela_01c_transmissao_c9orf72')) },
       { rotulo: 'Risco por idade', icone: 'calendario', conteudo: () => el('div', {}, el('p', { text: 'Risco condicional ao descendente assintomático em cada idade atual: P(portador | assintomático), risco nos próximos 10 e 20 anos e risco vitalício residual, com banda de 95 % pela incerteza da penetrância.' }), tab('tabela_04_risco_condicional'), tab('tabela_04b_risco_condicional_km')) },
       { rotulo: 'Curvas', icone: 'grafico', conteudo: () => r.sem_locus ? el('p', { text: 'Sem lócus de risco: não há curvas.' }) : el('div', {}, unidades.map((u) => { const c = r.curvas[u]; const t = tabelaAlternativa(`${u}, F(t), banda e S(t)`, c.t, [{ rotulo: 'F(t)', y: c.F }, { rotulo: 'F 2,5 %', y: c.F_q025 }, { rotulo: 'F 97,5 %', y: c.F_q975 }, { rotulo: 'S(t)', y: c.S }]);
           return graficoLinhas({ titulo: `${u}: F(t) com banda de 95 % e S(t)`, descricao: `Gráfico de linhas de ${u}: risco acumulado F(t) com banda de credibilidade de 95 % e sobrevivência S(t) por idade; os dados estão na tabela.`, x: c.t, yMax: 1, series: [{ nome: 'F(t) = P(C)·π·G(t)', y: c.F, classe: 'curva' }, { nome: 'S(t) = 1 − F(t)', y: c.S, classe: 'curva-2' }], banda: { inferior: c.F_q025, superior: c.F_q975, nome: 'banda 95 % (incerteza de π)' }, tabela: t }); }),
@@ -1674,6 +1778,7 @@
         figuraPorNome('figura_04'), figuraPorNome('figura_08'), figuraPorNome('figura_05')) },
       { rotulo: 'Sobrevivência', icone: 'degraus', conteudo: () => el('div', {}, el('p', { text: 'Coorte sintética censurada no horizonte: Kaplan-Meier (Lifelines), recuperação de π, λ e ρ pelo modelo de cura mista e, se pedido, o modelo de Cox como comparação.' }), tab('tabela_10_kaplan_meier'), tab('tabela_07_recuperacao_lifelines'), cartaoCox(r), figuraPorNome('figura_09')) },
       { rotulo: 'Verificações', icone: 'escudo', conteudo: () => el('div', {}, secao('Verificações'), tab('tabela_02_aderencia'), figuraPorNome('figura_06'), figuraPorNome('figura_01'),
+        r.tornado ? [secao('Sensibilidade tipo tornado'), tab('tabela_20_tornado'), figuraPorNome('figura_12')] : (r.sem_locus ? null : el('p', { class: 'pequeno texto-suave', text: 'Sensibilidade tipo tornado não solicitada nesta execução (opção da análise, desligada por padrão).' })),
         el('div', { class: 'cartao' }, el('h2', { text: 'Metadados da execução (reprodutibilidade)' }), el('dl', { class: 'lista-definicao' }, Object.entries(r.metadados).filter(([, v]) => v !== null && typeof v !== 'object').map(([k, v]) => [el('dt', { text: k }), el('dd', { text: String(v) })]).flat(),
           el('dt', { text: 'base de anotação' }), el('dd', { text: r.metadados.base_anotacao ? (r.metadados.base_anotacao.base_real || 'tabela curada') : '—' }), el('dt', { text: 'lóci descartados' }), el('dd', { text: (r.metadados.loci_descartados || []).join(', ') || 'nenhum' }),
           el('dt', { text: 'suposições' }), el('dd', { text: ent.suposicoes && ent.suposicoes.nao_portador ? `genitor assumido não portador: ${ent.suposicoes.nao_portador.join(', ')}` : 'nenhuma' }),
@@ -1718,12 +1823,12 @@
     if (!a) return el('span', { class: 'texto-suave', text: 'Sem análise' });
     const ini = a.inicio || {};
     return el('div', {}, el('div', { class: 'chips' }, a.sem_locus ? chip('Nenhum lócus', 'chip-neutro') : a.genes_de_risco.map((g) => chip(g, 'chip-azul'))),
-      el('div', { class: 'pequeno', text: `herdou ${fmtPct(a.p_portador)} · vida ${fmtPct(a.p_manifesta)} [${fmtPct(a.q025)}–${fmtPct(a.q975)}] · início ${fmtNum(a.idade_mediana, 0)} anos` }),
+      el('div', { class: 'pequeno', text: `herdou ${fmtPct(a.p_portador)} · ${a.condicionado ? 'daqui em diante' : 'vida'} ${fmtPct(a.p_manifesta)} [${fmtPct(a.q025)}–${fmtPct(a.q975)}] · início ${a.idade_mediana === null || a.idade_mediana === undefined ? '—' : `${fmtNum(a.idade_mediana, 0)} anos`}` }), el('div', { class: 'pequeno texto-suave', text: `Valores ${refAnalise(a)}` }),
       el('div', { class: 'pequeno texto-suave', text: `${fmtMes(a.executado_em)} · ${a.motor} · N=${fmtNum(a.n, 0)}${a.hipoteses ? ' · hipóteses' : ''}${a.com_suposicao ? ' · suposição' : ''}` }), void ini);
   }
   function cartaoCaso(c) {
     const cab = el('div', { class: 'cabecalho-tabela' }, el('div', {}, el('div', { class: 'chips' }, el('code', { text: c.codigo.slice(0, 12) + '…', title: 'código pseudonimizado' }), chip(c.tipo_rotulo, 'chip-azul', c.tipo === 'CASAL' ? 'casal' : c.tipo === 'FAMILIA' ? 'familia' : 'pessoa'), c.momento_rotulo ? chip(c.momento_rotulo, 'chip-neutro') : null, chip(`liberado em ${fmtMes(c.liberado_em)}`, 'chip-neutro'), c.com_suposicao ? chip('suposição de não portador', 'chip-aviso', 'alerta') : null)),
-      el('div', { class: 'chips' }, PAPEIS_GENITOR.map((g) => chip(`${g === 'MAE' ? 'mãe' : 'pai'}: ${c.genitores[g] && c.genitores[g].vcf_presente ? 'VCF' : 'sem VCF'}${c.genitores[g] && c.genitores[g].laudo_informado ? ' + laudo' : ''}`, c.genitores[g] && c.genitores[g].vcf_presente ? 'chip-ok' : 'chip-aviso'))));
+      el('div', { class: 'chips' }, PAPEIS_GENITOR.map((g) => chip(`${g === 'MAE' ? 'mãe' : 'pai'}: ${c.genitores[g] && c.genitores[g].vcf_presente ? 'VCF' : 'sem VCF'}${c.genitores[g] && c.genitores[g].laudo_informado ? ' + laudo' : ''}${c.genitores[g] && (c.genitores[g].parentes || []).length ? ` · inferido por ${c.genitores[g].parentes.length} parente(s)` : ''}`, c.genitores[g] && c.genitores[g].vcf_presente ? 'chip-ok' : 'chip-aviso'))));
     const pessoas = el('div', { class: 'grade' }, c.descendentes.map((d) => el('div', { class: 'medida' }, el('strong', { text: `Descendente ${d.indice}: ${ROTULO_SEXO[d.sexo]}, ${d.faixa_etaria} anos` }), analisePseudo(d.analise))),
       c.futuro_filho ? el('div', { class: 'medida' }, el('strong', { text: `Futuro filho${c.futuro_filho.sexo ? ` (${ROTULO_SEXO[c.futuro_filho.sexo]})` : ''}` }), analisePseudo(c.futuro_filho)) : null);
     const det = el('details', { class: 'detalhes-caso' }, el('summary', { text: 'Dados completos: variantes, dosagens, curva de risco e metadados' }));
@@ -1745,7 +1850,8 @@
       raiz.append(el('h3', { text: rotulo }));
       if (!a) { raiz.append(el('p', { class: 'texto-suave', text: 'Sem análise.' })); continue; }
       const ini = a.inicio || {};
-      raiz.append(el('div', { class: 'grade' }, medida(fmtPct(a.p_portador), '1. herdou / transmissão'), medida(`${fmtPct(a.p_manifesta)} [${fmtPct(a.q025)}–${fmtPct(a.q975)}]`, '2. manifestação ao longo da vida'), medida(a.sem_locus ? '—' : `${fmtNum(a.idade_mediana, 0)} anos (25–75 %: ${fmtNum(ini.q25, 0)}–${fmtNum(ini.q75, 0)})`, '3. idade provável de início')));
+      raiz.append(el('p', { class: 'pequeno texto-suave', text: `Os três valores abaixo valem ${refAnalise(a)}.` }));
+      raiz.append(el('div', { class: 'grade' }, medida(fmtPct(a.p_portador), '1. herdou / transmissão'), medida(`${fmtPct(a.p_manifesta)} [${fmtPct(a.q025)}–${fmtPct(a.q975)}]`, a.condicionado ? '2. manifestação daqui em diante' : '2. manifestação ao longo da vida'), medida(a.sem_locus ? '—' : `${fmtNum(a.idade_mediana, 0)} anos (25–75 %: ${fmtNum(ini.q25, 0)}–${fmtNum(ini.q75, 0)})`, '3. idade provável de início')));
       if (a.loci && a.loci.length) raiz.append(tabela([{ rotulo: 'Gene', chave: 'gene' }, { rotulo: 'Variante', chave: 'variante' }, { rotulo: 'Herança', chave: 'heranca' }, { rotulo: 'Dosagem mãe', chave: 'dosagem_mae', num: true }, { rotulo: 'Dosagem pai', chave: 'dosagem_pai', num: true }, { rotulo: 'P(portador)', valor: (l) => fmtPct(l.p_portador), num: true }, { rotulo: 'Risco vitalício [95 %]', valor: (l) => `${fmtPct(l.p_manifesta)} [${fmtPct(l.q025)}–${fmtPct(l.q975)}]`, num: true }, { rotulo: 'Idade mediana', valor: (l) => fmtNum(l.idade_mediana, 1), num: true }], a.loci, { legenda: 'Lóci de risco' }));
       if (a.vetor && a.vetor.length) raiz.append(tabela([{ rotulo: 'Gene', chave: 'gene' }, { rotulo: 'Variante', chave: 'variante' }, { rotulo: 'rs', chave: 'rs' }, { rotulo: 'Tipo', chave: 'tipo' }, { rotulo: 'Herança', chave: 'heranca' }, { rotulo: 'Dosagem mãe', chave: 'dosagem_mae', num: true }, { rotulo: 'Dosagem pai', chave: 'dosagem_pai', num: true }, { rotulo: 'Repetições mãe/pai', valor: (l) => `${fmtCelula(l.repeticoes_mae)} / ${fmtCelula(l.repeticoes_pai)}` }, { rotulo: 'ClinVar', chave: 'clnsig' }, { rotulo: 'Estrelas', chave: 'estrelas', num: true }, { rotulo: 'Descartado', chave: 'descartado' }], a.vetor, { legenda: 'Vetor genotípico parental (dosagem por lócus de risco)' }));
       if (a.variantes && a.variantes.length) raiz.append(tabela([{ rotulo: 'Genitor', valor: (v) => (v.amostra === 'MAE' ? 'mãe' : v.amostra === 'PAI' ? 'pai' : v.amostra) }, { rotulo: 'Gene', chave: 'gene' }, { rotulo: 'Crom.', chave: 'cromossomo' }, { rotulo: 'Posição', chave: 'posicao', num: true }, { rotulo: 'Ref', chave: 'ref' }, { rotulo: 'Alt', chave: 'alt' }, { rotulo: 'ID', chave: 'id' }, { rotulo: 'Tipo', chave: 'tipo' }, { rotulo: 'Classe', chave: 'classe' }, { rotulo: 'ClinVar', chave: 'clnsig' }, { rotulo: 'Estrelas', chave: 'estrelas', num: true }, { rotulo: 'Nome curto', chave: 'nome_curto' }, { rotulo: 'Dosagem', chave: 'dosagem', num: true }, { rotulo: 'Repetições', chave: 'repeticoes', num: true }], a.variantes, { legenda: 'Variantes aprovadas no filtro de qualidade, por genitor (dos VCFs)' }));

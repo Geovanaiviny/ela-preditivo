@@ -33,7 +33,7 @@ from .bd import agora
 from .comum import exigir_campos, interpretar_laudo, iso, obter_bd, obter_cifra
 from .config import Configuracao
 from .modelos import AnalisePaciente, Descendente, Paciente, Usuario
-from .pacientes import descendente_de, do_medico, idades
+from .pacientes import descendente_de, do_medico, idades, situacao_do_genitor
 from .permissoes import ANALISES_BAIXAR, ANALISES_EXECUTAR, MODELO_VER, exigir
 
 router = APIRouter(prefix="/api", tags=["analises"])
@@ -75,7 +75,17 @@ COLUNAS_VETOR = (
     "p_portador_exato",
     "descartado",
     "observacao",
+    "genitor_inferido",
+    "p_dosagem_mae",
+    "p_dosagem_pai",
 )
+PRIORS_AVOS = ("nao_portador", "hardy_weinberg")
+SITUACAO_PARA_O_NUCLEO = {
+    "VIVO_ASSINTOMATICO": "vivo_assintomatico",
+    "FALECIDO_SEM_ELA": "falecido_sem_ela",
+    "AFETADO": "afetado",
+    "DESCONHECIDA": "desconhecido",
+}
 
 
 class RegistroAnalises:
@@ -185,17 +195,43 @@ def _quantil_inicio(t: list, F: list, q: float) -> float | None:
     return None
 
 
-def principais(sem_locus: bool, combinado: dict, curvas: dict) -> dict:
-    """As três respostas do artefato, para a linha de indicadores: 1. probabilidade de ter herdado / transmissão;
-    2. probabilidade de manifestação clínica (ao longo da vida com banda, e aos 50/60/70 anos); 3. idade provável de
-    início (mediana e faixa 25–75 % de G(t) = F(t)/F(horizonte)) da unidade combinada."""
+def principais(
+    sem_locus: bool, combinado: dict, curvas: dict, condicionado: dict | None = None, idade_atual=None
+) -> dict:
+    """As três respostas do artefato, para a linha de indicadores.
+
+    Sem idade atual (ou idade 0: futuro filho), valem desde o nascimento: 1. probabilidade de ter herdado /
+    transmissão; 2. probabilidade de manifestação até o horizonte, com banda, e aos 50/60/70 anos; 3. idade provável
+    de início (mediana e faixa 25–75 % de G(t) = F(t)/F(horizonte)) da unidade combinada.
+
+    Com idade atual > 0 (`condicionado`, calculado pelo pipeline com a conta exata da Tabela 4 na idade do atendido),
+    valem para quem chegou a essa idade sem sintomas: 1. P(portador de ≥ 1 lócus | assintomático); 2. risco residual
+    até o horizonte, com banda, e nos próximos 10 e 20 anos; 3. mediana e faixa de 25 % a 75 % da idade de início entre
+    quem vai manifestar. `idade_referencia` acompanha os valores em toda tela, lista e exportação."""
+    ref = float(idade_atual) if idade_atual is not None and float(idade_atual) > 0 else None
     if sem_locus or not combinado:
         return {
             "sem_locus": True,
+            "condicionado": ref is not None,
+            "idade_referencia": ref,
             "transmissao": 0.0,
             "vida": {"valor": 0.0, "q025": 0.0, "q975": 0.0},
             "F": {},
+            "janelas": {},
             "inicio": None,
+        }
+    if condicionado:
+        ini = condicionado.get("inicio") or {}
+        return {
+            "sem_locus": False,
+            "condicionado": True,
+            "idade_referencia": condicionado.get("idade_referencia"),
+            "horizonte": condicionado.get("horizonte"),
+            "transmissao": condicionado.get("p_portador"),
+            "vida": dict(condicionado.get("risco_residual") or {}),
+            "F": {},
+            "janelas": condicionado.get("janelas") or {},
+            "inicio": {k: (None if ini.get(k) is None else round(float(ini[k]), 1)) for k in ("mediana", "q25", "q75")},
         }
     c = curvas.get(UNIDADE_COMBINADA) or (next(iter(curvas.values())) if curvas else None)
     F, inicio = {}, None
@@ -212,6 +248,9 @@ def principais(sem_locus: bool, combinado: dict, curvas: dict) -> dict:
         }
     return {
         "sem_locus": False,
+        "condicionado": False,
+        "idade_referencia": None,
+        "horizonte": combinado.get("horizonte"),
         "transmissao": combinado.get("p_portador_qualquer_exato"),
         "vida": {
             "valor": combinado.get("p_manifesta_qualquer_exato"),
@@ -219,14 +258,24 @@ def principais(sem_locus: bool, combinado: dict, curvas: dict) -> dict:
             "q975": combinado.get("p_manifesta_qualquer_q975"),
         },
         "F": F,
+        "janelas": {},
         "inicio": inicio,
     }
 
 
 def resumo_para_guardar(resultado: dict) -> dict:
-    """O que fica cifrado na ficha: genes de risco, probabilidades por lócus e combinadas, as três respostas e as
-    suposições. Nunca o relatório, as figuras, os VCFs nem qualquer nome."""
+    """O que fica cifrado na ficha: genes de risco, probabilidades por lócus e combinadas, as três respostas (as
+    condicionadas à idade atual, com a idade de referência, quando ela foi informada) e as suposições. Nunca o
+    relatório, as figuras, os VCFs nem qualquer nome."""
     comb = resultado.get("combinado") or {}
+    pr = resultado.get("principais") or {}
+    ref = pr.get("idade_referencia") if pr.get("condicionado") else None
+    tab4 = next((t for t in resultado.get("tabelas") or [] if t["nome"] == "tabela_04_risco_condicional"), None)
+    na_idade = {}  # linha da Tabela 4 de cada unidade na idade de referência
+    if ref is not None and tab4:
+        for l in tab4["linhas"]:
+            if l.get("idade_atual") is not None and abs(float(l["idade_atual"]) - float(ref)) < 1e-9:
+                na_idade[l.get("unidade")] = l
     loci = [
         {
             "gene": l.get("gene"),
@@ -239,10 +288,13 @@ def resumo_para_guardar(resultado: dict) -> dict:
             "q025": l.get("p_manifesta_q025"),
             "q975": l.get("p_manifesta_q975"),
             "idade_mediana": l.get("idade_mediana_exata"),
+            "p_portador_condicional": (na_idade.get(l.get("variante")) or {}).get("p_portador_condicional"),
+            "risco_residual": (na_idade.get(l.get("variante")) or {}).get("risco_vitalicio"),
+            "risco_residual_q025": (na_idade.get(l.get("variante")) or {}).get("risco_vitalicio_q025"),
+            "risco_residual_q975": (na_idade.get(l.get("variante")) or {}).get("risco_vitalicio_q975"),
         }
         for l in resultado.get("resumo") or []
     ]
-    pr = resultado.get("principais") or {}
     tab1 = next((t for t in resultado.get("tabelas") or [] if t["nome"] == "tabela_01_variantes_anotadas"), None)
     variantes = [{k: l.get(k) for k in COLUNAS_VARIANTES} for l in (tab1["linhas"] if tab1 else [])]
     vetor = [{k: l.get(k) for k in COLUNAS_VETOR} for l in resultado.get("vetor") or []]
@@ -266,14 +318,41 @@ def resumo_para_guardar(resultado: dict) -> dict:
                 "idade_mediana_primeiro_inicio",
             )
         },
+        "condicionado": bool(pr.get("condicionado")),
+        "idade_referencia": pr.get("idade_referencia"),
         "transmissao": pr.get("transmissao"),
+        "vida": pr.get("vida") or {},
+        "janelas": pr.get("janelas") or {},
         "F": pr.get("F") or {},
         "inicio": pr.get("inicio"),
         "laudo_informado": bool((resultado.get("entrada") or {}).get("laudo_c9orf72")),
+        # genitor sem exame inferido por parentes: situação, suposições e distribuição da dosagem (sem nomes)
+        "parentes": _parentes_para_guardar(resultado.get("parentes")),
+        "limite_inferior": bool(resultado.get("limite_inferior")),
         "loci_descartados": (resultado.get("metadados") or {}).get("loci_descartados") or [],
         "c9orf72_indeterminado": _c9orf72_indeterminado(resultado.get("vetor")),
         "horizonte": (resultado.get("metadados") or {}).get("horizonte"),
         "versao": (resultado.get("metadados") or {}).get("versao"),
+    }
+
+
+def _parentes_para_guardar(info: dict | None) -> dict | None:
+    """Do resumo da inferência por parentes fica o que explica o resultado: situação de cada genitor inferido,
+    parentes considerados (só o parentesco), suposições e a dosagem inferida por lócus. Nenhum nome de arquivo."""
+    if not info:
+        return None
+    return {
+        "genitores": info.get("genitores") or {},
+        "pessoas": [
+            {
+                "parente": x.get("parente"),
+                "com_vcf": bool(x.get("vcf")),
+                "com_laudo": x.get("laudo_c9orf72") is not None,
+            }
+            for x in info.get("pessoas") or []
+        ],
+        "suposicoes": info.get("suposicoes") or [],
+        "loci_inferidos": info.get("loci_inferidos") or [],
     }
 
 
@@ -307,6 +386,7 @@ def serializar_resultado(ident: str, r: dict, saida: Path, entrada: dict) -> dic
     figuras = [{"nome": Path(f["png"]).name, "legenda": f["legenda"]} for f in r["figuras"]]
     transm = r.get("transmissao_c9orf72")
     cox = r.get("cox")
+    tornado = r.get("tornado")
     provisorios = []
     try:
         par = carregar_parametros()
@@ -323,7 +403,9 @@ def serializar_resultado(ident: str, r: dict, saida: Path, entrada: dict) -> dic
             "sem_locus": sem_locus,
             "resumo": _registros(r.get("resumo")),
             "combinado": combinado,
-            "principais": principais(sem_locus, combinado, curvas),
+            "principais": principais(
+                sem_locus, combinado, curvas, _limpar(r.get("condicionado")), entrada.get("idade_atual")
+            ),
             "suposicoes_texto": {
                 "nao_portador": textos.SUPOSICAO_NAO_PORTADOR,
                 "laudo_sem_vcf": textos.SUPOSICAO_LAUDO_SEM_VCF,
@@ -331,6 +413,17 @@ def serializar_resultado(ident: str, r: dict, saida: Path, entrada: dict) -> dic
             },
             "c9orf72_indeterminado": _c9orf72_indeterminado(_registros(r.get("vetor"))),
             "texto_c9orf72_indeterminado": textos.C9ORF72_INDETERMINADO,
+            # genitor sem exame inferido por parentes: o que entrou, as suposições e os avisos
+            "parentes": _limpar(r.get("parentes")),
+            "texto_inferencia": textos.INFERENCIA_POR_PARENTES,
+            "limite_inferior": bool(r.get("limite_inferior")),
+            "texto_limite_inferior": textos.LIMITE_INFERIOR_GENITOR_AFETADO,
+            "aviso_parceiro_inferido": (
+                textos.AVISO_PARCEIRO_INFERIDO
+                if entrada.get("tipo") == "CASAL" and (r.get("parentes") or {}).get("loci_inferidos")
+                else None
+            ),
+            "texto_variante_herdada": textos.SUPOSICAO_VARIANTE_HERDADA,
             "vetor": _registros(r.get("vetor")),
             "aderencia": _registros(r.get("aderencia")),
             "curvas": curvas,
@@ -342,6 +435,11 @@ def serializar_resultado(ident: str, r: dict, saida: Path, entrada: dict) -> dic
             "cox": (
                 {"tabela": _registros(cox["tabela"]), "texto": cox["texto"], "mensagens": cox["mensagens"]}
                 if cox is not None
+                else None
+            ),
+            "tornado": (
+                {"linhas": _registros(tornado), "fora": list(tornado.attrs.get("fora_do_tornado") or [])}
+                if tornado is not None and not tornado.empty
                 else None
             ),
             "metadados": {
@@ -356,6 +454,7 @@ def serializar_resultado(ident: str, r: dict, saida: Path, entrada: dict) -> dic
                     "laudo_c9orf72",
                     "hipoteses_c9orf72",
                     "comparar_cox",
+                    "tornado",
                     "horizonte",
                     "data",
                     "versao_parametros",
@@ -364,6 +463,10 @@ def serializar_resultado(ident: str, r: dict, saida: Path, entrada: dict) -> dic
                     "montagem",
                     "loci",
                     "loci_descartados",
+                    "indicadores_condicionados",
+                    "parentes",
+                    "limite_inferior",
+                    "sorteios_rejeitados",
                     "tempo_total_s",
                 )
             },
@@ -372,7 +475,8 @@ def serializar_resultado(ident: str, r: dict, saida: Path, entrada: dict) -> dic
                 "parametros_provisorios": provisorios,
                 "texto": (
                     "Independência entre lóci; sem fatores modificadores; penetrância populacional de coortes "
-                    "europeias/norte-americanas; dados sintéticos; sem ancestralidade nem histórico familiar."
+                    "europeias/norte-americanas; dados sintéticos; sem ancestralidade nem fenótipo de parentes sem "
+                    "teste genético; vale para pessoa sem sintomas."
                 ),
             },
             "aviso_legal": AVISO_LEGAL,
@@ -489,6 +593,7 @@ def parametros(usuario: Usuario = Depends(exigir(MODELO_VER))):
             "extensoes": {
                 "repeticoes": "transmissão do C9orf72 por repetições, limiar e antecipação (hipótese experimental)",
                 "cox": "CoxPHFitter na coorte sintética de portadores, comparado com a cura mista",
+                "tornado": "sensibilidade tipo tornado, um parâmetro por vez dentro da faixa publicada (opção da análise)",
             },
             "limitacao_modelo": textos.LIMITACAO_MODELO,
             "aviso_legal": AVISO_LEGAL,
@@ -510,32 +615,105 @@ class Execucao:
         sexo_filho: str | None = None,
         modo: str = "vcf",
         cenario: int | None = None,
+        assintomatico: bool = False,
+        prior_avos: str = "nao_portador",
+        tornado: bool = False,
     ):
+        self.tornado = bool(tornado)  # sensibilidade tipo tornado do caso (desligada por padrão)
+        self.prior_avos = prior_avos  # avô ou avó sem exame: suposto não portador (padrão) ou Hardy-Weinberg
         self.n, self.seed, self.motor, self.cox, self.hipoteses = n, seed, motor, cox, hipoteses
         self.assumir, self.sexo_filho, self.modo, self.cenario = assumir, sexo_filho, modo, cenario
+        # confirmação do profissional de que a pessoa analisada não apresenta sintomas de ELA (obrigatória quando
+        # há pessoa analisada; não se aplica ao futuro filho de um casal)
+        self.assintomatico = bool(assintomatico)
 
 
-def _preparar_vcfs_do_registro(config, cifra, p: Paciente, pasta: Path, assumir: frozenset[str], campos: dict):
-    """Decifra os anexos para a pasta temporária; genitor sem VCF: VCF sem variantes se assumido, senão erro de campo."""
+def _preparar_vcfs_do_registro(
+    config,
+    cifra,
+    p: Paciente,
+    pasta: Path,
+    assumir: frozenset[str],
+    campos: dict,
+    descendente: Descendente | None = None,
+    prior_avos: str = "nao_portador",
+):
+    """Decifra os anexos para a pasta temporária e monta a evidência de parentes.
+
+    Genitor com VCF: observado. Genitor sem VCF: inferido por parentes quando algum parente dele (ou um filho já
+    testado, no caso de família) tem VCF, e então a situação clínica dele é obrigatória; senão, VCF sem variantes se
+    assumido não portador; senão, erro de campo. Devolve (VCF da mãe, VCF do pai, suposições, argumento `parentes` do
+    pipeline, resumo sem caminhos para a entrada)."""
     caminhos: dict[str, Path] = {}
     suposicoes: dict[str, list[str]] = {"nao_portador": [], "laudo_sem_vcf": []}
+    parentes_arg: dict = {}
+    resumo: dict = {}
+    filhos = (
+        [d for d in p.descendentes if d.tem_vcf and (descendente is None or d.id != descendente.id)]
+        if p.tipo == "FAMILIA"
+        else []
+    )
     for papel, lado in (("MAE", "mae"), ("PAI", "pai")):
         g = p.genitor(papel)
         rotulo = textos.ROTULO_GENITOR[p.tipo][papel]
         if g is not None and g.tem_vcf:
             caminhos[lado] = vcfs.decifrar_para(config, cifra, g, pasta, lado)
-        elif papel in assumir:
-            caminhos[lado] = vcfs.sem_variantes(pasta / f"{lado}.vcf", f"{lado}_sem_exame")
-            suposicoes["nao_portador"].append(papel)
-            if g is not None and cifra.decifrar(g.laudo_c9orf72_cifrado):
-                suposicoes["laudo_sem_vcf"].append(papel)
-        else:
-            campos[f"vcf_{lado}"] = (
-                f"{rotulo} sem VCF anexado: anexe o arquivo na ficha ou marque a suposição de não portador."
+            continue
+        meus = p.parentes_de(papel) if g is not None else []
+        inferido = any(x.tem_vcf for x in meus) or bool(filhos)
+        if not inferido:
+            if papel in assumir:
+                caminhos[lado] = vcfs.sem_variantes(pasta / f"{lado}.vcf", f"{lado}_sem_exame")
+                suposicoes["nao_portador"].append(papel)
+                if g is not None and cifra.decifrar(g.laudo_c9orf72_cifrado):
+                    suposicoes["laudo_sem_vcf"].append(papel)
+            else:
+                campos[f"vcf_{lado}"] = (
+                    f"{rotulo} sem VCF anexado: anexe o arquivo na ficha, adicione um parente testado ou marque a "
+                    "suposição de não portador."
+                )
+        if not (meus or inferido) or g is None:
+            continue
+        # parentes do genitor sem exame: VCFs inferem as variantes dele; laudos, o C9orf72
+        sit = situacao_do_genitor(g, cifra)
+        if sit["situacao"] is None:
+            campos[f"situacao_{lado}"] = (
+                f"Informe na ficha a situação clínica de {rotulo} (genitor sem exame com parente testado)."
             )
+        item: dict = {
+            "situacao": SITUACAO_PARA_O_NUCLEO.get(sit["situacao"], "desconhecido"),
+            "idade": sit["idade"],
+            "prior_avos": prior_avos,
+            "irmaos": [],
+        }
+        for x in meus:
+            dado = {
+                "vcf": vcfs.decifrar_para(config, cifra, x, pasta, f"parente_{x.id}") if x.tem_vcf else None,
+                "laudo_c9orf72": interpretar_laudo(
+                    cifra.decifrar(x.laudo_c9orf72_cifrado), f"laudo_parente_{x.id}", campos
+                ),
+            }
+            if x.parentesco == "IRMAO_DO_GENITOR":
+                item["irmaos"].append(dado)
+            else:
+                item["pai" if x.parentesco == "PAI_DO_GENITOR" else "mae"] = dado
+        parentes_arg[lado] = item
+        resumo[papel] = {
+            "situacao": sit["situacao"],
+            "idade": sit["idade"],
+            "inferido": inferido,
+            "parentes": [x.parentesco for x in meus],
+            "com_laudo": any(cifra.decifrar(x.laudo_c9orf72_cifrado) for x in meus),
+        }
+    if filhos and len(caminhos) < 2:  # filho já testado só é evidência quando algum genitor não tem VCF
+        parentes_arg["filhos_testados"] = [
+            {"vcf": vcfs.decifrar_para(config, cifra, d, pasta, f"filho_{d.id}")} for d in filhos
+        ]
+        resumo["filhos_testados"] = len(filhos)
     if assumir >= {"MAE", "PAI"}:
         campos["assumir_nao_portador"] = "É preciso o VCF de ao menos um genitor."
-    return caminhos.get("mae"), caminhos.get("pai"), {k: v for k, v in suposicoes.items() if v}
+    suposicoes_usadas = {k: v for k, v in suposicoes.items() if v}
+    return caminhos.get("mae"), caminhos.get("pai"), suposicoes_usadas, parentes_arg, resumo
 
 
 def _laudo_do_registro(cifra, p: Paciente, campos: dict) -> dict:
@@ -577,6 +755,7 @@ def _executar(
     descendente: Descendente | None = None,
     cifra=None,
     config: Configuracao | None = None,
+    parentes: dict | None = None,
 ) -> dict:
     """Roda o pipeline numa pasta temporária, serializa, guarda em memória e, se houver registro, persiste o resumo."""
     saida = pasta / "saida"
@@ -595,6 +774,8 @@ def _executar(
                 laudo_c9orf72=laudo or None,
                 hipoteses_c9orf72=exec_.hipoteses,
                 comparar_cox=exec_.cox,
+                parentes=parentes or None,
+                tornado=exec_.tornado,
             )
         resultado = serializar_resultado(ident, r, saida, entrada)
         if paciente is not None:
@@ -611,6 +792,8 @@ def _executar(
                 cox=exec_.cox,
                 sexo=sexo,
                 idade_na_analise=int(idade) if idade is not None else None,
+                assintomatico_confirmado=entrada.get("assintomatico_confirmado"),
+                assintomatico_confirmado_em=agora() if entrada.get("assintomatico_confirmado") else None,
                 suposicoes=json.dumps(entrada.get("suposicoes") or {}, ensure_ascii=False) or None,
                 vcf_hash_mae=(paciente.genitor("MAE").vcf_hash if paciente.genitor("MAE") else None),
                 vcf_hash_pai=(paciente.genitor("PAI").vcf_hash if paciente.genitor("PAI") else None),
@@ -635,8 +818,10 @@ def _executar(
             alvo_id=ident,
             detalhe=(
                 f"modo={exec_.modo}; cenario={entrada.get('cenario')}; motor={exec_.motor}; n={exec_.n}; cox={exec_.cox}; "
+                f"tornado={exec_.tornado}; "
                 f"hipoteses={'sim' if exec_.hipoteses else 'não'}; paciente={entrada.get('paciente_id')}; "
-                f"descendente={entrada.get('descendente_id')}; suposicoes={','.join(sorted((entrada.get('suposicoes') or {}).get('nao_portador', []))) or 'nenhuma'}"
+                f"descendente={entrada.get('descendente_id')}; suposicoes={','.join(sorted((entrada.get('suposicoes') or {}).get('nao_portador', []))) or 'nenhuma'}; "
+                f"assintomatico={'confirmado' if entrada.get('assintomatico_confirmado') else 'não se aplica'}"
             ),
         )
         bd.commit()
@@ -659,8 +844,9 @@ def _executar(
         bd.commit()
         raise
     finally:
-        for nome in ("mae.vcf", "pai.vcf", "mae.vcf.gz", "pai.vcf.gz"):  # VCFs nunca ficam na pasta da análise
-            (pasta / nome).unlink(missing_ok=True)
+        # VCFs (genitores, parentes e filho testado) nunca ficam na pasta da análise
+        for arquivo in list(pasta.glob("*.vcf")) + list(pasta.glob("*.vcf.gz")):
+            arquivo.unlink(missing_ok=True)
 
 
 def executar_para_registro(
@@ -690,10 +876,21 @@ def executar_para_registro(
             rotulo = f"registro {p.id}, descendente {descendente.id}"  # nunca o nome
     if exec_.modo == "cenario" and not config.demonstracao:
         campos["modo"] = "Cenário de exemplo só é permitido em ambiente de demonstração."
+    if descendente is not None and not exec_.assintomatico:
+        campos["confirma_assintomatico"] = textos.ERRO_CONFIRMACAO_ASSINTOMATICO
+    if descendente is not None and descendente.tem_vcf:
+        campos["descendente_id"] = (
+            "Este filho já fez o teste (VCF próprio anexado): o genótipo dele é conhecido e entra como evidência sobre "
+            "o genitor sem exame; ele não é analisado como pessoa em risco."
+        )
+    if exec_.prior_avos not in PRIORS_AVOS:
+        campos["prior_avos"] = "Opção desconhecida para avô ou avó sem exame."
     laudo = _laudo_do_registro(cifra, p, campos)
     exigir_campos(campos)
     ident, pasta = registro.criar(usuario.id)
     suposicoes: dict = {}
+    parentes_arg: dict = {}
+    resumo_parentes: dict = {}
     try:
         if exec_.modo == "cenario":
             num = exec_.cenario
@@ -710,14 +907,16 @@ def executar_para_registro(
             if not laudo:
                 laudo = dict(c.laudo_c9orf72)
         else:
-            caminho_mae, caminho_pai, suposicoes = _preparar_vcfs_do_registro(
-                config, cifra, p, pasta, exec_.assumir, campos
+            caminho_mae, caminho_pai, suposicoes, parentes_arg, resumo_parentes = _preparar_vcfs_do_registro(
+                config, cifra, p, pasta, exec_.assumir, campos, descendente, exec_.prior_avos
             )
             exigir_campos(campos)
             # genitor assumido não portador e sem laudo: a suposição cobre também o C9orf72 (laudo normal suposto),
-            # senão o lócus ficaria indeterminado e o caso com um só parceiro testado nunca avaliaria o gene
+            # senão o lócus ficaria indeterminado e o caso com um só parceiro testado nunca avaliaria o gene. Se algum
+            # parente dele tem laudo, o C9orf72 do genitor é inferido por esse laudo, sem supor nada.
             for papel, lado in (("MAE", "mae"), ("PAI", "pai")):
-                if papel in suposicoes.get("nao_portador", []) and lado not in laudo:
+                parente_com_laudo = (resumo_parentes.get(papel) or {}).get("com_laudo")
+                if papel in suposicoes.get("nao_portador", []) and lado not in laudo and not parente_com_laudo:
                     laudo[lado] = cenarios.LAUDO_NORMAL
                     suposicoes.setdefault("laudo_normal_suposto", []).append(papel)
     except HTTPException:
@@ -734,10 +933,15 @@ def executar_para_registro(
         "semente": exec_.seed,
         "motor": exec_.motor,
         "comparar_cox": exec_.cox,
+        "tornado": exec_.tornado,
         "paciente_id": p.id,
         "tipo": p.tipo,
         "descendente_id": descendente.id if descendente is not None else None,
+        "assintomatico_confirmado": True if descendente is not None else None,
+        "assintomatico_confirmado_em": iso(agora()) if descendente is not None else None,
         "suposicoes": suposicoes,
+        "parentes": resumo_parentes or None,
+        "prior_avos": exec_.prior_avos if resumo_parentes else None,
         "vcf_hash": {
             "mae": (p.genitor("MAE").vcf_hash or "")[:12] or None if p.genitor("MAE") else None,
             "pai": (p.genitor("PAI").vcf_hash or "")[:12] or None if p.genitor("PAI") else None,
@@ -761,6 +965,7 @@ def executar_para_registro(
         descendente=descendente,
         cifra=cifra,
         config=config,
+        parentes=parentes_arg,
     )
 
 
@@ -783,10 +988,13 @@ def executar_analise(
     semente: str | None = Form(None),
     motor: str = Form("numpy"),
     cox: str | None = Form("1"),
+    tornado: str | None = Form(None),
     paciente_id: str | None = Form(None),
     descendente_id: str | None = Form(None),
     sexo_filho: str | None = Form(None),
     assumir_nao_portador: str | None = Form(None),
+    confirma_assintomatico: str | None = Form(None),
+    prior_avos: str | None = Form(None),
 ):
     bd, config, cifra = obter_bd(request), request.app.state.config, obter_cifra(request)
     registro: RegistroAnalises = request.app.state.analises
@@ -804,6 +1012,8 @@ def executar_analise(
     }
     hipoteses = {k: v for k, v in hip.items() if v is not None} or None
     comparar_cox = str(cox or "").strip().lower() in ("1", "true", "sim", "on")
+    com_tornado = str(tornado or "").strip().lower() in ("1", "true", "sim", "on")
+    confirmou = str(confirma_assintomatico or "").strip().lower() in ("1", "true", "sim", "on")
     num_cenario = _inteiro(cenario, "cenario", campos, 1, len(cenarios.CENARIOS)) if modo == "cenario" else None
     if modo == "cenario" and num_cenario is None and "cenario" not in campos:
         campos["cenario"] = "Escolha o cenário de exemplo."
@@ -835,11 +1045,14 @@ def executar_analise(
             seed=seed,
             motor=motor,
             cox=comparar_cox,
+            tornado=com_tornado,
             hipoteses=hipoteses,
             assumir=assumir,
             sexo_filho=sf,
             modo=modo,
             cenario=num_cenario,
+            assintomatico=confirmou,
+            prior_avos=(prior_avos or "nao_portador").strip().lower(),
         )
         return executar_para_registro(bd, config, cifra, registro, usuario, p, descendente, exec_)
 
@@ -848,6 +1061,9 @@ def executar_analise(
     if sexo_ not in (None, "M", "F"):
         campos["sexo"] = "Sexo deve ser M ou F."
     idade = _decimal(idade_atual, "idade_atual", campos, 0, 120, None)
+    tem_pessoa = idade is not None and idade > 0  # idade vazia ou zero = futuro filho, sem pessoa a confirmar
+    if tem_pessoa and not confirmou:
+        campos["confirma_assintomatico"] = textos.ERRO_CONFIRMACAO_ASSINTOMATICO
     laudo = {}
     for lado, texto in (("mae", c9orf72_mae), ("pai", c9orf72_pai)):
         v = interpretar_laudo(texto, f"c9orf72_{lado}", campos)
@@ -871,9 +1087,12 @@ def executar_analise(
         "semente": seed,
         "motor": motor,
         "comparar_cox": comparar_cox,
+        "tornado": com_tornado,
         "paciente_id": None,
         "tipo": None,
         "descendente_id": None,
+        "assintomatico_confirmado": True if tem_pessoa else None,
+        "assintomatico_confirmado_em": iso(agora()) if tem_pessoa else None,
         "suposicoes": {},
     }
     try:
@@ -895,7 +1114,14 @@ def executar_analise(
         registro.descartar(ident)
         raise
     exec_ = Execucao(
-        n=n_, seed=seed, motor=motor, cox=comparar_cox, hipoteses=hipoteses, modo=modo, cenario=num_cenario
+        n=n_,
+        seed=seed,
+        motor=motor,
+        cox=comparar_cox,
+        hipoteses=hipoteses,
+        modo=modo,
+        cenario=num_cenario,
+        tornado=com_tornado,
     )
     return _executar(
         registro,
