@@ -265,48 +265,49 @@ Todas as legendas saem no padrão "Tabela N — ... / Figura N — ...; Fonte: e
 
 ## 7. Cenários e resultados
 
-Execução definitiva em 24/10/2026 (`ela-preditivo tudo --saida resultados --seed 42`): 5 cenários × 2 sexos com N = 10.000, avaliação com N ∈ {1.000, 10.000, 100.000} × 30 sementes; 5 min 22 s no total. Índice completo em `../resultados/README.md`; relatório de cada caso em `../resultados/cenarios/cenario_<n>_<sexo>/relatorio.md`; avaliação em `../resultados/avaliacao/relatorio.md`.
+Execução completa de 17/11/2026 com o código desta revisão (`ela-preditivo tudo --seed 42 --so-tabela-curada`): 5 cenários × 2 sexos com N = 10.000 e idade atual de 30 anos, avaliação com N ∈ {1.000, 10.000, 100.000} × 30 sementes e verificação com 200 mundos; 6 min 29 s no total, numa máquina sem g++. A anotação usou só a tabela curada.
 
-> **Nota de 13/11/2026.** Os números desta seção vêm de `resultados/`, regenerado em 13/11/2026 com o código atual (`ela-preditivo tudo --saida resultados --seed 42 --n 10000 --idade-atual 30`, 837 s numa máquina sem g++) e com a calibração de G(t) pelas estatísticas publicadas. As medianas de idade de início mudaram em relação às execuções anteriores: SOD1 50,9, C9orf72 58,3, TARDBP 58,3 e FUS 46,7 anos. As probabilidades de transmissão e os riscos vitalícios não mudaram, porque a penetrância é a mesma.
-
-> **Nota de 17/11/2026.** `resultados/` é anterior a esta revisão e precisa ser regenerado na máquina que tem `dados_reais/` (`ela-preditivo tudo --saida resultados --seed 42`). O que muda: o risco vitalício passa a ser o risco até os 90 anos (FUS 9,6 % → 9,2 %; cenário 5 combinado 26,9 % → 26,6 %; TARDBP 19,2 % → 19,1 %; os demais não mudam na primeira casa), a Tabela 3 ganha a coluna "sem limite de idade", a Tabela 11 muda com as sementes independentes por sexo, as Tabelas 6 e 9 passam a trazer a log-normal truncada e entram as Tabelas 12 a 20 e as Figuras 10 a 12. As tabelas 7.1 e 7.2 abaixo ainda mostram a execução anterior; a seção 7.3 vem de uma execução local com a tabela curada.
+> **Pasta `resultados/`.** A pasta versionada ainda é a execução de 13/11/2026, anterior às correções desta revisão (nela o FUS aparece com 9,6 %). Ela será substituída pela execução completa com a base real do ClinVar: `ela-preditivo tudo --saida resultados --seed 42`, ou **Artefato › Reprodução completa** na plataforma. A base de anotação muda a origem da classificação de cada variante, não as dosagens dos cinco cenários; a conferência de que os números abaixo se repetem com a base real fica para essa execução.
 
 ### 7.1 Os cinco cenários (Tabela 3 consolidada)
 
 | Cenário (TCC, 4.5) | Lócus de risco | P(portador) | Risco vitalício [IC 95 %] | Idade mediana de início, anos (F / M) |
 |---|---|---|---|---|
-| 1. Pai heterozigoto SOD1 p.Ala5Val × mãe selvagem | SOD1 A4V | 0,50 | 26,9 % [16,3–37,2] | 50,3 |
+| 1. Pai heterozigoto SOD1 p.Ala5Val × mãe selvagem | SOD1 A4V | 0,50 | 26,9 % [16,3–37,2] | 50,9 |
 | 2. Mãe com expansão C9orf72 (45 repetições) × pai selvagem | C9orf72 | 0,50 | 16,6 % [10,2–23,7] | 59,3 / 57,3 |
 | 3. Pai het. SOD1 p.Ala5Val × mãe com expansão C9orf72 (exemplo literal do TCC) | C9orf72 | 0,50 | 16,6 % [10,2–23,7] | 59,3 / 57,3 |
-| | SOD1 A4V | 0,50 | 26,9 % [16,3–37,2] | 50,3 |
-| | qualquer lócus | 0,75 | 39,1 % [24,9–52,1] | 53,0 / 52,3 (primeiro início) |
-| 4. Ambos os pais het. SOD1 p.Asp91Ala (recessiva) | SOD1 D91A | 0,25 | 13,5 % [8,2–18,6] | 50,3 |
-| 5. Pai het. TARDBP p.Met337Val × mãe het. FUS p.Arg521Cys | TARDBP M337V | 0,50 | 19,2 % [10,5–28,7] | 54,2 |
-| | FUS R521C | 0,50 | 9,6 % [6,3–13,3] | 42,8 |
-| | qualquer lócus | 0,75 | 26,9 % [16,2–38,2] | 50,5 |
+| | SOD1 A4V | 0,50 | 26,9 % [16,3–37,2] | 50,9 |
+| | qualquer lócus | 0,75 | 39,1 % [28,8–48,6] | 52,8 / 52,2 (primeiro início) |
+| 4. Ambos os pais het. SOD1 p.Asp91Ala (recessiva) | SOD1 D91A | 0,25 | 13,5 % [8,2–18,6] | 50,9 |
+| 5. Pai het. TARDBP p.Met337Val × mãe het. FUS p.Arg521Cys | TARDBP M337V | 0,50 | 19,1 % [10,5–28,7] | 58,3 |
+| | FUS R521C | 0,50 | 9,2 % [6,1–12,8] | 46,7 |
+| | qualquer lócus | 0,75 | 26,6 % [18,2–35,6] | 55,8 |
+
+Risco vitalício é o risco até os 90 anos. A fração que manifesta em algum momento, sem limite de idade, é maior onde a idade de início se estende além do horizonte: FUS 9,6 %, TARDBP 19,2 % e cenário 5 combinado 26,9 %; nos demais, a diferença não aparece na primeira casa.
 
 O que os números mostram:
 
-- **Transmissão ≠ manifestação.** Nos cenários dominantes a probabilidade de herdar é sempre 50 %, mas o risco de adoecer vai de 9,6 % (FUS) a 26,9 % (SOD1), porque a penetrância é incompleta e varia por gene (TCC, 4.1). O intervalo de credibilidade carrega a incerteza publicada da penetrância até o resultado final.
-- **Herança recessiva** (cenário 4): só o homozigoto está em risco, P(portador) cai para 25 % e o risco vitalício para 13,5 %, mesmo com os dois pais portadores. A variante é *conflitante* no ClinVar e entra pela regra qualificada: 14 das 20 classificações são patogênicas ou provavelmente patogênicas e o fenótipo declara herança recessiva; o relatório registra a abertura do conflito e, como limitação, que a penetrância do SOD1 foi estimada sem essa variante.
+- **Transmissão ≠ manifestação.** Nos cenários dominantes a probabilidade de herdar é sempre 50 %, mas o risco de adoecer vai de 9,2 % (FUS) a 26,9 % (SOD1), porque a penetrância é incompleta e varia por gene (TCC, 4.1). O intervalo de credibilidade carrega a incerteza publicada da penetrância até o resultado final.
+- **Herança recessiva** (cenário 4): só o homozigoto está em risco, P(portador) cai para 25 % e o risco vitalício para 13,5 %, mesmo com os dois pais portadores. Com a tabela curada a variante entra como recessiva pela própria tabela. Com a base real do ClinVar ela é *conflitante* e entra pela regra qualificada das conflitantes: 14 das 20 classificações são patogênicas ou provavelmente patogênicas e o fenótipo declara herança recessiva; o relatório registra a abertura do conflito e, como limitação, que a penetrância do SOD1 foi estimada sem essa variante.
 - **Dois genes na família** (cenário 3): 75 % de chance de herdar pelo menos uma variante e 39,1 % de manifestar, sob independência entre lóci.
 - **Sexo**: no C9orf72 o descendente masculino manifesta 2 anos antes (57,3 vs 59,3 anos); nos demais genes não há evidência no TCC e o efeito é nulo por construção.
-- **Idade atual sem sintomas** (cenário 3, descendente feminina): aos 40 anos o risco nos próximos 20 anos é 23,5 % e o risco residual até os 90 anos 35,0 %; aos 60 anos caem para 14,8 % e 14,9 %; a probabilidade de portar SOD1 p.Ala5Val, dado assintomático aos 60, cai de 50 % para 36,3 % (atualização bayesiana).
-- **Kaplan-Meier** (cenário 3): a mediana de sobrevivência "não é atingida" em nenhum lócus, assinatura do modelo de cura mista (risco vitalício < 50 %); 90 % do risco do SOD1 já ocorreu aos 65 anos e o do C9orf72 aos 70.
+- **Idade atual sem sintomas** (cenário 3, descendente feminina): aos 40 anos o risco nos próximos 20 anos é 25,0 % e o risco residual até os 90 anos 35,7 %; aos 60 anos caem para 14,2 % e 14,3 %; a probabilidade de portar SOD1 p.Ala5Val, dado assintomático aos 60, cai de 50 % para 35,8 % (atualização bayesiana).
+- **Kaplan-Meier** (cenário 3): a mediana de sobrevivência "não é atingida" em nenhum lócus, assinatura do modelo de cura mista (risco vitalício < 50 %); 90 % do risco do SOD1 já ocorreu aos 63 anos e o do C9orf72 aos 71.
 
 ### 7.2 Verificações (TCC, 4.5)
 
 | Critério | Resultado |
 |---|---|
-| Aderência teórica (Tabela 2) | maior desvio entre Monte Carlo e valor exato nos 10 casos: 1,39 erros padrão (limite usual 4); qui-quadrado do genótipo sem rejeição; PyMC e NumPy concordam |
-| Estabilidade numérica (Tabela 5, Figura 7) | razão DP observado / EP teórico média de 1,04 nos 5 cenários; no cenário 3 o DP de P(manifestação) cai de 0,0146 (N = 1.000) para 0,0054 (10.000) e 0,0017 (100.000), inclinação −½ em log-log |
-| Coerência das curvas (Tabelas 7 e 10, Figura 4) | risco vitalício por Kaplan-Meier difere de P(C)·π em no máximo 0,006; mediana de início da Weibull da Lifelines difere da exata em até 1,2 ano; o modelo de cura mista recupera π com erro ≤ 3 % (ex.: SOD1 0,526–0,537 vs 0,539; FUS 0,194 vs 0,192), λ e ρ dentro de 4 %; pico de h(t): C9orf72 62 anos, SOD1 53, TARDBP 57, FUS 43,5 (início mais precoce, curvas provisórias); a faixa de incidência populacional 60–75 anos (Feldman et al., 2022) é comparada só com o pico do risco combinado, como referência, e não aprova nem reprova variantes |
-| Tempo (Tabela 8) | NumPy: 0,007 s para N = 100.000; PyMC: 0,20 s (1.000), 1,7 s (10.000), 16,4 s (100.000) em modo Python sem g++; caso completo com figuras ≈ 4 s |
-| Sensibilidade (Tabela 9, cenário 3) | risco combinado de 39,1 % com a literatura, 61,5 % com os parâmetros do exemplo do orientador (penetrância 0,90/0,60) e 59,8 % com C9orf72 de coorte familiar (π = 0,90): a escolha da penetrância domina o resultado |
+| Aderência teórica (Tabela 2) | maior desvio entre Monte Carlo e valor exato nos 10 casos: 1,54 erro padrão (limite usual 4); qui-quadrado do genótipo sem rejeição (maior valor 2,37); PyMC e NumPy concordam |
+| Estabilidade numérica (Tabela 5, Figura 7) | razão DP observado / EP teórico média de 1,04 nos 5 cenários; no cenário 3 o DP de P(manifestação) cai de 0,0172 (N = 1.000) para 0,0046 (10.000) e 0,0015 (100.000), inclinação −½ em log-log |
+| Coerência das curvas (Tabelas 7 e 10, Figura 4) | risco vitalício por Kaplan-Meier difere do exato em no máximo 0,006; mediana de início da Weibull da Lifelines difere da exata em até 0,4 ano, salvo no FUS (3,5 anos; é a distribuição mais larga e a curva é provisória); o modelo de cura mista recupera π com erro de até 2,5 % (SOD1 0,526 a 0,539 para 0,539; FUS 0,193 para 0,192), λ dentro de 1 % (FUS: 4,4 %) e ρ dentro de 5 %; pico de h(t): C9orf72 62 anos, SOD1 53,5, TARDBP 61, FUS 44; a faixa de incidência populacional 60–75 anos (Feldman et al., 2022) é comparada só com o pico do risco combinado (dentro dela nos cenários 2 e 5), como referência, e não aprova nem reprova variantes |
+| Tempo (Tabela 8) | NumPy: 0,008 s para N = 100.000; PyMC: 0,23 s (1.000), 1,9 s (10.000), 17,6 s (100.000) em modo Python sem g++; reprodução completa em 6 min 29 s |
+| Sensibilidade (Tabela 9, cenário 3) | risco combinado de 39,1 % com a literatura, 40,3 % com a penetrância log-normal truncada, 61,5 % com os parâmetros do exemplo do orientador (penetrância 0,90/0,60) e 59,8 % com C9orf72 de coorte familiar (π = 0,90): a escolha da penetrância domina o resultado, e a forma da distribuição pesa pouco |
+| Comparação com Cox (Tabela 11, cenário 3, sementes independentes por sexo) | razão de riscos do sexo masculino: SOD1 0,96 [0,914–1,016], p = 0,17, sem efeito, como esperado (teste de riscos proporcionais p = 0,32); C9orf72 0,98 [0,921–1,053], p = 0,66, com o teste de riscos proporcionais rejeitando (p < 0,001); no modelo combinado, portar SOD1 2,98 [2,82–3,16] e portar C9orf72 1,49 [1,41–1,56], concordância 0,62. S(t) do Cox e da cura mista diferem em no máximo 0,004 por lócus |
 
 ### 7.3 Métricas de verificação com famílias sintéticas
 
-Execução local de `avaliar` em 17/11/2026 com a tabela curada, semente 1000, N = 10.000, 200 mundos e 10 pessoas sorteadas por estrato (os parâmetros que `tudo` usa): 360.000 pessoas sorteadas, 326.006 na coorte com verdade = modelo. Medem verificação, não validação contra pacientes reais.
+Da mesma execução (a avaliação roda com semente 1000, N = 10.000, 200 mundos e 10 pessoas sorteadas por estrato): 360.000 pessoas sorteadas, 326.006 na coorte com verdade = modelo. Medem verificação, não validação contra pacientes reais.
 
 | Métrica | Verdade = modelo | Verdade alternativa (parâmetros do exemplo do orientador) |
 |---|---|---|
