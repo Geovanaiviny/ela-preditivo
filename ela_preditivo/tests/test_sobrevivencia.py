@@ -81,14 +81,14 @@ def test_tabela_risco_condicional(anotados, parametros):
     res = _res(anotados, parametros, 3, n=5000)
     t = sobrevivencia.tabela_risco_condicional(res, idades_atuais=(0, 40, 70))
     l0 = t[(t.unidade == res.loci[0].rotulo)].set_index("idade_atual")
-    # em t = 0 o risco vitalício condicional é o incondicional; cai com a idade
-    assert l0.loc[0, "risco_vitalicio"] == pytest.approx(
+    # na idade 0 o risco residual é o risco vitalício; cai com a idade
+    assert l0.loc[0, "risco_residual"] == pytest.approx(
         res.loci[0].p_manifesta_exato, abs=1e-4
     )  # quadratura numérica da Weibull
-    assert l0.loc[70, "risco_vitalicio"] < l0.loc[40, "risco_vitalicio"] < l0.loc[0, "risco_vitalicio"]
+    assert l0.loc[70, "risco_residual"] < l0.loc[40, "risco_residual"] < l0.loc[0, "risco_residual"]
     assert l0.loc[0, "p_portador_condicional"] == pytest.approx(0.5)
-    assert (t.risco_vitalicio_q025 <= t.risco_vitalicio + 1e-9).all() and (
-        t.risco_vitalicio <= t.risco_vitalicio_q975 + 1e-9
+    assert (t.risco_residual_q025 <= t.risco_residual + 1e-9).all() and (
+        t.risco_residual <= t.risco_residual_q975 + 1e-9
     ).all()
     assert sobrevivencia.QUALQUER in set(t.unidade)
 
@@ -99,4 +99,4 @@ def test_risco_condicional_km_aproxima_analitico(anotados, parametros):
     an = sobrevivencia.tabela_risco_condicional(res, idades_atuais=(40,)).set_index("unidade")
     u = res.loci[0].rotulo
     assert km.loc[u, "risco_20_anos_km"] == pytest.approx(an.loc[u, "risco_20_anos"], abs=0.02)
-    assert km.loc[u, "risco_vitalicio_km"] == pytest.approx(an.loc[u, "risco_vitalicio"], abs=0.02)
+    assert km.loc[u, "risco_residual_km"] == pytest.approx(an.loc[u, "risco_residual"], abs=0.02)

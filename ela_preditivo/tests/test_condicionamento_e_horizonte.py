@@ -45,7 +45,7 @@ def test_indicadores_condicionados_valores_exatos(
     # é a mesma conta exata da Tabela 4, na idade do atendido
     tab = sobrevivencia.tabela_risco_condicional(res, idades_atuais=(idade,), horizonte=90.0)
     linha = tab[tab.unidade == ind["unidade"]].iloc[0]
-    assert linha.p_portador_condicional == ind["p_portador"] and linha.risco_vitalicio == rr["valor"]
+    assert linha.p_portador_condicional == ind["p_portador"] and linha.risco_residual == rr["valor"]
 
 
 def test_condicionado_bate_com_a_rejeicao_do_monte_carlo(anotados, parametros, curada):
@@ -116,7 +116,7 @@ def test_pipeline_poe_a_idade_do_atendido_na_tabela_4_e_no_relatorio(dir_cenario
     assert sorted(t4.idade_atual.unique()) == [0, 20, 30, 40, 42, 50, 60, 70]
     linha = t4[t4.idade_atual == 42].iloc[0]
     assert linha.p_portador_condicional == pytest.approx(cond["p_portador"])
-    assert linha.risco_vitalicio == pytest.approx(cond["risco_residual"]["valor"])
+    assert linha.risco_residual == pytest.approx(cond["risco_residual"]["valor"])
     # o texto do relatório usa os mesmos números dos indicadores
     texto = (tmp_path / "c2" / "relatorio.md").read_text(encoding="utf-8")
     assert "assintomático aos 42 anos" in texto and "para 49.3%" in texto and "é 15.5%" in texto
@@ -143,14 +143,14 @@ def test_fus_cenario_5_risco_ate_o_horizonte_nas_tabelas_e_nas_curvas(anotados, 
     assert l.p_manifesta_sem_limite == pytest.approx(0.0960, abs=5e-5)  # F(∞), coluna própria
     assert res.resumo().iloc[j].p_manifesta_exato == l.p_manifesta_exato
     t4 = sobrevivencia.tabela_risco_condicional(res, idades_atuais=(0,), horizonte=90.0).set_index("unidade")
-    assert t4.loc[l.rotulo, "risco_vitalicio"] == pytest.approx(l.p_manifesta_exato, abs=1e-12)  # Tabela 4, idade 0
+    assert t4.loc[l.rotulo, "risco_residual"] == pytest.approx(l.p_manifesta_exato, abs=1e-12)  # Tabela 4, idade 0
     curvas = sobrevivencia.curvas_analiticas(res, 90.0)
     assert curvas[curvas.unidade == l.rotulo].F.iloc[-1] == pytest.approx(l.p_manifesta_exato, abs=1e-12)
     # combinado: mesmo número na Tabela 3, na Tabela 4 (idade 0) e na curva; a banda é a da curva no horizonte
     comb = res.resumo_combinado()
     q = curvas[curvas.unidade == sobrevivencia.QUALQUER]
     assert comb["p_manifesta_qualquer_exato"] == pytest.approx(
-        t4.loc[sobrevivencia.QUALQUER, "risco_vitalicio"], abs=1e-12
+        t4.loc[sobrevivencia.QUALQUER, "risco_residual"], abs=1e-12
     )
     assert comb["p_manifesta_qualquer_exato"] == pytest.approx(q.F.iloc[-1], abs=1e-12)
     assert comb["p_manifesta_qualquer_q025"] == pytest.approx(q.F_q025.iloc[-1], abs=1e-12)
@@ -198,12 +198,12 @@ def test_tabela_3_tem_coluna_propria_para_a_fracao_sem_limite(dir_cenarios, tmp_
     t4 = pd.read_csv(tmp_path / "c5" / "tabelas" / "tabela_04_risco_condicional.csv")
     fus = t3[t3.variante.str.startswith("FUS")].iloc[0]
     assert fus.p_manifesta_exato == pytest.approx(0.0918, abs=5e-5) and fus[col] == pytest.approx(0.0960, abs=5e-5)
-    na_t4 = t4[(t4.unidade == fus.variante) & (t4.idade_atual == 0)].risco_vitalicio.item()
+    na_t4 = t4[(t4.unidade == fus.variante) & (t4.idade_atual == 0)].risco_residual.item()
     assert na_t4 == pytest.approx(fus.p_manifesta_exato, abs=1e-9)
     comb3 = t3[t3.variante == sobrevivencia.QUALQUER].iloc[0]
     comb4 = t4[(t4.unidade == sobrevivencia.QUALQUER) & (t4.idade_atual == 0)].iloc[0]
     assert (
-        comb3.p_manifesta_exato == pytest.approx(comb4.risco_vitalicio, abs=1e-9)
+        comb3.p_manifesta_exato == pytest.approx(comb4.risco_residual, abs=1e-9)
         and comb3[col] > comb3.p_manifesta_exato
     )
     texto = (tmp_path / "c5" / "relatorio.md").read_text(encoding="utf-8")

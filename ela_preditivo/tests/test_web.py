@@ -1375,7 +1375,7 @@ def test_filtros_do_medico_funcao_pura_e_rota(plataforma, medico):
             "vcfs_completos": True,
             "genes_de_risco": [],
             "n_analises": 0,
-            "risco_maximo": None,
+            "risco_vitalicio_maximo": None,
             "laudo_informado": False,
             "com_suposicao": False,
             "ultima_analise": None,
@@ -1389,7 +1389,7 @@ def test_filtros_do_medico_funcao_pura_e_rota(plataforma, medico):
             nome="Ana",
             genes_de_risco=["SOD1"],
             n_analises=1,
-            risco_maximo=0.3,
+            risco_vitalicio_maximo=0.3,
             ultima_analise={"executado_em": "2026-11-15T12:00:00Z"},
             pesquisa_situacao="LIBERADO",
         ),
@@ -1401,7 +1401,7 @@ def test_filtros_do_medico_funcao_pura_e_rota(plataforma, medico):
             com_suposicao=True,
             genes_de_risco=["C9orf72"],
             n_analises=1,
-            risco_maximo=0.1,
+            risco_vitalicio_maximo=0.1,
             ultima_analise={"executado_em": "2026-11-01T12:00:00Z"},
             laudo_informado=True,
         ),
@@ -1810,6 +1810,8 @@ def test_genitor_sem_laudo_deixa_o_c9orf72_indeterminado_na_analise(plataforma, 
     assert "expansão GGGGCC" in res["metadados"]["loci_descartados"] and [x["gene"] for x in res["resumo"]] == ["SOD1"]
     assert "Resultado parcial para o C9orf72" in res["relatorio_md"]
     ficha = medico.get(f"/api/pacientes/{pid}").json()
+    # sem laudo e sem parente com laudo: aí sim o genitor fica indeterminado
+    assert all(g["c9orf72_por_parentes"] == [] and not g["laudo_informado"] for g in ficha["genitores"].values())
     assert ficha["analises"][-1]["resumo"]["c9orf72_indeterminado"] is True and ficha["genes_de_risco"] == ["SOD1"]
     normal = str(cenarios.LAUDO_NORMAL)
     com = medico.post(
@@ -1858,7 +1860,7 @@ def test_indicadores_condicionados_confirmacao_e_horizonte_pela_api(plataforma, 
     t4 = next(t for t in res["tabelas"] if t["nome"] == "tabela_04_risco_condicional")
     linha = next(l for l in t4["linhas"] if l["idade_atual"] == 55)
     assert linha["p_portador_condicional"] == pytest.approx(pr["transmissao"])
-    assert linha["risco_vitalicio"] == pytest.approx(pr["vida"]["valor"])
+    assert linha["risco_residual"] == pytest.approx(pr["vida"]["valor"]) and "risco_vitalicio" not in linha
     # sem idade: futuro filho, sem confirmação, indicadores desde o nascimento
     r = medico.post("/api/analises", data={**base, "cenario": "5", "sexo": "F"})
     assert r.status_code == 201, r.text
@@ -1873,10 +1875,10 @@ def test_indicadores_condicionados_confirmacao_e_horizonte_pela_api(plataforma, 
     fus3 = next(l for l in t3["linhas"] if l["variante"].startswith("FUS"))
     fus4 = next(l for l in t4["linhas"] if l["unidade"].startswith("FUS") and l["idade_atual"] == 0)
     assert fus3["p_manifesta_exato"] == pytest.approx(0.0918, abs=5e-5) and fus3[col] == pytest.approx(0.0960, abs=5e-5)
-    assert fus4["risco_vitalicio"] == pytest.approx(fus3["p_manifesta_exato"], abs=1e-9)
+    assert fus4["risco_residual"] == pytest.approx(fus3["p_manifesta_exato"], abs=1e-9)  # idade 0: é o vitalício
     comb3 = next(l for l in t3["linhas"] if l["variante"] == "qualquer lócus")
     comb4 = next(l for l in t4["linhas"] if l["unidade"] == "qualquer lócus" and l["idade_atual"] == 0)
-    assert pr5["vida"]["valor"] == pytest.approx(comb3["p_manifesta_exato"]) == pytest.approx(comb4["risco_vitalicio"])
+    assert pr5["vida"]["valor"] == pytest.approx(comb3["p_manifesta_exato"]) == pytest.approx(comb4["risco_residual"])
     assert col in t3["colunas"]
     # resumo guardado na ficha, lista de análises e painel usam os valores condicionados, com a idade de referência
     ana = next(p for p in medico.get("/api/pacientes").json()["pacientes"] if p["nome"].startswith("Ana"))
@@ -1919,9 +1921,34 @@ def test_indicadores_condicionados_confirmacao_e_horizonte_pela_api(plataforma, 
     assert all(re.fullmatch(r"\d+–\d+|100\+", a["faixa_idade_referencia"]) for a in visto)
     csv = pesquisador.post("/api/pesquisa/casos/exportar", json={}).text.lstrip("\ufeff").splitlines()
     cab = csv[0].split(";")
-    assert {"faixa_idade_referencia", "risco_10_anos", "risco_20_anos", "p_manifesta_vida"} <= set(cab)
-    i_ref, i_10 = cab.index("faixa_idade_referencia"), cab.index("risco_10_anos")
-    assert any(l.split(";")[i_ref] and l.split(";")[i_10] for l in csv[1:])
+    # cada coluna do CSV guarda uma só grandeza: o risco vitalício (desde o nascimento) e o risco residual (a partir
+    # da idade de referência) nunca dividem a mesma coluna
+    assert "p_manifesta_vida" not in cab and len(cab) == len(set(cab)) == len(mod_pesquisa.COLUNAS_CSV)
+    i = {
+        c: cab.index(c)
+        for c in ("faixa_idade_referencia", "risco_10_anos", "risco_vitalicio", "risco_residual", "F_50")
+    }
+    linhas = [l.split(";") for l in csv[1:]]
+
+    def num(v: str) -> float:
+        return float(v.replace(",", "."))
+
+    com_idade = [l for l in linhas if l[i["faixa_idade_referencia"]]]
+    sem_idade = [l for l in linhas if not l[i["faixa_idade_referencia"]] and l[i["risco_vitalicio"]]]
+    assert com_idade and sem_idade
+    for l in com_idade:  # os dois riscos preenchidos, o residual menor: a pessoa já passou sem sintomas parte da vida
+        assert l[i["risco_10_anos"]] and l[i["F_50"]] and 0 < num(l[i["risco_residual"]]) < num(l[i["risco_vitalicio"]])
+    assert all(not l[i["risco_residual"]] and not l[i["risco_10_anos"]] for l in sem_idade)
+    # nas listas, o risco vitalício é sempre o desde o nascimento; o da idade atual vem à parte, com a referência
+    for a in visto:
+        assert a["risco_residual"] == a["p_manifesta"] and a["risco_vitalicio"] > a["risco_residual"]
+    for reg in medico.get("/api/pacientes").json()["pacientes"]:
+        ultimas = [d["ultima_analise"] for d in reg["descendentes"] if d["ultima_analise"]]
+        if ultimas:
+            assert (
+                reg["risco_vitalicio_maximo"] == max(u["risco_vitalicio"] for u in ultimas)
+                and "risco_maximo" not in reg
+            )
 
 
 def test_demonstracao_nao_tem_menor_de_idade():
@@ -1960,6 +1987,9 @@ def test_demonstracao_traz_genitor_inferido_por_parentes_e_filho_testado(platafo
     ficha = medico.get(f"/api/pacientes/{heitor['id']}").json()
     pai = ficha["genitores"]["PAI"]
     assert pai["vcf"]["presente"] is False and pai["inferido_por_parentes"] is True
+    # C9orf72: o pai não tem laudo, mas a avó tem; a ficha diz que ele é inferido, não que fica indeterminado
+    assert pai["laudo_informado"] is False and pai["c9orf72_por_parentes"] == ["Avó paterna"]
+    assert ficha["genitores"]["MAE"]["c9orf72_por_parentes"] == []  # tem laudo próprio
     assert pai["situacao_clinica"] == "FALECIDO_SEM_ELA" and pai["idade_situacao"] == 60 and pai["situacao_rotulo"]
     assert [(x["parentesco"], x["rotulo"], x["vcf"]["presente"]) for x in pai["parentes"]] == [
         ("MAE_DO_GENITOR", "Avó paterna", True)
@@ -1974,6 +2004,7 @@ def test_demonstracao_traz_genitor_inferido_por_parentes_e_filho_testado(platafo
     assert res["resumo"][0]["p_portador_exato"] == pytest.approx(0.1792, abs=5e-5)
     assert res["resumo"][0]["p_manifesta_exato"] == pytest.approx(0.0935, abs=1e-4)
     assert res["principais"]["condicionado"] and res["principais"]["transmissao"] < 0.1792  # 38 anos sem sintomas
+    assert res["c9orf72_indeterminado"] is False  # o resultado concorda com a ficha: nada de resultado parcial
     inf = res["parentes"]
     assert inf["genitores"]["pai"]["situacao"] == "falecido_sem_ela" and inf["penetrancia_compartilhada"] is True
     locus = inf["loci_inferidos"][0]

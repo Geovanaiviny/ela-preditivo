@@ -20,7 +20,17 @@ from sqlalchemy import select
 
 from . import arquivos, auditoria, textos, vcfs
 from .bd import agora
-from .comum import exigir_campos, interpretar_laudo, iso, laudo_texto, obter_bd, obter_cifra, obter_config, texto_curto
+from .comum import (
+    exigir_campos,
+    interpretar_laudo,
+    iso,
+    laudo_texto,
+    obter_bd,
+    obter_cifra,
+    obter_config,
+    quantil_inicio,
+    texto_curto,
+)
 from .modelos import (
     BASE_LEGAL_ATENDIMENTO,
     MAXIMO_IRMAOS_POR_GENITOR,
@@ -450,6 +460,8 @@ def genitor_dict(
         "idade_situacao": sit["idade"],
         "parentes": meus,
         "inferido_por_parentes": (not g.tem_vcf) and any(x["vcf"]["presente"] for x in meus),
+        # C9orf72: sem laudo próprio, o genitor é inferido se algum parente dele tem laudo; senão fica indeterminado
+        "c9orf72_por_parentes": [x["rotulo"] for x in meus if x["laudo_informado"]] if not laudo else [],
         "laudo_documento": next(
             (
                 documento_dict(x, cifra)
@@ -486,14 +498,41 @@ def analise_dict(a: AnalisePaciente, cifra) -> dict:
     }
 
 
+def _desde_o_nascimento_pela_curva(r: dict) -> dict:
+    """F(50), F(60), F(70) e os quartis da idade de início desde o nascimento, lidos da curva guardada no resumo. Nas
+    análises condicionadas o resumo só traz os valores a partir da idade de referência; a curva F(t) cobre os dois."""
+    c = r.get("curva") or {}
+    t, F = c.get("t") or [], c.get("F") or []
+    acumulado = {}
+    for alvo in (50, 60, 70):
+        idx = next((i for i, x in enumerate(t) if x is not None and abs(x - alvo) < 1e-6), None)
+        acumulado[str(alvo)] = F[idx] if idx is not None else None
+    return {
+        "F": acumulado,
+        "q25": quantil_inicio(t, F, 0.25) if t else None,
+        "q75": quantil_inicio(t, F, 0.75) if t else None,
+    }
+
+
 def analise_compacta(a: dict) -> dict:
     """O essencial de uma análise para listas, comparativos e filtros: as três respostas do artefato. Quando a
-    análise tem idade de referência, os três valores são os condicionados (pessoa sem sintomas a partir dessa idade)."""
+    análise tem idade de referência, os três valores são os condicionados (pessoa sem sintomas a partir dessa idade).
+
+    O risco aparece em campos próprios, para nenhum rótulo misturar as duas coisas: `risco_vitalicio` é sempre o
+    risco desde o nascimento até o horizonte, e `risco_residual` é o risco da idade de referência até o horizonte,
+    só nas análises condicionadas. `p_manifesta` é a resposta 2 da pessoa: o residual quando há, senão o vitalício."""
     r = a["resumo"]
     comb = r.get("combinado") or {}
     vida = r.get("vida") or {}  # ausente em resumos antigos: cai no valor desde o nascimento
     condicionado = bool(r.get("condicionado"))
     inicio = r.get("inicio") or {}
+    sem_locus = r.get("sem_locus", True)
+    nascimento = _desde_o_nascimento_pela_curva(r)
+
+    def desde_o_nascimento(chave):  # resumo sem lócus de risco: risco zero, não ausente
+        v = comb.get(chave)
+        return 0.0 if v is None and sem_locus else v
+
     return {
         "id": a["id"],
         "descendente_id": a["descendente_id"],
@@ -516,6 +555,17 @@ def analise_compacta(a: dict) -> dict:
         "p_manifesta": vida.get("valor", comb.get("p_manifesta_qualquer_exato")),
         "q025": vida.get("q025", comb.get("p_manifesta_qualquer_q025")),
         "q975": vida.get("q975", comb.get("p_manifesta_qualquer_q975")),
+        "risco_vitalicio": desde_o_nascimento("p_manifesta_qualquer_exato"),
+        "risco_vitalicio_q025": desde_o_nascimento("p_manifesta_qualquer_q025"),
+        "risco_vitalicio_q975": desde_o_nascimento("p_manifesta_qualquer_q975"),
+        "risco_residual": vida.get("valor") if condicionado else None,
+        "risco_residual_q025": vida.get("q025") if condicionado else None,
+        "risco_residual_q975": vida.get("q975") if condicionado else None,
+        "p_portador_desde_nascimento": desde_o_nascimento("p_portador_qualquer_exato"),
+        "inicio_mediana_desde_nascimento": comb.get("idade_mediana_primeiro_inicio"),
+        "inicio_q25_desde_nascimento": nascimento["q25"],
+        "inicio_q75_desde_nascimento": nascimento["q75"],
+        "F_desde_nascimento": nascimento["F"],
         "idade_mediana": inicio.get("mediana") if condicionado else comb.get("idade_mediana_primeiro_inicio"),
         "inicio": inicio,
         "janelas": r.get("janelas") or {},
@@ -564,7 +614,9 @@ def paciente_dict(p: Paciente, cifra, resumo: bool = False) -> dict:
     prontuario_doc = next((documento_dict(x, cifra) for x in p.documentos if x.tipo == "PRONTUARIO"), None)
     requisitos = requisitos_pesquisa(p, idades_desc, nomes)
     genes = sorted({g for a in ultimas.values() for g in a["genes_de_risco"]})
-    riscos = [a["p_manifesta"] for a in ultimas.values() if a["p_manifesta"] is not None]
+    # o maior risco vitalício entre as pessoas do registro: uma só grandeza (desde o nascimento), comparável entre
+    # pessoas de idades diferentes; o valor a partir da idade de cada uma fica na análise dela
+    riscos = [a["risco_vitalicio"] for a in ultimas.values() if a["risco_vitalicio"] is not None]
     tipo = textos.TIPOS_ATENDIMENTO[p.tipo]
     d = {
         "id": p.id,
@@ -593,7 +645,7 @@ def paciente_dict(p: Paciente, cifra, resumo: bool = False) -> dict:
         "ultimas_por_descendente": ultimas if not resumo else None,
         "n_analises": len(analises),
         "genes_de_risco": genes,
-        "risco_maximo": max(riscos) if riscos else None,
+        "risco_vitalicio_maximo": max(riscos) if riscos else None,
         "com_suposicao": any(a["com_suposicao"] for a in ultimas.values()),
         "criado_em": iso(p.criado_em),
         "atualizado_em": iso(p.atualizado_em),
@@ -675,7 +727,9 @@ def filtrar_pacientes(itens: list[dict], f: dict) -> list[dict]:
             continue
         if f.get("analise") == "SEM" and d["n_analises"] > 0:
             continue
-        if f.get("risco_min") is not None and (d["risco_maximo"] is None or d["risco_maximo"] < f["risco_min"]):
+        if f.get("risco_min") is not None and (
+            d["risco_vitalicio_maximo"] is None or d["risco_vitalicio_maximo"] < f["risco_min"]
+        ):
             continue
         if f.get("laudo_c9orf72") is not None and d["laudo_informado"] != f["laudo_c9orf72"]:
             continue
@@ -701,7 +755,7 @@ def filtrar_pacientes(itens: list[dict], f: dict) -> list[dict]:
         elif chave == "ultima_analise":
             v = d["ultima_analise"]["executado_em"] if d["ultima_analise"] else None
         elif chave == "risco":
-            v = d["risco_maximo"]
+            v = d["risco_vitalicio_maximo"]
         elif chave == "cadastro":
             v = d["criado_em"]
         else:
@@ -774,6 +828,8 @@ def _analises_do_medico(pacientes: list[Paciente], itens: list[dict], cifra) -> 
                     "p_manifesta": c["p_manifesta"],
                     "q025": c["q025"],
                     "q975": c["q975"],
+                    "risco_vitalicio": c["risco_vitalicio"],
+                    "risco_residual": c["risco_residual"],
                     "idade_mediana": c["idade_mediana"],
                     "com_suposicao": c["com_suposicao"],
                     "tem_resultado": c["tem_resultado"],

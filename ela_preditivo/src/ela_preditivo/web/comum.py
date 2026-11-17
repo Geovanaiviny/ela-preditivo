@@ -78,3 +78,21 @@ def laudo_texto(valor) -> str | None:
     if isinstance(valor, (list, tuple)):
         return ",".join(str(int(v)) for v in valor)
     return str(int(valor))
+
+
+def quantil_inicio(t: list, F: list, q: float) -> float | None:
+    """Idade em que G(t) = F(t)/F(horizonte) cruza `q` (interpolação linear); None se F(horizonte) = 0."""
+    pares = [(tt, ff) for tt, ff in zip(t, F) if tt is not None and ff is not None]
+    if not pares or pares[-1][1] <= 0:
+        return None
+    fh = pares[-1][1]
+    anterior = None
+    for tt, ff in pares:
+        g = ff / fh
+        if g >= q:
+            if anterior is None:
+                return round(float(tt), 1)
+            t0, g0 = anterior
+            return round(float(t0 + (tt - t0) * ((q - g0) / (g - g0) if g > g0 else 0)), 1)
+        anterior = (tt, g)
+    return None

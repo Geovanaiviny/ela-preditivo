@@ -488,7 +488,9 @@ def executar(
             cond,
             saida / "tabelas",
             "tabela_04_risco_condicional",
-            f"Tabela 4 — Risco condicional à idade atual sem sintomas: P(portador | assintomático), risco nos próximos 10 e 20 anos e risco vitalício residual (até os {horizonte:.0f} anos), com banda de 95%",
+            f"Tabela 4 — Risco condicional à idade atual sem sintomas: P(portador | assintomático), risco nos próximos 10 e 20 anos e risco residual (da idade atual até os {horizonte:.0f} anos), com banda de 95%",
+            "risco_residual: probabilidade de manifestar entre a idade atual e o horizonte, para quem chegou a essa idade "
+            "sem sintomas. Na idade 0 é o risco vitalício da Tabela 3.",
         )
     )
     # indicadores principais condicionados à idade atual (mesmo cálculo exato da Tabela 4, na idade do atendido)
@@ -535,7 +537,7 @@ def executar(
                 saida / "tabelas",
                 "tabela_20_tornado",
                 "Tabela 20 — Sensibilidade tipo tornado: um parâmetro por vez dentro da faixa publicada, com a variação do "
-                + ("risco vitalício residual" if idade_atual is not None else "risco vitalício combinado")
+                + ("risco residual" if idade_atual is not None else "risco vitalício combinado")
                 + " e da idade mediana de início",
                 "Valores exatos; toda faixa vem de fonte publicada (coluna `fonte`). Fora do tornado, por não haver "
                 "incerteza publicada: " + ("; ".join(fora) if fora else "nenhum gene deste caso") + ".",
@@ -557,7 +559,7 @@ def executar(
         rr, ini = ex_c["risco_residual"], ex_c["inicio"]
         extra = (
             f" Condicionando ao descendente assintomático aos {idade_atual:.0f} anos, P(portador de ≥ 1 lócus) passa de "
-            f"{_p(comb['p_portador_qualquer_exato'])} para {_p(ex_c['p_portador'])} e o risco vitalício residual (até os {horizonte:.0f} anos) é "
+            f"{_p(comb['p_portador_qualquer_exato'])} para {_p(ex_c['p_portador'])} e o risco residual (da idade atual até os {horizonte:.0f} anos) é "
             f"{_p(rr['valor'])} [{_p(rr['q025'])}–{_p(rr['q975'])}]"
             + (
                 f"; idade provável de início a partir dessa idade: mediana {ini['mediana']:.1f} anos "
@@ -829,7 +831,7 @@ def avaliar(
             saida / "tabelas",
             "tabela_06_calibracao",
             "Tabela 6 — Calibração das distribuições de penetrância (Beta e log-normal truncada em 1) e das distribuições de idade de início a partir da literatura",
-            "valor_provisorio = sim: parâmetro marcado com confirmar: true no YAML, a validar pela autora. "
+            "valor_provisorio = sim: parâmetro marcado com confirmar: true no YAML, a validar na literatura. "
             "massa_truncada_lognormal: fração da log-normal acima de 1, retirada pelo truncamento.",
         ),
         relatorio.salvar_tabela(

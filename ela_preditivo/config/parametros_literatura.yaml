@@ -1,5 +1,5 @@
 # Parâmetros epidemiológicos do artefato. Todo valor tem `citacao` e `confirmar`.
-# confirmar: true  => valor provisório, que a autora precisa validar na literatura antes da versão final.
+# confirmar: true  => valor provisório, a validar na literatura antes da versão final.
 # A distribuição de idade de início de cada gene aceita `pontos` ([[idade, fração acumulada], ...], de curva de
 # Kaplan-Meier, faixas etárias ou quartis publicados) OU `estatisticas` ({media, dp} ou {mediana, iqr}, resolvidas
 # em forma fechada) — exatamente uma das duas.
@@ -22,7 +22,7 @@ calibracao_beta:
 #   lognormal_truncada : log-normal truncada em 1, com mediana no valor publicado e desvio em escala log tirado do
 #                      IC publicado; reproduz ao mesmo tempo a mediana e os dois limites. A fração retirada pelo
 #                      truncamento é reportada na Tabela 6.
-# A escolha é da autora: trocar o padrão altera as bandas e, pouco, os riscos médios. A alternativa entra sempre
+# Escolha em aberto: trocar o padrão altera as bandas e, pouco, os riscos médios. A alternativa entra sempre
 # como cenário da análise de sensibilidade (Tabela 9 e tornado).
 calibracao_penetrancia:
   distribuicao: beta
@@ -45,7 +45,7 @@ limiar_repeticoes_c9orf72:
   citacao: "ClinVar registra a expansão como GGGGCC[>24] (TCC 4.2.5); limiar clínico usual >= 30 repetições"
   confirmar: true
 
-# Regra qualificada para classificação conflitante (TCC 4.2.2, ajuste em redação pela autora).
+# Regra qualificada para classificação conflitante (TCC 4.2.2, ajuste em redação).
 # Por padrão toda variante "Conflicting classifications of pathogenicity" fica na classe `conflitante` e não sustenta
 # risco. Ela passa à classe `risco` somente quando as duas condições valem:
 #   (a) mais da metade das classificações contadas na abertura do conflito (ClassificacaoConflitante / CLNSIGCONF)
@@ -58,7 +58,7 @@ regra_conflitante:
   maioria_minima: 0.5
   estrita: true
   exigir_heranca_declarada: true
-  citacao: "TCC 4.2.2 (ajuste em redação pela autora). Caso que motivou a regra: SOD1 p.Asp91Ala (rs80265967), 14 de 20 classificações patogênicas ou provavelmente patogênicas e fenótipo de ELA com herança recessiva declarada; YAMASHITA; ANDO, 2015 (transmissão dominante e recessiva); BERDYŃSKI et al., 2022 (mutações codificantes do SOD1 como causadoras de doença)"
+  citacao: "TCC 4.2.2 (ajuste em redação). Caso que motivou a regra: SOD1 p.Asp91Ala (rs80265967), 14 de 20 classificações patogênicas ou provavelmente patogênicas e fenótipo de ELA com herança recessiva declarada; YAMASHITA; ANDO, 2015 (transmissão dominante e recessiva); BERDYŃSKI et al., 2022 (mutações codificantes do SOD1 como causadoras de doença)"
   confirmar: true
 
 sensibilidade:
