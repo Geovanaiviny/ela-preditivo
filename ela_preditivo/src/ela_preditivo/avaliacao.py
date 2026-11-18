@@ -1008,7 +1008,7 @@ def robustez_vcf(
     linhas = []
     for num in numeros:
         c = cenarios.cenario_por_numero(num)
-        originais = {lado: (dir_cenarios / f"cenario_{num}_{lado}.vcf") for lado in ("mae", "pai")}
+        originais = {lado: cenarios.vcf_cenario(dir_cenarios, num, lado) for lado in ("mae", "pai")}
         base = avaliar(originais["mae"], originais["pai"], c)
         portadoras = [(lado, v) for lado in ("mae", "pai") for v in getattr(c, lado) if v.dosagem > 0]
         presentes = {(v.cromossomo, v.posicao) for lado in ("mae", "pai") for v in getattr(c, lado)}

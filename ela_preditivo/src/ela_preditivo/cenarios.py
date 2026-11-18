@@ -47,6 +47,14 @@ def laudo_normal_c9orf72(config: str | Path | None = None) -> int:
 
 LAUDO_NORMAL = laudo_normal_c9orf72()
 
+# data/sinteticos tem uma pasta por caso de atendimento do TCC. Cada arquivo fica numa só pasta, a do caso em que é
+# usado na demonstração e no roteiro de testes; o par de VCFs em si serve a qualquer caso.
+PASTAS_CASO = {
+    1: "caso_1_pessoa_com_historico",
+    2: "caso_2_casal_ou_futuro_filho",
+    3: "caso_3_familia_com_variante",
+}
+
 
 @dataclass(frozen=True)
 class VarianteSintetica:
@@ -131,6 +139,7 @@ class Cenario:
     laudo_c9orf72: dict[str, int] = field(
         default_factory=dict
     )  # {"mae": repetições, "pai": repetições} do laudo laboratorial
+    caso: int = 1  # caso de atendimento (pasta em data/sinteticos)
 
     @property
     def esperado(self) -> pd.DataFrame:
@@ -190,6 +199,7 @@ CENARIOS: list[Cenario] = [
         mae=[SOD1_D91A],
         herancas={"SOD1": "recessiva"},
         laudo_c9orf72={"mae": LAUDO_NORMAL, "pai": LAUDO_NORMAL},
+        caso=3,
     ),
     Cenario(
         5,
@@ -207,6 +217,32 @@ def cenario_por_numero(numero: int) -> Cenario:
         if c.numero == numero:
             return c
     raise KeyError(f"cenário {numero} não existe (1 a {len(CENARIOS)})")
+
+
+def pasta_caso(dir_base: str | Path, caso: int) -> Path:
+    """Pasta do caso de atendimento dentro de `dir_base` (por exemplo, data/sinteticos)."""
+    return Path(dir_base) / PASTAS_CASO[caso]
+
+
+def vcf_cenario(dir_base: str | Path, numero: int, lado: str) -> Path:
+    """Caminho do VCF de um dos cinco cenários. Aceita também uma pasta antiga, sem as subpastas por caso."""
+    nome = f"cenario_{numero}_{lado}.vcf"
+    caminho = pasta_caso(dir_base, cenario_por_numero(numero).caso) / nome
+    plano = Path(dir_base) / nome
+    return plano if not caminho.exists() and plano.exists() else caminho
+
+
+def vcf_sintetico(dir_base: str | Path, nome: str) -> Path:
+    """Localiza um VCF sintético pelo nome (com ou sem `.vcf`) nas pastas dos casos, ou direto em `dir_base`."""
+    nome = nome if nome.endswith(".vcf") else f"{nome}.vcf"
+    for caso in PASTAS_CASO:
+        caminho = pasta_caso(dir_base, caso) / nome
+        if caminho.exists():
+            return caminho
+    plano = Path(dir_base) / nome
+    if plano.exists():
+        return plano
+    raise FileNotFoundError(f"VCF sintético {nome} não encontrado em {dir_base}")
 
 
 # ---------------------------------------------------------------------------
@@ -329,7 +365,7 @@ def gerar_cenarios(
             proprias = {v.rotulo: v for v in lista}
             registros = [proprias.get(r, loci[r].com_dosagem(0)) for r in loci]
             caminho = escrever_vcf(
-                dir_saida / f"cenario_{c.numero}_{lado}.vcf",
+                pasta_caso(dir_saida, c.caso) / f"cenario_{c.numero}_{lado}.vcf",
                 lado.upper(),
                 registros,
                 rng,
@@ -397,6 +433,7 @@ class CenarioParentes:
     tios: tuple = ()  # um conjunto de variantes por irmão testado
     filhos_testados: tuple = ()  # um conjunto de variantes por filho já testado
     laudos: tuple = ()  # pares (pessoa, repetições): "testado", "avo", "avoh"
+    caso: int = 1  # caso de atendimento (pasta em data/sinteticos)
 
     @property
     def lado_testado(self) -> str:
@@ -428,6 +465,7 @@ CENARIOS_PARENTES: list[CenarioParentes] = [
         avoh=(SOD1_A5V,),
         filhos_testados=((SOD1_A5V.com_dosagem(0),),),
         laudos=(("testado", LAUDO_NORMAL), ("avoh", LAUDO_NORMAL)),
+        caso=3,
     ),
 ]
 
@@ -453,7 +491,7 @@ def gerar_cenarios_parentes(
 
         def vcf(sufixo: str, amostra: str, variantes) -> Path:
             return escrever_vcf(
-                dir_saida / f"parentes_{c.numero}_{sufixo}.vcf",
+                pasta_caso(dir_saida, c.caso) / f"parentes_{c.numero}_{sufixo}.vcf",
                 amostra,
                 list(variantes),
                 rng,
@@ -488,6 +526,83 @@ def gerar_cenarios_parentes(
                 "vcf_pai": caminho_testado if t == "pai" else None,
                 "laudo_c9orf72": {t: laudos["testado"]} if "testado" in laudos else {},
                 "parentes": parentes,
+            }
+        )
+    return saida
+
+
+# ---------------------------------------------------------------------------
+# Cenários de casal que planeja filhos (caso 2): o resultado é para o futuro filho
+# ---------------------------------------------------------------------------
+@dataclass(frozen=True)
+class CenarioCasal:
+    """Casal sintético do caso 2. `pai=None` representa o parceiro que não fez o exame genético."""
+
+    numero: int
+    nome: str
+    descricao: str
+    mae: tuple
+    pai: tuple | None
+    herancas: tuple = ()  # pares (gene, herança)
+    laudos: tuple = ()  # pares (lado, repetições do laudo do C9orf72)
+
+
+CENARIOS_CASAL: list[CenarioCasal] = [
+    CenarioCasal(
+        1,
+        "parceira_C9orf72_parceiro_sem_exame",
+        "Parceira com expansão C9orf72 (45 repetições, laudo); parceiro sem exame genético",
+        mae=(),
+        pai=None,
+        laudos=(("mae", 45),),
+    ),
+    CenarioCasal(
+        2,
+        "casal_SOD1_D91A_recessiva",
+        "Os dois parceiros heterozigotos para SOD1 p.Asp91Ala (herança recessiva)",
+        mae=(SOD1_D91A,),
+        pai=(SOD1_D91A,),
+        herancas=(("SOD1", "recessiva"),),
+        laudos=(("mae", LAUDO_NORMAL), ("pai", LAUDO_NORMAL)),
+    ),
+]
+
+
+def gerar_cenarios_casal(
+    dir_saida: str | Path, seed: int = 2026, incluir_ruido: bool = True, config: str | Path | None = None
+) -> list[dict]:
+    """Gera os VCFs dos casais do caso 2 e devolve, por casal, `vcf_mae`, `vcf_pai` (None para quem não fez o exame),
+    `laudo_c9orf72` e `herancas`. O gerador de números é próprio (derivado da semente), de modo que os arquivos dos
+    outros cenários não mudam."""
+    pasta = pasta_caso(dir_saida, 2)
+    data_arquivo = data_fixa_vcf(config)
+    saida = []
+    for c in CENARIOS_CASAL:
+        rng = np.random.default_rng([int(seed), 2000 + c.numero])
+        caminhos = {}
+        for lado in ("mae", "pai"):
+            proprias = getattr(c, lado)
+            if proprias is None:
+                caminhos[lado] = None
+                continue
+            caminhos[lado] = escrever_vcf(
+                pasta / f"casal_{c.numero}_{lado}.vcf",
+                lado.upper(),
+                list(proprias),
+                rng,
+                descricao=f"casal {c.numero}, {lado}: {c.descricao}",
+                incluir_ruido=incluir_ruido,
+                data_arquivo=data_arquivo,
+            )
+        saida.append(
+            {
+                "numero": c.numero,
+                "nome": c.nome,
+                "descricao": c.descricao,
+                "vcf_mae": caminhos["mae"],
+                "vcf_pai": caminhos["pai"],
+                "laudo_c9orf72": dict(c.laudos),
+                "herancas": dict(c.herancas),
             }
         )
     return saida

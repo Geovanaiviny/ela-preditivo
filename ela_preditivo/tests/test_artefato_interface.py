@@ -18,7 +18,7 @@ import pandas as pd
 import pytest
 from fastapi.testclient import TestClient
 
-from ela_preditivo import DIR_DADOS, anotacao, cli, pipeline
+from ela_preditivo import DIR_DADOS, anotacao, cenarios, cli, pipeline
 from ela_preditivo.calibracao import CAMINHO_PADRAO
 from ela_preditivo.web import analises, artefato, auditoria, demo, primeiro_acesso
 from ela_preditivo.web.api import criar_app
@@ -605,8 +605,8 @@ def test_analise_sem_registro_aceita_as_opcoes_avancadas_da_linha_de_comando(ser
     assert res["entrada"]["parametros_alternativos"] is False and res["entrada"]["tabela_alternativa"] is False
     # o mesmo que `ela-preditivo executar ... --horizonte 70 --sem-figuras --so-tabela-curada --cox`
     direto = pipeline.executar(
-        SINT / "cenario_1_mae.vcf",
-        SINT / "cenario_1_pai.vcf",
+        cenarios.vcf_cenario(SINT, 1, "mae"),
+        cenarios.vcf_cenario(SINT, 1, "pai"),
         tmp_path / "direto",
         n=400,
         seed=42,
@@ -654,7 +654,7 @@ def test_analise_sem_registro_aceita_as_opcoes_avancadas_da_linha_de_comando(ser
     # amostra do VCF (--amostra-mae): a que existe passa, a que não existe é erro da análise
     amostra = next(
         linha.split("\t")[-1]
-        for linha in (SINT / "cenario_1_mae.vcf").read_text(encoding="utf-8").splitlines()
+        for linha in (cenarios.vcf_cenario(SINT, 1, "mae")).read_text(encoding="utf-8").splitlines()
         if linha.startswith("#CHROM")
     )
     r = medico.post("/api/analises", data={**comum, "amostra_mae": amostra})

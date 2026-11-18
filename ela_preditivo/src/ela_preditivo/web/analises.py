@@ -625,7 +625,7 @@ def listar_cenarios(usuario: Usuario = Depends(exigir(ANALISES_EXECUTAR))):
                 "descricao": c.descricao,
                 "laudo_c9orf72": c.laudo_c9orf72 or {},
                 "herancas": c.herancas,
-                "disponivel": (DIR_SINTETICOS / f"cenario_{c.numero}_mae.vcf").exists(),
+                "disponivel": cenarios.vcf_cenario(DIR_SINTETICOS, c.numero, "mae").exists(),
             }
         )
     return {"cenarios": itens, "aviso": "VCFs sintéticos gerados pelo artefato (seed 2026); nenhum dado genômico real."}
@@ -1003,8 +1003,8 @@ def executar_para_registro(
             exigir_campos(campos)
             c = cenarios.cenario_por_numero(num)
             caminho_mae, caminho_pai = (
-                DIR_SINTETICOS / f"cenario_{num}_mae.vcf",
-                DIR_SINTETICOS / f"cenario_{num}_pai.vcf",
+                cenarios.vcf_cenario(DIR_SINTETICOS, num, "mae"),
+                cenarios.vcf_cenario(DIR_SINTETICOS, num, "pai"),
             )
             if not caminho_mae.exists() or not caminho_pai.exists():
                 raise HTTPException(409, "VCFs sintéticos ausentes; gere-os com `ela-preditivo gerar-cenarios`.")
@@ -1241,8 +1241,8 @@ def executar_analise(
     try:
         if modo == "cenario":
             c = cenarios.cenario_por_numero(num_cenario)
-            caminho_mae = DIR_SINTETICOS / f"cenario_{num_cenario}_mae.vcf"
-            caminho_pai = DIR_SINTETICOS / f"cenario_{num_cenario}_pai.vcf"
+            caminho_mae = cenarios.vcf_cenario(DIR_SINTETICOS, num_cenario, "mae")
+            caminho_pai = cenarios.vcf_cenario(DIR_SINTETICOS, num_cenario, "pai")
             if not caminho_mae.exists() or not caminho_pai.exists():
                 raise HTTPException(409, "VCFs sintéticos ausentes; gere-os com `ela-preditivo gerar-cenarios`.")
             if not laudo:

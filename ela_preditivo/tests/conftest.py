@@ -26,8 +26,8 @@ def anotados(dir_cenarios, curada):
     """{numero: (anotadas_mae, anotadas_pai)} para os 5 cenários, anotados com a tabela curada."""
     out = {}
     for c in cenarios.CENARIOS:
-        mae = anotacao.anotar(ingestao.ler_vcf(dir_cenarios / f"cenario_{c.numero}_mae.vcf"), curada)
-        pai = anotacao.anotar(ingestao.ler_vcf(dir_cenarios / f"cenario_{c.numero}_pai.vcf"), curada)
+        mae = anotacao.anotar(ingestao.ler_vcf(cenarios.vcf_cenario(dir_cenarios, c.numero, "mae")), curada)
+        pai = anotacao.anotar(ingestao.ler_vcf(cenarios.vcf_cenario(dir_cenarios, c.numero, "pai")), curada)
         out[c.numero] = (mae, pai)
     return out
 

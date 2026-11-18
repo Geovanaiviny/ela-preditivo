@@ -768,12 +768,12 @@ def avaliar(
     for num in numeros:
         c = cenarios.cenario_por_numero(num)
         mae = anotacao.anotar(
-            ingestao.ler_vcf(dir_cenarios / f"cenario_{num}_mae.vcf", regioes, par.filtro_qualidade),
+            ingestao.ler_vcf(cenarios.vcf_cenario(dir_cenarios, num, "mae"), regioes, par.filtro_qualidade),
             tabela,
             par.limiar_repeticoes,
         )
         pai = anotacao.anotar(
-            ingestao.ler_vcf(dir_cenarios / f"cenario_{num}_pai.vcf", regioes, par.filtro_qualidade),
+            ingestao.ler_vcf(cenarios.vcf_cenario(dir_cenarios, num, "pai"), regioes, par.filtro_qualidade),
             tabela,
             par.limiar_repeticoes,
         )

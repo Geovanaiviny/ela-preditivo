@@ -8,8 +8,8 @@ from ela_preditivo import cenarios, cli, pipeline
 
 def test_executar_cenario_3_completo(dir_cenarios, tmp_path):
     r = pipeline.executar(
-        dir_cenarios / "cenario_3_mae.vcf",
-        dir_cenarios / "cenario_3_pai.vcf",
+        cenarios.vcf_cenario(dir_cenarios, 3, "mae"),
+        cenarios.vcf_cenario(dir_cenarios, 3, "pai"),
         tmp_path / "c3",
         sexo="F",
         idade_atual=30,
@@ -56,8 +56,8 @@ def test_executar_cenario_3_completo(dir_cenarios, tmp_path):
 def test_executar_sem_locus_de_risco(dir_cenarios, tmp_path):
     # mãe do cenário 1 × mãe do cenário 1: só variantes 0/0, benigna e não anotadas
     r = pipeline.executar(
-        dir_cenarios / "cenario_1_mae.vcf",
-        dir_cenarios / "cenario_1_mae.vcf",
+        cenarios.vcf_cenario(dir_cenarios, 1, "mae"),
+        cenarios.vcf_cenario(dir_cenarios, 1, "mae"),
         tmp_path / "vazio",
         n=500,
         motor="numpy",
@@ -76,9 +76,9 @@ def test_cli_gerar_e_executar(tmp_path, capsys):
             [
                 "executar",
                 "--vcf-mae",
-                str(tmp_path / "s" / "cenario_4_mae.vcf"),
+                str(cenarios.vcf_cenario(tmp_path / "s", 4, "mae")),
                 "--vcf-pai",
-                str(tmp_path / "s" / "cenario_4_pai.vcf"),
+                str(cenarios.vcf_cenario(tmp_path / "s", 4, "pai")),
                 "--saida",
                 str(tmp_path / "c4"),
                 "--n",
@@ -99,9 +99,9 @@ def test_cli_gerar_e_executar(tmp_path, capsys):
             [
                 "executar",
                 "--vcf-mae",
-                str(tmp_path / "s" / "cenario_2_mae.vcf"),
+                str(cenarios.vcf_cenario(tmp_path / "s", 2, "mae")),
                 "--vcf-pai",
-                str(tmp_path / "s" / "cenario_2_pai.vcf"),
+                str(cenarios.vcf_cenario(tmp_path / "s", 2, "pai")),
                 "--saida",
                 str(tmp_path / "c2"),
                 "--n",

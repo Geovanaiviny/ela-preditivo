@@ -333,10 +333,18 @@ def main(argv=None) -> int:
         df = cenarios.gerar_cenarios(args.saida, seed=args.seed, incluir_ruido=not args.sem_ruido)
         print(df.to_string(index=False))
         extras = cenarios.gerar_cenarios_parentes(args.saida, seed=args.seed, incluir_ruido=not args.sem_ruido)
-        n_extras = len(list(__import__("pathlib").Path(args.saida).glob("parentes_*.vcf")))
+        casais = cenarios.gerar_cenarios_casal(args.saida, seed=args.seed, incluir_ruido=not args.sem_ruido)
+        pasta = __import__("pathlib").Path(args.saida)
+        n_extras = len(list(pasta.rglob("parentes_*.vcf")))
+        n_casais = len(list(pasta.rglob("casal_*.vcf")))
         for c in extras:
             print(f"cenário de parentes {c['numero']}: {c['descricao']}")
-        print(f"\n{len(df) * 2} VCFs sintéticos dos cenários e {n_extras} dos cenários de parentes em {args.saida}")
+        for c in casais:
+            print(f"casal {c['numero']}: {c['descricao']}")
+        print(
+            f"\n{len(df) * 2} VCFs sintéticos dos cenários, {n_extras} dos cenários de parentes e {n_casais} dos casais"
+            f" em {args.saida}, numa pasta por caso de atendimento"
+        )
     elif args.comando == "executar":
         r = pipeline.executar(
             args.vcf_mae,

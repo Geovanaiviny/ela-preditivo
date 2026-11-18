@@ -13,7 +13,7 @@ A partir do VCF da mãe e do pai (ou do genótipo de parentes, quando um genitor
 | `ela_preditivo/` | pacote Python: núcleo numérico, linha de comando, plataforma web EloSense, testes e documentação completa em [`ela_preditivo/README.md`](ela_preditivo/README.md) |
 | `ela_preditivo/src/ela_preditivo/web/static/` | interface da plataforma (HTML, CSS e JavaScript, sem framework) |
 | `ela_preditivo/config/` | parâmetros da literatura, com a citação de cada valor |
-| `ela_preditivo/data/sinteticos/` | cenários familiares sintéticos (VCF) |
+| `ela_preditivo/data/sinteticos/` | VCFs sintéticos, numa pasta por caso de atendimento (pessoa com histórico, casal ou futuro filho, família com variante confirmada) |
 | `resultados/` | tabelas, figuras e relatórios gerados pelo artefato |
 | `Dockerfile`, `docker-compose.yml`, `.env.exemplo` | subida da plataforma em um comando |
 | `exemplo_maquina_tcc_ela.py` | exemplo de referência enviado pelo orientador |

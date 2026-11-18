@@ -395,7 +395,7 @@ def test_sem_parentes_o_resultado_e_identico(dir_cenarios, tmp_path):
         base_clinvar=False,
         figuras=False,
     )
-    mae, pai = dir_cenarios / "cenario_3_mae.vcf", dir_cenarios / "cenario_3_pai.vcf"
+    mae, pai = cenarios.vcf_cenario(dir_cenarios, 3, "mae"), cenarios.vcf_cenario(dir_cenarios, 3, "pai")
     a = pipeline.executar(mae, pai, tmp_path / "a", **comum)
     b = pipeline.executar(mae, pai, tmp_path / "b", parentes={}, **comum)
     c = pipeline.executar(mae, pai, tmp_path / "c", parentes={"pai": {"situacao": "desconhecido"}}, **comum)
@@ -441,18 +441,19 @@ def test_filho_testado_pelo_pipeline(tmp_path):
 def test_cli_com_parentes(tmp_path, capsys):
     assert cli.main(["gerar-cenarios", "--saida", str(tmp_path / "s"), "--seed", "2026"]) == 0
     saida = capsys.readouterr().out
-    assert "cenário de parentes 1" in saida and len(list((tmp_path / "s").glob("parentes_*.vcf"))) == 5
+    assert "cenário de parentes 1" in saida and len(list((tmp_path / "s").rglob("parentes_*.vcf"))) == 5
     # os cinco cenários padrão continuam os mesmos arquivos (o gerador dos parentes é independente)
-    for p in sorted((tmp_path / "s").glob("cenario_*.vcf")):
-        assert p.read_bytes() == (cli_dados() / p.name).read_bytes(), p.name
+    for p in sorted((tmp_path / "s").rglob("cenario_*.vcf")):
+        rel = p.relative_to(tmp_path / "s")
+        assert p.read_bytes() == (cli_dados() / rel).read_bytes(), rel
     args = [
         "executar",
         "--vcf-mae",
-        str(tmp_path / "s" / "parentes_1_mae.vcf"),
+        str(cenarios.vcf_sintetico(tmp_path / "s", "parentes_1_mae.vcf")),
         "--c9orf72-mae",
         str(cenarios.LAUDO_NORMAL),
         "--vcf-mae-do-pai",
-        str(tmp_path / "s" / "parentes_1_avo_paterna.vcf"),
+        str(cenarios.vcf_sintetico(tmp_path / "s", "parentes_1_avo_paterna.vcf")),
         "--c9orf72-mae-do-pai",
         str(cenarios.LAUDO_NORMAL),
         "--situacao-pai",
@@ -499,11 +500,12 @@ def cli_dados():
 def test_vcfs_dos_cenarios_de_parentes_sao_reprodutiveis(tmp_path):
     a = cenarios.gerar_cenarios_parentes(tmp_path / "a", seed=2026)
     cenarios.gerar_cenarios_parentes(tmp_path / "b", seed=2026)
-    arquivos = sorted((tmp_path / "a").glob("parentes_*.vcf"))
+    arquivos = sorted((tmp_path / "a").rglob("parentes_*.vcf"))
     assert len(arquivos) == 5 and len(a) == len(cenarios.CENARIOS_PARENTES) == 2
     for p in arquivos:
-        assert p.read_bytes() == (tmp_path / "b" / p.name).read_bytes()
-        assert p.read_bytes() == (cli_dados() / p.name).read_bytes(), p.name  # os versionados são os do gerador
+        rel = p.relative_to(tmp_path / "a")
+        assert p.read_bytes() == (tmp_path / "b" / rel).read_bytes()
+        assert p.read_bytes() == (cli_dados() / rel).read_bytes(), rel  # os versionados são os do gerador
     assert a[0]["vcf_pai"] is None and a[0]["parentes"]["pai"]["situacao"] == "falecido_sem_ela"
     assert cenarios.cenario_parentes_por_numero(2).filhos_testados and a[1]["parentes"]["filhos_testados"]
     with pytest.raises(KeyError):

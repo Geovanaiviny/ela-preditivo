@@ -77,8 +77,8 @@ def test_cenarios_sinteticos_contra_base_real(dir_cenarios, parametros, base_rea
     t = anotacao.tabela_anotacao(base_real=base_real)
     esperado_fonte = t.attrs["fontes"]["base_real"]
     for c in cenarios.CENARIOS:
-        mae = anotacao.anotar(ingestao.ler_vcf(dir_cenarios / f"cenario_{c.numero}_mae.vcf"), t)
-        pai = anotacao.anotar(ingestao.ler_vcf(dir_cenarios / f"cenario_{c.numero}_pai.vcf"), t)
+        mae = anotacao.anotar(ingestao.ler_vcf(cenarios.vcf_cenario(dir_cenarios, c.numero, "mae")), t)
+        pai = anotacao.anotar(ingestao.ler_vcf(cenarios.vcf_cenario(dir_cenarios, c.numero, "pai")), t)
         v = genotipo.vetor_dosagem(mae, pai, parametros, laudo_c9orf72=c.laudo_c9orf72, tabela=t)
         e = c.esperado
         if c.numero == 4:  # D91A entra pela regra qualificada: herança recessiva, P(portador) 0,25
@@ -96,8 +96,8 @@ def test_cenarios_sinteticos_contra_base_real(dir_cenarios, parametros, base_rea
 
 def test_pipeline_cenario_3_com_base_real(dir_cenarios, tmp_path, base_real):
     r = pipeline.executar(
-        dir_cenarios / "cenario_3_mae.vcf",
-        dir_cenarios / "cenario_3_pai.vcf",
+        cenarios.vcf_cenario(dir_cenarios, 3, "mae"),
+        cenarios.vcf_cenario(dir_cenarios, 3, "pai"),
         tmp_path / "c3r",
         sexo="M",
         n=800,
@@ -110,8 +110,8 @@ def test_pipeline_cenario_3_com_base_real(dir_cenarios, tmp_path, base_real):
     texto = (tmp_path / "c3r" / "relatorio.md").read_text(encoding="utf-8")
     assert "clinvar_" in texto and "p.Ala5Val" in texto
     r4 = pipeline.executar(
-        dir_cenarios / "cenario_4_mae.vcf",
-        dir_cenarios / "cenario_4_pai.vcf",
+        cenarios.vcf_cenario(dir_cenarios, 4, "mae"),
+        cenarios.vcf_cenario(dir_cenarios, 4, "pai"),
         tmp_path / "c4r",
         n=300,
         motor="numpy",

@@ -9,7 +9,7 @@ from ela_preditivo import cenarios, ingestao
 
 
 def test_gera_dez_vcfs_e_csv(dir_cenarios):
-    arquivos = sorted(p.name for p in dir_cenarios.glob("*.vcf"))
+    arquivos = sorted(p.relative_to(dir_cenarios) for p in dir_cenarios.rglob("cenario_*.vcf"))
     assert len(arquivos) == 10
     idx = pd.read_csv(dir_cenarios / "cenarios.csv")
     assert {"c9orf72_mae", "c9orf72_pai"} <= set(idx.columns)
@@ -34,9 +34,9 @@ def test_vcfs_sao_reproduziveis(tmp_path):
     cenarios.gerar_cenarios(tmp_path / "b", seed=7)
     for n in range(1, 6):
         for lado in ("mae", "pai"):
-            assert (tmp_path / "a" / f"cenario_{n}_{lado}.vcf").read_bytes() == (
-                tmp_path / "b" / f"cenario_{n}_{lado}.vcf"
-            ).read_bytes()
+            a = cenarios.vcf_cenario(tmp_path / "a", n, lado)
+            assert a.parent.name == cenarios.PASTAS_CASO[cenarios.cenario_por_numero(n).caso]
+            assert a.read_bytes() == cenarios.vcf_cenario(tmp_path / "b", n, lado).read_bytes()
 
 
 def test_normalizacao_cromossomo_e_regioes():
@@ -59,7 +59,7 @@ def test_motivo_repeticao_biopython():
 
 
 def test_leitura_cenario_3_mae(dir_cenarios):
-    df = ingestao.ler_vcf(dir_cenarios / "cenario_3_mae.vcf")
+    df = ingestao.ler_vcf(cenarios.vcf_cenario(dir_cenarios, 3, "mae"))
     assert df.amostra.unique().tolist() == ["MAE"]
     assert set(df.cromossomo) <= {"1", "9", "16", "17", "21"}  # sem prefixo chr
     assert (df.montagem == "GRCh38").all() and df.attrs["vcf"]["montagem"] == "GRCh38"
@@ -87,7 +87,7 @@ def test_leitura_cenario_3_mae(dir_cenarios):
 
 def test_filtro_configuravel(dir_cenarios):
     df = ingestao.ler_vcf(
-        dir_cenarios / "cenario_1_pai.vcf", filtro={"dp_minimo": 0, "gq_minimo": 0, "exigir_pass": False}
+        cenarios.vcf_cenario(dir_cenarios, 1, "pai"), filtro={"dp_minimo": 0, "gq_minimo": 0, "exigir_pass": False}
     )
     assert df.loc[df.posicao == 31663000, "aprovado"].item()
 
@@ -206,3 +206,36 @@ def test_amostra_multiamostra(tmp_path):
     )
     with pytest.raises(ValueError, match="amostra"):
         ingestao.ler_vcf(p, amostra="FILHO")
+
+
+def test_sinteticos_organizados_por_caso_de_atendimento(tmp_path):
+    """data/sinteticos tem uma pasta por caso do TCC; cada VCF fica numa só pasta e os casais (caso 2) são do gerador."""
+    from ela_preditivo import DIR_DADOS
+
+    sint = DIR_DADOS / "sinteticos"
+    assert {p.name for p in sint.iterdir() if p.is_dir()} == set(cenarios.PASTAS_CASO.values())
+    assert not list(sint.glob("*.vcf"))  # nenhum VCF solto na raiz
+    nomes = [p.name for p in sint.rglob("*.vcf")]
+    assert len(nomes) == len(set(nomes)) == 18
+    assert {p.name for p in cenarios.pasta_caso(sint, 2).glob("*.vcf")} == {
+        "casal_1_mae.vcf",
+        "casal_2_mae.vcf",
+        "casal_2_pai.vcf",
+    }
+    assert cenarios.vcf_cenario(sint, 4, "mae").parent.name == "caso_3_familia_com_variante"
+    assert cenarios.vcf_sintetico(sint, "parentes_2_filho_testado").parent.name == "caso_3_familia_com_variante"
+    with pytest.raises(FileNotFoundError):
+        cenarios.vcf_sintetico(sint, "nao_existe")
+    # casais: reprodutíveis, iguais aos versionados e sem mexer nos outros cenários
+    a = cenarios.gerar_cenarios_casal(tmp_path / "a", seed=2026)
+    assert a[0]["vcf_pai"] is None and a[0]["laudo_c9orf72"] == {"mae": 45}
+    assert a[1]["herancas"] == {"SOD1": "recessiva"}
+    for p in sorted((tmp_path / "a").rglob("*.vcf")):
+        rel = p.relative_to(tmp_path / "a")
+        assert p.read_bytes() == (sint / rel).read_bytes(), rel
+    assert not list((tmp_path / "a").rglob("cenario_*.vcf"))
+    # uma pasta antiga, sem as subpastas, continua funcionando
+    plano = tmp_path / "plano"
+    plano.mkdir()
+    (plano / "cenario_1_mae.vcf").write_bytes(cenarios.vcf_cenario(sint, 1, "mae").read_bytes())
+    assert cenarios.vcf_cenario(plano, 1, "mae") == plano / "cenario_1_mae.vcf"

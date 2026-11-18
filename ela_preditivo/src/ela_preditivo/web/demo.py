@@ -200,7 +200,7 @@ REGISTROS_FICTICIOS = [
         "tipo": "CASAL",
         "prontuario": "DEMO-0006",
         "momento": "ANTES_DO_TESTE",
-        "mae": {"nome": "Fernanda Fictícia Nunes", "nascimento": "1990-08-14", "laudo": "45", "vcf": 2},
+        "mae": {"nome": "Fernanda Fictícia Nunes", "nascimento": "1990-08-14", "laudo": "45", "vcf": "casal_1_mae"},
         "pai": {"nome": "Gustavo Fictício Nunes", "nascimento": "1988-03-03", "laudo": None, "vcf": None},
         "descendentes": [],
         "observacoes": "Casal que planeja filhos: parceira com expansão do C9orf72 (laudo e VCF do cenário 2); parceiro sem exame, assumido não portador na análise. Registro fictício.",
@@ -334,10 +334,10 @@ def anexar_documento_demo(
 
 
 def _vcf_sintetico(referencia, lado: str):
-    """VCF sintético versionado: número do cenário (arquivo do lado) ou nome do arquivo de um cenário de parentes."""
+    """VCF sintético versionado: número do cenário (arquivo do lado) ou nome do arquivo de parentes ou de casal."""
     if isinstance(referencia, int):
-        return DIR_DADOS / "sinteticos" / f"cenario_{referencia}_{lado}.vcf"
-    return DIR_DADOS / "sinteticos" / f"{referencia}.vcf"
+        return cenarios.vcf_cenario(DIR_DADOS / "sinteticos", referencia, lado)
+    return cenarios.vcf_sintetico(DIR_DADOS / "sinteticos", referencia)
 
 
 def criar_registro(bd: Session, cifra: Cifra, config, medico: Usuario, r: dict) -> Paciente:

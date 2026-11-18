@@ -12,8 +12,8 @@ from ela_preditivo.monte_carlo import loci_de_vetor
 
 def _executar(dir_cenarios, saida, **kw):
     return pipeline.executar(
-        dir_cenarios / "cenario_3_mae.vcf",
-        dir_cenarios / "cenario_3_pai.vcf",
+        cenarios.vcf_cenario(dir_cenarios, 3, "mae"),
+        cenarios.vcf_cenario(dir_cenarios, 3, "pai"),
         saida,
         sexo="F",
         idade_atual=30,
@@ -135,9 +135,9 @@ def test_cli_hipoteses(tmp_path):
     args = [
         "executar",
         "--vcf-mae",
-        str(tmp_path / "s" / "cenario_2_mae.vcf"),
+        str(cenarios.vcf_cenario(tmp_path / "s", 2, "mae")),
         "--vcf-pai",
-        str(tmp_path / "s" / "cenario_2_pai.vcf"),
+        str(cenarios.vcf_cenario(tmp_path / "s", 2, "pai")),
         "--saida",
         str(tmp_path / "c2"),
         "--n",

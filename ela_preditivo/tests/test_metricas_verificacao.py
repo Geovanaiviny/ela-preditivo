@@ -402,7 +402,7 @@ def test_tornado_so_usa_faixas_publicadas(vetores, parametros):
 def test_tornado_como_opcao_da_execucao(dir_cenarios, tmp_path):
     comum = dict(sexo="F", idade_atual=40, n=600, motor="numpy", base_clinvar=False)
     c = cenarios.cenario_por_numero(3)
-    vcfs = (dir_cenarios / "cenario_3_mae.vcf", dir_cenarios / "cenario_3_pai.vcf")
+    vcfs = (cenarios.vcf_cenario(dir_cenarios, 3, "mae"), cenarios.vcf_cenario(dir_cenarios, 3, "pai"))
     sem = pipeline.executar(*vcfs, tmp_path / "sem", laudo_c9orf72=c.laudo_c9orf72, figuras=False, **comum)
     assert sem["tornado"] is None and not (tmp_path / "sem" / "tabelas" / "tabela_20_tornado.csv").exists()
     assert json.loads((tmp_path / "sem" / "metadados.json").read_text(encoding="utf-8"))["tornado"] is False
@@ -499,9 +499,9 @@ def test_cli_executar_com_tornado(dir_cenarios, tmp_path, capsys):
     args = [
         "executar",
         "--vcf-mae",
-        str(dir_cenarios / "cenario_1_mae.vcf"),
+        str(cenarios.vcf_cenario(dir_cenarios, 1, "mae")),
         "--vcf-pai",
-        str(dir_cenarios / "cenario_1_pai.vcf"),
+        str(cenarios.vcf_cenario(dir_cenarios, 1, "pai")),
     ]
     args += [
         "--saida",

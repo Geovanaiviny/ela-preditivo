@@ -73,7 +73,7 @@ Fórmulas exatas de referência: dominante `P(C) = 1 − (1 − d_m/2)(1 − d_f
 | Distribuição da penetrância e faixas do tornado | `config/parametros_literatura.yaml` | `calibracao_penetrancia.distribuicao`: `beta` (padrão) ou `lognormal_truncada`; `sensibilidade.tornado`: faixa de cada parâmetro com a citação (média ± 1,96·dp/√n para o SOD1; mediana ± 1,96·EP para o TARDBP, aproximação com `confirmar: true`; medianas publicadas do C9orf72; FUS sem faixa, por não haver incerteza publicada para a idade de início) |
 | Variantes conhecidas (anotação) | `data/variantes_curadas.csv` | SOD1 p.Ala5Val (rs121912442, chr21:31659783 C>T), SOD1 p.Asp91Ala recessiva (rs80265967, chr21:31667290 A>C), TARDBP p.Met337Val (rs80356730, chr1:11022418 A>G), FUS p.Arg521Cys (rs121909668, chr16:31191418 C>T), expansão GGGGCC do C9orf72 (chr9:27573529–27573534), SOD1 rs17883296 benigna (exemplo do TCC). Coordenadas conferidas no dbSNP/ClinVar em 24/10/2026 |
 | Subconjunto real do ClinVar/dbSNP (seção 4.2.2 do TCC) | `dados_reais/` na raiz do repositório (ignorada pelo git) ou `ELA_DADOS_BRUTOS` | `base_consolidada_ela.csv` (preferida), `clinvar_ela_4genes.csv`/`variant_summary.txt` ou `clinvar*.vcf`; encontrados automaticamente por `anotacao.tabela_anotacao()` e mesclados com a tabela curada (classificação do ClinVar prevalece; a curada contribui herança e a expansão do C9orf72). Sem eles o protótipo roda só com a tabela curada (`--so-tabela-curada`). `ela-preditivo atualizar-base` baixa a release mensal do ClinVar (quatro genes), registra release e sha256 em `dados_reais/versoes/` e compara com a release anterior; cada execução grava arquivo, release e sha256 da base em `metadados.json` |
-| Cenários familiares | `data/sinteticos/` (gerados por `cenarios.py`, seed 2026) | VCF 4.2, GRCh38, uma amostra por arquivo, com ruído para exercitar filtros (benigna, não anotada, fora dos genes, baixa qualidade, multialélica); dois cenários com genitor sem exame (`parentes_1_*`: pai falecido sem ELA aos 60 anos e avó paterna testada; `parentes_2_*`: pai sem exame, avó e um filho testados) |
+| Cenários familiares | `data/sinteticos/` (gerados por `cenarios.py`, seed 2026), uma pasta por caso de atendimento | VCF 4.2, GRCh38, uma amostra por arquivo, com ruído para exercitar filtros (benigna, não anotada, fora dos genes, baixa qualidade, multialélica). `caso_1_pessoa_com_historico/`: cenários 1, 2, 3 e 5 e `parentes_1_*` (pai falecido sem ELA aos 60 anos e avó paterna testada). `caso_2_casal_ou_futuro_filho/`: `casal_1_mae` (parceira com expansão do C9orf72 por laudo, parceiro sem exame) e `casal_2_*` (os dois parceiros heterozigotos SOD1 p.Asp91Ala). `caso_3_familia_com_variante/`: cenário 4 e `parentes_2_*` (pai sem exame, avó e um filho testados). Coordenadas e alelos das variantes de risco e da benigna vêm da base real do ClinVar/dbSNP; genótipos, profundidade e qualidade são gerados pela semente. O par de VCFs serve a qualquer caso: a pasta indica onde ele é usado na demonstração. `cenarios.vcf_cenario(dir, n, lado)` e `cenarios.vcf_sintetico(dir, nome)` localizam os arquivos e aceitam também uma pasta antiga, sem subpastas |
 
 A expansão do C9orf72 **não é lida do VCF**: o fluxo de variantes curtas não a detecta e o TCC (4.2.1) a trata como parâmetro do laudo laboratorial. Informe o nº de repetições do maior alelo de cada genitor (`--c9orf72-mae 45`, `--c9orf72-pai 2 45` para os dois alelos). Limiar: ≥ 30 repetições patogênico, 24–29 intermediário (configurável). **Genitor sem laudo = não testado**: o C9orf72 desse genitor é indeterminado, o lócus inteiro sai do cálculo pelo mesmo critério do genótipo indeterminado no VCF, a linha fica na Tabela 1b com `descartado = True` e o motivo, `metadados.json` lista o descarte em `loci_descartados` e o relatório marca o resultado como **parcial para o C9orf72**; isso vale também quando só um genitor tem laudo. Um laudo normal é um laudo com contagem (ex.: `--c9orf72-pai 8`), e os cenários sintéticos declaram laudo normal explícito (`cenarios.LAUDO_NORMAL`, um abaixo da faixa intermediária do YAML) para os genitores sem envolvimento do gene. Um VCF no estilo ExpansionHunter (`ALT=<STRn>`, `REPCN`) continua legível como caminho secundário, mas não substitui o laudo: com laudo, a divergência fica no relatório e prevalece o laudo; sem laudo, o lócus é descartado e o registro do VCF vai para a observação.
 
@@ -116,19 +116,19 @@ Dependências pinadas em `pyproject.toml`: pymc 5.28.5, lifelines 0.30.3 (versã
 ## 5. Uso
 
 ```bash
-# 1) gerar os VCFs sintéticos dos 5 cenários
+# 1) gerar os VCFs sintéticos (cinco cenários, parentes e casais), numa pasta por caso de atendimento
 ela-preditivo gerar-cenarios --saida ela_preditivo/data/sinteticos
 
 # 2) executar um caso (as três camadas) e gravar relatório, tabelas e figuras
-ela-preditivo executar --vcf-mae ela_preditivo/data/sinteticos/cenario_3_mae.vcf \
-                       --vcf-pai ela_preditivo/data/sinteticos/cenario_3_pai.vcf \
+ela-preditivo executar --vcf-mae ela_preditivo/data/sinteticos/caso_1_pessoa_com_historico/cenario_3_mae.vcf \
+                       --vcf-pai ela_preditivo/data/sinteticos/caso_1_pessoa_com_historico/cenario_3_pai.vcf \
                        --c9orf72-mae 45 --c9orf72-pai 8 \
                        --sexo F --idade-atual 30 --n 10000 --seed 42 --motor pymc --saida resultados/cenario_3_F
 # laudo do C9orf72 dos dois genitores: genitor sem laudo é "não testado" e o lócus fica indeterminado
 
 # 2b) genitor sem exame: omita o VCF dele e informe o de parentes dele, com a situação clínica do genitor
-ela-preditivo executar --vcf-mae ela_preditivo/data/sinteticos/parentes_1_mae.vcf \
-                       --vcf-mae-do-pai ela_preditivo/data/sinteticos/parentes_1_avo_paterna.vcf \
+ela-preditivo executar --vcf-mae ela_preditivo/data/sinteticos/caso_1_pessoa_com_historico/parentes_1_mae.vcf \
+                       --vcf-mae-do-pai ela_preditivo/data/sinteticos/caso_1_pessoa_com_historico/parentes_1_avo_paterna.vcf \
                        --c9orf72-mae 2 --c9orf72-mae-do-pai 2 \
                        --situacao-pai falecido_sem_ela --idade-pai 60 \
                        --sexo M --idade-atual 35 --saida resultados/parentes_1_M

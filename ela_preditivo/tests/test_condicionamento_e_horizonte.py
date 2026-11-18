@@ -107,7 +107,7 @@ def test_pipeline_poe_a_idade_do_atendido_na_tabela_4_e_no_relatorio(dir_cenario
         base_clinvar=False,
         figuras=False,
     )
-    mae, pai = dir_cenarios / "cenario_2_mae.vcf", dir_cenarios / "cenario_2_pai.vcf"
+    mae, pai = cenarios.vcf_cenario(dir_cenarios, 2, "mae"), cenarios.vcf_cenario(dir_cenarios, 2, "pai")
     r = pipeline.executar(mae, pai, tmp_path / "c2", idade_atual=42, **args)
     cond = r["condicionado"]
     assert cond["p_portador"] == pytest.approx(0.4930, abs=5e-5)
@@ -181,8 +181,8 @@ def test_horizonte_menor_reduz_o_risco_vitalicio(anotados, parametros, curada):
 
 def test_tabela_3_tem_coluna_propria_para_a_fracao_sem_limite(dir_cenarios, tmp_path):
     r = pipeline.executar(
-        dir_cenarios / "cenario_5_mae.vcf",
-        dir_cenarios / "cenario_5_pai.vcf",
+        cenarios.vcf_cenario(dir_cenarios, 5, "mae"),
+        cenarios.vcf_cenario(dir_cenarios, 5, "pai"),
         tmp_path / "c5",
         sexo="F",
         n=1200,

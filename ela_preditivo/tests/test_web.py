@@ -52,7 +52,7 @@ def registro_pessoa(nome="Pessoa de Teste", nasc="1990-01-01", sexo="F", prontua
 
 def anexar_cenario(cliente, pid: int, papel: str, numero: int, lado: str | None = None):
     lado = lado or ("mae" if papel == "MAE" else "pai")
-    with open(SINT / f"cenario_{numero}_{lado}.vcf", "rb") as f:
+    with open(cenarios.vcf_cenario(SINT, numero, lado), "rb") as f:
         return cliente.post(
             f"/api/pacientes/{pid}/genitores/{papel}/vcf", files={"vcf": ("Nome Pessoal.vcf", f, "text/plain")}
         )
@@ -968,7 +968,7 @@ def test_privacidade_publica_com_encarregado_e_termos_versionados(plataforma):
 # ---------------------------------------------------------------------------
 def test_analise_por_upload_e_por_cenario_so_para_quem_executou(plataforma, medico, admin):
     sint = DIR_DADOS / "sinteticos"
-    with open(sint / "cenario_2_mae.vcf", "rb") as fm, open(sint / "cenario_2_pai.vcf", "rb") as fp:
+    with open(cenarios.vcf_cenario(sint, 2, "mae"), "rb") as fm, open(cenarios.vcf_cenario(sint, 2, "pai"), "rb") as fp:
         r = medico.post(
             "/api/analises",
             data={
@@ -1183,7 +1183,7 @@ def test_vcf_do_genitor_e_validado_cifrado_substituivel_e_removivel(plataforma, 
         f"/api/pacientes/{pid}/genitores/MAE/vcf", files={"vcf": ("x.vcf", b"isto nao e um vcf\n", "text/plain")}
     )
     assert r.status_code == 422 and "vcf" in r.json()["campos"]
-    grch37 = (SINT / "cenario_1_mae.vcf").read_text(encoding="utf-8").replace("GRCh38", "GRCh37")
+    grch37 = (cenarios.vcf_cenario(SINT, 1, "mae")).read_text(encoding="utf-8").replace("GRCh38", "GRCh37")
     r = medico.post(f"/api/pacientes/{pid}/genitores/MAE/vcf", files={"vcf": ("x.vcf", grch37.encode(), "text/plain")})
     assert r.status_code == 422 and "GRCh38" in r.json()["campos"]["vcf"]
     assert (
@@ -1945,7 +1945,7 @@ def anexar_parente(
         dados["laudo_c9orf72"] = laudo
     if arquivo is None:
         return cliente.post(f"/api/pacientes/{pid}/genitores/{papel}/parentes", data=dados)
-    with open(SINT / arquivo, "rb") as f:
+    with open(cenarios.vcf_sintetico(SINT, arquivo), "rb") as f:
         return cliente.post(
             f"/api/pacientes/{pid}/genitores/{papel}/parentes",
             data=dados,
@@ -2166,7 +2166,7 @@ def test_parentes_situacao_clinica_e_filho_testado_pela_api(plataforma, medico, 
     assert r.status_code == 422 and "caso 3" in r.json()["campos"]["vcf"]
     fam = next(p for p in medico.get("/api/pacientes").json()["pacientes"] if "Ramos" in p["nome"])
     fid = fam["descendentes"][0]["id"]
-    with open(SINT / "cenario_4_mae.vcf", "rb") as f:
+    with open(cenarios.vcf_cenario(SINT, 4, "mae"), "rb") as f:
         r = medico.post(
             f"/api/pacientes/{fam['id']}/descendentes/{fid}/vcf", files={"vcf": ("Filho.vcf", f, "text/plain")}
         )

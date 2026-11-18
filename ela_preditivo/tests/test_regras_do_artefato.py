@@ -237,8 +237,8 @@ def test_weibull_em_forma_fechada_a_partir_de_estatisticas(tmp_path):
 def test_n_pequeno_sem_ajuste_da_lifelines_nao_trava(dir_cenarios, tmp_path):
     # N = 30: menos de 10 eventos por lócus, a Lifelines não ajusta a cura mista e `erro_rel_pi` não existe (antes: AttributeError)
     r = pipeline.executar(
-        dir_cenarios / "cenario_5_mae.vcf",
-        dir_cenarios / "cenario_5_pai.vcf",
+        cenarios.vcf_cenario(dir_cenarios, 5, "mae"),
+        cenarios.vcf_cenario(dir_cenarios, 5, "pai"),
         tmp_path / "n30",
         n=30,
         seed=1,
@@ -277,8 +277,8 @@ def test_tabela_anotacao_aceita_dataframe_como_curada(tmp_path, variant_summary_
 def test_pasta_de_saida_e_limpa_a_cada_execucao(dir_cenarios, tmp_path):
     saida = tmp_path / "saida"
     pipeline.executar(
-        dir_cenarios / "cenario_1_mae.vcf",
-        dir_cenarios / "cenario_1_pai.vcf",
+        cenarios.vcf_cenario(dir_cenarios, 1, "mae"),
+        cenarios.vcf_cenario(dir_cenarios, 1, "pai"),
         saida,
         n=200,
         motor="numpy",
@@ -290,8 +290,8 @@ def test_pasta_de_saida_e_limpa_a_cada_execucao(dir_cenarios, tmp_path):
     (saida / "notas_do_usuario.txt").write_text("fica", encoding="utf-8")
     # segunda execução na mesma pasta, agora sem lócus de risco: nada da execução anterior sobrevive ao lado do relatório novo
     r = pipeline.executar(
-        dir_cenarios / "cenario_1_mae.vcf",
-        dir_cenarios / "cenario_1_mae.vcf",
+        cenarios.vcf_cenario(dir_cenarios, 1, "mae"),
+        cenarios.vcf_cenario(dir_cenarios, 1, "mae"),
         saida,
         n=200,
         motor="numpy",
@@ -450,13 +450,14 @@ def test_file_date_fixo_vindo_do_yaml(tmp_path):
         assert cenarios.data_fixa_vcf() != hoje
     cenarios.gerar_cenarios(tmp_path / "a", seed=7)
     cenarios.gerar_cenarios(tmp_path / "b", seed=7)
-    for p in sorted((tmp_path / "a").glob("*.vcf")):
+    for p in sorted((tmp_path / "a").rglob("*.vcf")):
         assert p.read_text(encoding="utf-8").splitlines()[1] == f"##fileDate={data}"
-        assert p.read_bytes() == (tmp_path / "b" / p.name).read_bytes()
+        assert p.read_bytes() == (tmp_path / "b" / p.relative_to(tmp_path / "a")).read_bytes()
     # os VCFs versionados em data/sinteticos são exatamente o que o gerador produz com a semente 2026
     cenarios.gerar_cenarios(tmp_path / "c", seed=2026)
-    for p in sorted((tmp_path / "c").glob("*.vcf")):
-        assert p.read_bytes() == (DIR_DADOS / "sinteticos" / p.name).read_bytes(), p.name
+    for p in sorted((tmp_path / "c").rglob("*.vcf")):
+        rel = p.relative_to(tmp_path / "c")
+        assert p.read_bytes() == (DIR_DADOS / "sinteticos" / rel).read_bytes(), rel
     with pytest.raises(ValueError, match="data"):
         cfg = tmp_path / "sem_data.yaml"
         cfg.write_text("versao: 1\n", encoding="utf-8")
@@ -507,8 +508,8 @@ def test_genitor_sem_laudo_descarta_o_c9orf72(anotados, parametros, curada, tmp_
         assert vn.dosagem_mae.tolist() == e.dosagem_mae.tolist() and vn.dosagem_pai.tolist() == e.dosagem_pai.tolist()
     # pipeline: metadados registram o descarte e o relatório diz que o resultado é parcial
     r = pipeline.executar(
-        dir_cenarios / "cenario_1_mae.vcf",
-        dir_cenarios / "cenario_1_pai.vcf",
+        cenarios.vcf_cenario(dir_cenarios, 1, "mae"),
+        cenarios.vcf_cenario(dir_cenarios, 1, "pai"),
         tmp_path / "p",
         n=300,
         seed=1,
@@ -524,8 +525,8 @@ def test_genitor_sem_laudo_descarta_o_c9orf72(anotados, parametros, curada, tmp_
     assert "Resultado parcial para o C9orf72" in texto and "pai: não testado" in texto and "mãe: 45 repetições" in texto
     # só o C9orf72 em jogo e um genitor sem laudo → nenhum lócus utilizável, e o relatório diz por quê
     r2 = pipeline.executar(
-        dir_cenarios / "cenario_2_mae.vcf",
-        dir_cenarios / "cenario_2_pai.vcf",
+        cenarios.vcf_cenario(dir_cenarios, 2, "mae"),
+        cenarios.vcf_cenario(dir_cenarios, 2, "pai"),
         tmp_path / "p2",
         n=300,
         motor="numpy",
@@ -654,7 +655,7 @@ def test_regra_qualificada_para_conflitantes(tmp_path, dir_cenarios, variant_sum
     assert d.classe == "risco" and bool(d.regra_qualificada) and d.heranca == "recessiva"
     assert pd.isna(d.divergencia_curada) and pd.isna(d.clnsig_curada)
     # `anotar` usa a classe final da tabela: as anotadas do cenário 4 saem como risco pela regra
-    mae = anotacao.anotar(ingestao.ler_vcf(dir_cenarios / "cenario_4_mae.vcf"), t)
+    mae = anotacao.anotar(ingestao.ler_vcf(cenarios.vcf_cenario(dir_cenarios, 4, "mae")), t)
     linha = mae[mae.posicao == 31667290].iloc[0]
     assert linha.classe == "risco" and bool(linha.regra_qualificada) and "TCC 4.2.2" in linha.nota_regra
     # os dois modos declarados: com herança na curada → aceita (D91A); sem linha na curada → não aceita e reportada
@@ -683,8 +684,8 @@ def test_regra_qualificada_para_conflitantes(tmp_path, dir_cenarios, variant_sum
 def test_cenario_4_entra_pela_regra_qualificada(dir_cenarios, tmp_path, variant_summary_fake, linha_vs):
     base = _base_falsa(variant_summary_fake, linha_vs, tmp_path / "base.txt", CONFLITO_D91A, FENOTIPO_RECESSIVO)
     r = pipeline.executar(
-        dir_cenarios / "cenario_4_mae.vcf",
-        dir_cenarios / "cenario_4_pai.vcf",
+        cenarios.vcf_cenario(dir_cenarios, 4, "mae"),
+        cenarios.vcf_cenario(dir_cenarios, 4, "pai"),
         tmp_path / "c4",
         n=400,
         seed=2,

@@ -91,8 +91,8 @@ def test_poucos_eventos_nao_ajusta_sem_quebrar(parametros, curada, anotados):
 
 def test_pipeline_com_cox_grava_tabela_11_e_figura_9(dir_cenarios, tmp_path):
     r = pipeline.executar(
-        dir_cenarios / "cenario_2_mae.vcf",
-        dir_cenarios / "cenario_2_pai.vcf",
+        cenarios.vcf_cenario(dir_cenarios, 2, "mae"),
+        cenarios.vcf_cenario(dir_cenarios, 2, "pai"),
         tmp_path / "c2",
         sexo="M",
         n=1500,
@@ -109,8 +109,8 @@ def test_pipeline_com_cox_grava_tabela_11_e_figura_9(dir_cenarios, tmp_path):
     assert "Comparação com o modelo de Cox" in texto and "CoxPHFitter" in texto
     # sem o flag nada disso aparece
     r0 = pipeline.executar(
-        dir_cenarios / "cenario_2_mae.vcf",
-        dir_cenarios / "cenario_2_pai.vcf",
+        cenarios.vcf_cenario(dir_cenarios, 2, "mae"),
+        cenarios.vcf_cenario(dir_cenarios, 2, "pai"),
         tmp_path / "c2b",
         n=500,
         seed=2,
