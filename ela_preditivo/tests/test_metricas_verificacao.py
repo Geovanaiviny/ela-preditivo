@@ -410,7 +410,7 @@ def test_tornado_como_opcao_da_execucao(dir_cenarios, tmp_path):
     assert len(com["tornado"]) == 6 and "tabela_20_tornado" in {t["nome"] for t in com["tabelas"]}
     assert (tmp_path / "com" / "figuras" / "figura_12_tornado.png").stat().st_size > 10_000
     texto = (tmp_path / "com" / "relatorio.md").read_text(encoding="utf-8")
-    assert "## Sensibilidade tipo tornado" in texto and "risco vitalício residual" in texto
+    assert "## Sensibilidade tipo tornado" in texto and "risco residual" in texto and "vitalício residual" not in texto
     assert json.loads((tmp_path / "com" / "metadados.json").read_text(encoding="utf-8"))["tornado"] is True
     # o tornado não muda o resultado da análise
     sem_tempo = lambda d: {k: v for k, v in d.items() if k != "tempo_s"}  # noqa: E731

@@ -136,7 +136,7 @@ def caso_dict(p: Paciente, cifra, hoje: _dt.date, detalhado: bool = False) -> di
     futuro = _analise_pseudonimizada(ultimas.get(None), detalhado) if p.tipo == "CASAL" else None
     analisadas = [x["analise"] for x in descendentes if x["analise"]] + ([futuro] if futuro else [])
     genes = sorted({g for a in analisadas for g in a["genes_de_risco"]})
-    riscos = [a["p_manifesta"] for a in analisadas if a["p_manifesta"] is not None]
+    riscos = [a["risco_vitalicio"] for a in analisadas if a["risco_vitalicio"] is not None]
     tipo = textos.TIPOS_ATENDIMENTO[p.tipo]
     return {
         "codigo": p.codigo_pesquisa,
@@ -160,7 +160,7 @@ def caso_dict(p: Paciente, cifra, hoje: _dt.date, detalhado: bool = False) -> di
         "n_analises": len(analisadas),
         "genes_de_risco": genes,
         "herancas": sorted({h for a in analisadas for h in a["herancas"]}),
-        "risco_maximo": max(riscos) if riscos else None,
+        "risco_vitalicio_maximo": max(riscos) if riscos else None,
         "com_hipoteses": any(a["hipoteses"] for a in analisadas),
         "com_suposicao": any(a["com_suposicao"] for a in analisadas),
         "ultima_analise_em": max((a["executado_em"] for a in analisadas if a["executado_em"]), default=None),
@@ -186,9 +186,11 @@ def filtrar_casos(casos: list[dict], f: dict) -> list[dict]:
             continue
         if f.get("heranca") and f["heranca"] not in c["herancas"]:
             continue
-        if f.get("risco_min") is not None and (c["risco_maximo"] is None or c["risco_maximo"] < f["risco_min"]):
+        # filtros de risco: pelo risco vitalício (desde o nascimento), a mesma grandeza para todos os registros
+        maior = c["risco_vitalicio_maximo"]
+        if f.get("risco_min") is not None and (maior is None or maior < f["risco_min"]):
             continue
-        if f.get("risco_max") is not None and (c["risco_maximo"] is None or c["risco_maximo"] > f["risco_max"]):
+        if f.get("risco_max") is not None and (maior is None or maior > f["risco_max"]):
             continue
         if f.get("analise_de") and (c["ultima_analise_em"] is None or c["ultima_analise_em"] < f["analise_de"]):
             continue
@@ -211,7 +213,7 @@ def totais(casos: list[dict]) -> dict:
         analisadas += [x["analise"] for x in c["descendentes"] if x["analise"]]
         if c["futuro_filho"]:
             analisadas.append(c["futuro_filho"])
-    riscos = [c["risco_maximo"] for c in casos if c["risco_maximo"] is not None]
+    riscos = [c["risco_vitalicio_maximo"] for c in casos if c["risco_vitalicio_maximo"] is not None]
     return {
         "casos": len(casos),
         "analises": len(analisadas),
@@ -434,28 +436,39 @@ COLUNAS_CSV = [
     "suposicao_nao_portador",
     "genes_de_risco",
     "herancas",
-    "faixa_idade_referencia",
+    # desde o nascimento (valem para toda análise)
     "p_transmissao",
-    "p_manifesta_vida",
-    "p_manifesta_q025",
-    "p_manifesta_q975",
-    "risco_10_anos",
-    "risco_20_anos",
+    "risco_vitalicio",
+    "risco_vitalicio_q025",
+    "risco_vitalicio_q975",
     "F_50",
     "F_60",
     "F_70",
-    "inicio_mediana",
-    "inicio_q25",
-    "inicio_q75",
+    "inicio_mediana_desde_nascimento",
+    "inicio_q25_desde_nascimento",
+    "inicio_q75_desde_nascimento",
+    # a partir da idade de referência, sem sintomas (vazias quando a análise não tem idade)
+    "faixa_idade_referencia",
+    "p_portador_sem_sintomas",
+    "risco_residual",
+    "risco_residual_q025",
+    "risco_residual_q975",
+    "risco_10_anos",
+    "risco_20_anos",
+    "inicio_mediana_a_partir_da_idade",
+    "inicio_q25_a_partir_da_idade",
+    "inicio_q75_a_partir_da_idade",
 ]
 
 
 def csv_casos(casos: list[dict]) -> str:
     """Uma linha por análise (descendente ou futuro filho); separador ';' e decimal com vírgula (pt-BR).
 
-    Com `faixa_idade_referencia` preenchida, `p_transmissao`, `p_manifesta_vida` (risco residual até o horizonte), a
-    banda, `risco_10_anos`, `risco_20_anos` e a idade de início são os valores condicionados à pessoa sem sintomas nessa
-    faixa de idade; vazia, valem desde o nascimento e `F_50`, `F_60`, `F_70` são o risco acumulado até essas idades."""
+    Cada coluna guarda uma só grandeza. Desde o nascimento, em toda análise: `p_transmissao`, `risco_vitalicio` (até o
+    horizonte, com a banda), `F_50`, `F_60`, `F_70` e a idade de início (mediana e faixa de 25 % a 75 %). A partir da idade de
+    referência,
+    para a pessoa sem sintomas, só quando `faixa_idade_referencia` está preenchida: `p_portador_sem_sintomas`,
+    `risco_residual` (da idade até o horizonte, com a banda), `risco_10_anos`, `risco_20_anos` e a idade de início."""
     linhas = [";".join(COLUNAS_CSV)]
     for c in casos:
         pessoas = [
@@ -465,9 +478,10 @@ def csv_casos(casos: list[dict]) -> str:
             pessoas.append(("futuro filho", c["futuro_filho"]["sexo"], "", c["futuro_filho"]))
         for pessoa, sexo, faixa, a in pessoas:
             a = a or {}
-            F = a.get("F") or {}
+            F = a.get("F_desde_nascimento") or {}
             jan = a.get("janelas") or {}
             ini = a.get("inicio") or {}
+            cond = bool(a.get("condicionado"))
             valores = [
                 c["codigo"],
                 c["tipo"],
@@ -483,19 +497,26 @@ def csv_casos(casos: list[dict]) -> str:
                 ",".join((a.get("suposicoes") or {}).get("nao_portador", [])),
                 ",".join(a.get("genes_de_risco") or []),
                 ",".join(a.get("herancas") or []),
+                _num(a.get("p_portador_desde_nascimento")),
+                _num(a.get("risco_vitalicio")),
+                _num(a.get("risco_vitalicio_q025")),
+                _num(a.get("risco_vitalicio_q975")),
+                _num(F.get("50")),
+                _num(F.get("60")),
+                _num(F.get("70")),
+                _num(a.get("inicio_mediana_desde_nascimento")),
+                _num(a.get("inicio_q25_desde_nascimento")),
+                _num(a.get("inicio_q75_desde_nascimento")),
                 a.get("faixa_idade_referencia") or "",
-                _num(a.get("p_portador")),
-                _num(a.get("p_manifesta")),
-                _num(a.get("q025")),
-                _num(a.get("q975")),
+                _num(a.get("p_portador") if cond else None),
+                _num(a.get("risco_residual")),
+                _num(a.get("risco_residual_q025")),
+                _num(a.get("risco_residual_q975")),
                 _num((jan.get("10") or {}).get("valor")),
                 _num((jan.get("20") or {}).get("valor")),
-                _num((F.get("50") or {}).get("valor")),
-                _num((F.get("60") or {}).get("valor")),
-                _num((F.get("70") or {}).get("valor")),
-                _num(ini.get("mediana")),
-                _num(ini.get("q25")),
-                _num(ini.get("q75")),
+                _num(ini.get("mediana") if cond else None),
+                _num(ini.get("q25") if cond else None),
+                _num(ini.get("q75") if cond else None),
             ]
             linhas.append(";".join(str(v).replace(";", ",") for v in valores))
     return "\n".join(linhas) + "\n"

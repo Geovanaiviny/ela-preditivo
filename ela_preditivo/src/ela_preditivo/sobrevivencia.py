@@ -219,7 +219,8 @@ def tabela_risco_condicional(
     res: ResultadoSimulacao, idades_atuais=(0, 20, 30, 40, 50, 60, 70), janelas=(10, 20), horizonte: float = 90.0
 ) -> pd.DataFrame:
     """Tabela 4: para cada idade atual sem sintomas, P(portador | assintomático), risco nos próximos 10/20 anos
-    e risco vitalício residual (até o horizonte), por lócus e combinado, com banda de 95 % pela incerteza de π.
+    e risco residual (da idade atual até o horizonte), por lócus e combinado, com banda de 95 % pela incerteza de π.
+    "Risco vitalício" fica reservado ao risco desde o nascimento; na idade 0 os dois coincidem.
 
     As janelas de 10 e 20 anos são limitadas ao horizonte. Na linha combinada, P(portador de ≥ 1 lócus | assintomático)
     é 1 − ∏_j (1 − P(C_j | assintomático)): dado que nenhum lócus manifestou, os lóci continuam independentes."""
@@ -238,7 +239,7 @@ def tabela_risco_condicional(
                 r = float(risco_condicional(t, a, l.p_portador_exato, l.pen_media, l.dist))
                 ft = qpen * float(l.dist.cdf(t))
                 rd = np.clip((ft - fa) / (1 - fa), 0, 1)
-                nome = "vitalicio" if jan is None else f"{jan}_anos"
+                nome = "residual" if jan is None else f"{jan}_anos"
                 linha[f"risco_{nome}"] = r
                 linha[f"risco_{nome}_q025"] = float(np.percentile(rd, 2.5))
                 linha[f"risco_{nome}_q975"] = float(np.percentile(rd, 97.5))
@@ -255,7 +256,7 @@ def tabela_risco_condicional(
                 ft_any = 1 - np.prod([1 - f for f in ft_all], axis=0)
                 ft_med = 1 - np.prod([1 - l.p_portador_exato * l.pen_media * float(l.dist.cdf(t)) for l in res.loci])
                 rd = np.clip((ft_any - fa_any) / (1 - fa_any), 0, 1)
-                nome = "vitalicio" if jan is None else f"{jan}_anos"
+                nome = "residual" if jan is None else f"{jan}_anos"
                 linha[f"risco_{nome}"] = float(np.clip((ft_med - fa_med) / (1 - fa_med), 0, 1))
                 linha[f"risco_{nome}_q025"] = float(np.percentile(rd, 2.5))
                 linha[f"risco_{nome}_q975"] = float(np.percentile(rd, 97.5))
@@ -287,9 +288,9 @@ def indicadores_condicionados(
         "unidade": unidade,
         "p_portador": float(r.p_portador_condicional),
         "risco_residual": {
-            "valor": float(r.risco_vitalicio),
-            "q025": float(r.risco_vitalicio_q025),
-            "q975": float(r.risco_vitalicio_q975),
+            "valor": float(r.risco_residual),
+            "q025": float(r.risco_residual_q025),
+            "q975": float(r.risco_residual_q975),
         },
         "janelas": {
             str(jan): {
@@ -318,6 +319,6 @@ def risco_condicional_km(
             st = float(km.survival_function_at_times([idade_atual + jan]).values[0])
             linha[f"risco_{jan}_anos_km"] = 1 - st / sa if sa > 0 else np.nan
         st = float(km.survival_function_at_times([horizonte]).values[0])
-        linha["risco_vitalicio_km"] = 1 - st / sa if sa > 0 else np.nan
+        linha["risco_residual_km"] = 1 - st / sa if sa > 0 else np.nan
         linhas.append(linha)
     return pd.DataFrame(linhas)

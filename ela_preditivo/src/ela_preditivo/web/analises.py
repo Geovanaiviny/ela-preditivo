@@ -30,7 +30,7 @@ from ..calibracao import carregar_parametros
 from ..ingestao import MontagemDivergente
 from . import arquivos, auditoria, textos, vcfs
 from .bd import agora
-from .comum import exigir_campos, interpretar_laudo, iso, obter_bd, obter_cifra, texto_curto
+from .comum import exigir_campos, interpretar_laudo, iso, obter_bd, obter_cifra, quantil_inicio, texto_curto
 from .config import Configuracao
 from .modelos import AnalisePaciente, Descendente, Paciente, Usuario
 from .pacientes import descendente_de, do_medico, idades, situacao_do_genitor
@@ -272,24 +272,6 @@ def _secoes_relatorio(caminho: Path) -> list[dict]:
     return secoes
 
 
-def _quantil_inicio(t: list, F: list, q: float) -> float | None:
-    """Idade em que G(t) = F(t)/F(horizonte) cruza `q` (interpolação linear); None se F(horizonte) = 0."""
-    pares = [(tt, ff) for tt, ff in zip(t, F) if tt is not None and ff is not None]
-    if not pares or pares[-1][1] <= 0:
-        return None
-    fh = pares[-1][1]
-    anterior = None
-    for tt, ff in pares:
-        g = ff / fh
-        if g >= q:
-            if anterior is None:
-                return round(float(tt), 1)
-            t0, g0 = anterior
-            return round(float(t0 + (tt - t0) * ((q - g0) / (g - g0) if g > g0 else 0)), 1)
-        anterior = (tt, g)
-    return None
-
-
 def principais(
     sem_locus: bool, combinado: dict, curvas: dict, condicionado: dict | None = None, idade_atual=None
 ) -> dict:
@@ -337,9 +319,9 @@ def principais(
                 F[str(alvo)] = {"valor": c["F"][idx], "q025": c["F_q025"][idx], "q975": c["F_q975"][idx]}
         inicio = {
             "mediana": combinado.get("idade_mediana_primeiro_inicio"),
-            "q25": _quantil_inicio(c["t"], c["F"], 0.25),
-            "q50_curva": _quantil_inicio(c["t"], c["F"], 0.5),
-            "q75": _quantil_inicio(c["t"], c["F"], 0.75),
+            "q25": quantil_inicio(c["t"], c["F"], 0.25),
+            "q50_curva": quantil_inicio(c["t"], c["F"], 0.5),
+            "q75": quantil_inicio(c["t"], c["F"], 0.75),
         }
     return {
         "sem_locus": False,
@@ -384,9 +366,9 @@ def resumo_para_guardar(resultado: dict) -> dict:
             "q975": l.get("p_manifesta_q975"),
             "idade_mediana": l.get("idade_mediana_exata"),
             "p_portador_condicional": (na_idade.get(l.get("variante")) or {}).get("p_portador_condicional"),
-            "risco_residual": (na_idade.get(l.get("variante")) or {}).get("risco_vitalicio"),
-            "risco_residual_q025": (na_idade.get(l.get("variante")) or {}).get("risco_vitalicio_q025"),
-            "risco_residual_q975": (na_idade.get(l.get("variante")) or {}).get("risco_vitalicio_q975"),
+            "risco_residual": (na_idade.get(l.get("variante")) or {}).get("risco_residual"),
+            "risco_residual_q025": (na_idade.get(l.get("variante")) or {}).get("risco_residual_q025"),
+            "risco_residual_q975": (na_idade.get(l.get("variante")) or {}).get("risco_residual_q975"),
         }
         for l in resultado.get("resumo") or []
     ]

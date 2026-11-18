@@ -48,7 +48,7 @@ def test_variantes_curadas_batem_com_o_clinvar(base):
 
 
 def test_impacto_da_regra_qualificada_na_base_real(base, base_real):
-    """Números esperados pela autora. Se a base discordar, este teste falha e o caso é reportado antes de seguir."""
+    """Números esperados para a base real. Se a base discordar, este teste falha e o caso é reportado antes de seguir."""
     bruto = pd.read_csv(base_real, dtype=str, keep_default_na=False, encoding="utf-8-sig", low_memory=False)
     col = {c.lower().lstrip("#"): c for c in bruto.columns}
     sig = col.get("germlineclassification") or col.get("clinicalsignificance")

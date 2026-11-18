@@ -192,7 +192,7 @@ COMANDOS: dict[str, Comando] = {
                 *_VERIFICACAO,
                 *_BASE,
             ),
-            duracao="dezenas de minutos com as opções padrão, porque inclui a avaliação",
+            duracao="vários minutos com as opções padrão, porque inclui a avaliação",
         ),
         Comando(
             "avaliar",
@@ -245,7 +245,7 @@ COMANDOS: dict[str, Comando] = {
                 *_VERIFICACAO,
                 *_BASE,
             ),
-            duracao="cerca de dez minutos com as opções padrão",
+            duracao="alguns minutos com as opções padrão",
         ),
         Comando(
             "gerar-cenarios",
