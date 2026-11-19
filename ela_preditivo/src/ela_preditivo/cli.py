@@ -20,7 +20,10 @@ def construir_parser() -> argparse.ArgumentParser:
     p.add_argument("--versao", action="version", version=f"ela_preditivo {__version__}")
     sub = p.add_subparsers(dest="comando", required=True)
 
-    g = sub.add_parser("gerar-cenarios", help="gera os VCFs sintéticos dos 5 cenários familiares")
+    g = sub.add_parser(
+        "gerar-cenarios",
+        help="gera os VCFs sintéticos dos cenários e os documentos fictícios das fichas de teste (prontuário e laudo)",
+    )
     g.add_argument("--saida", default="data/sinteticos")
     g.add_argument("--seed", type=int, default=2026)
     g.add_argument("--sem-ruido", action="store_true")
@@ -334,6 +337,9 @@ def main(argv=None) -> int:
         print(df.to_string(index=False))
         extras = cenarios.gerar_cenarios_parentes(args.saida, seed=args.seed, incluir_ruido=not args.sem_ruido)
         casais = cenarios.gerar_cenarios_casal(args.saida, seed=args.seed, incluir_ruido=not args.sem_ruido)
+        from . import documentos_ficticios
+
+        documentos = documentos_ficticios.gerar_documentos(args.saida)
         pasta = __import__("pathlib").Path(args.saida)
         n_extras = len(list(pasta.rglob("parentes_*.vcf")))
         n_casais = len(list(pasta.rglob("casal_*.vcf")))
@@ -344,6 +350,10 @@ def main(argv=None) -> int:
         print(
             f"\n{len(df) * 2} VCFs sintéticos dos cenários, {n_extras} dos cenários de parentes e {n_casais} dos casais"
             f" em {args.saida}, numa pasta por caso de atendimento"
+        )
+        print(
+            f"{len(documentos)} documentos fictícios das {len(documentos_ficticios.FICHAS_DE_TESTE)} fichas de "
+            "teste (prontuário e laudo do C9orf72, em PDF) nas mesmas pastas"
         )
     elif args.comando == "executar":
         r = pipeline.executar(

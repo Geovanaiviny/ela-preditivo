@@ -2,7 +2,8 @@
 ao longo do tempo; 4.2.2: só a publicação mensal do ClinVar permite reproduzir uma estimativa depois).
 
 - `baixar_clinvar`: baixa a release mensal do ClinVar (VCF GRCh38 do FTP do NCBI; a mais recente ou uma do arquivo) e
-  guarda só os registros dos quatro genes em `DIR_DADOS_BRUTOS` (fora do versionamento) como `clinvar_ela_4genes_<release>.vcf`.
+  guarda só os registros dos quatro genes em `DIR_DADOS_BRUTOS` como `clinvar_ela_4genes_<release>.vcf` (o download
+  fica fora do versionamento; da pasta, só `base_consolidada_ela.csv` é versionada).
 - `registrar_versao`: identifica uma base (release, sha256), guarda um instantâneo das classificações por variante em
   `DIR_DADOS_BRUTOS/versoes/` e a anota em `versoes.json`.
 - `comparar_versoes`: variantes novas, removidas e reclassificadas entre dois instantâneos, com as transições de classe e o
@@ -50,7 +51,8 @@ ARQUIVO_REGISTRO = "versoes.json"
 
 
 def dir_registro(diretorio: str | Path | None = None) -> Path:
-    """Pasta do registro de versões: `diretorio` ou `DIR_DADOS_BRUTOS/versoes` (ignorada pelo git, como os dados reais)."""
+    """Pasta do registro de versões: `diretorio` ou `DIR_DADOS_BRUTOS/versoes` (fora do versionamento: da pasta, só a
+    base consolidada é versionada)."""
     return Path(diretorio) if diretorio else DIR_DADOS_BRUTOS / "versoes"
 
 

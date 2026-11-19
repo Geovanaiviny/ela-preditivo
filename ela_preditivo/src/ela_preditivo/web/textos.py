@@ -70,6 +70,12 @@ ROTULO_GENITOR = {
     "FAMILIA": {"MAE": "Mãe", "PAI": "Pai"},
     "CASAL": {"MAE": "Parceira (futura mãe)", "PAI": "Parceiro (futuro pai)"},
 }
+# Genitor sem VCF, sem parente testado e sem a suposição declarada: o texto com que a análise é recusada e que a
+# ficha mostra antes do clique
+GENITOR_SEM_VCF = (
+    "{rotulo} sem VCF anexado: anexe o arquivo na ficha, adicione um parente testado ou marque a suposição de não "
+    "portador."
+)
 ROTULO_TITULAR = {
     "MAE": "Mãe",
     "PAI": "Pai",
@@ -91,13 +97,43 @@ SUPOSICAO_LAUDO_SEM_VCF = (
     "variante de risco."
 )
 SUPOSICAO_LAUDO_NORMAL = (
-    "Genitor sem exame e sem laudo do C9orf72: também assumido sem expansão (laudo normal suposto, abaixo da faixa "
-    "intermediária). Com o laudo real em mãos, registre-o na ficha e repita a análise."
+    "Genitor sem exame e sem o nº de repetições do C9orf72 na ficha: também assumido sem expansão (laudo normal "
+    "suposto, abaixo da faixa intermediária). Com o laudo em mãos, digite o nº de repetições na ficha e repita a "
+    "análise."
 )
 C9ORF72_INDETERMINADO = (
-    "Genitor sem laudo do C9orf72 é tratado como não testado: o lócus do C9orf72 fica indeterminado, sai do cálculo e "
-    "o resultado é parcial para esse gene. Registre o nº de repetições do laudo na ficha para incluí-lo."
+    "O modelo usa o nº de repetições do C9orf72 digitado na ficha; o arquivo do laudo fica guardado como documento e "
+    "não é lido. Genitor sem esse número é tratado como não testado: o lócus do C9orf72 fica indeterminado, sai do "
+    "cálculo e o resultado é parcial para esse gene. Digite na ficha o nº de repetições que consta no laudo e repita "
+    "a análise."
 )
+# genitor sem o nº de repetições: o aviso separa quem tem o arquivo do laudo anexado de quem não tem laudo nenhum
+LAUDO_ARQUIVO_SEM_NUMERO = "{rotulo}: o arquivo do laudo está anexado, mas o nº de repetições não foi digitado."
+LAUDO_AUSENTE = "{rotulo}: sem laudo do C9orf72 (nem o nº de repetições, nem o arquivo)."
+
+
+def _genitores_sem_numero(sem_numero: dict | None, tipo: str | None, papeis) -> list[str]:
+    rotulos = ROTULO_GENITOR.get(tipo or "PESSOA", ROTULO_GENITOR["PESSOA"])
+    return [
+        (LAUDO_ARQUIVO_SEM_NUMERO if (sem_numero or {}).get(papel) else LAUDO_AUSENTE).format(rotulo=rotulos[papel])
+        for papel in ("MAE", "PAI")
+        if papel in (sem_numero or {}) and papel in papeis
+    ]
+
+
+def c9orf72_indeterminado(sem_numero: dict | None = None, tipo: str | None = None, supostos=()) -> str:
+    """Aviso do resultado parcial para o C9orf72. `sem_numero` traz os genitores sem o nº de repetições e diz se o
+    arquivo do laudo de cada um está anexado; os cobertos pela suposição de laudo normal (`supostos`) ficam de fora."""
+    quem = _genitores_sem_numero(sem_numero, tipo, [p for p in ("MAE", "PAI") if p not in supostos])
+    return " ".join([*quem, C9ORF72_INDETERMINADO])
+
+
+def suposicao_laudo_normal(sem_numero: dict | None = None, tipo: str | None = None, supostos=()) -> str:
+    """Texto da suposição de laudo normal; avisa quando o arquivo do laudo do genitor suposto está anexado."""
+    com_arquivo = {p: True for p in supostos if (sem_numero or {}).get(p)}
+    return " ".join([SUPOSICAO_LAUDO_NORMAL, *_genitores_sem_numero(com_arquivo, tipo, supostos)])
+
+
 CONFIRMACAO_ASSINTOMATICO = "Confirmo que a pessoa analisada não apresenta sintomas de ELA"
 ERRO_CONFIRMACAO_ASSINTOMATICO = (
     "Confirme que a pessoa analisada não apresenta sintomas de ELA: o condicionamento pela idade só vale para quem "

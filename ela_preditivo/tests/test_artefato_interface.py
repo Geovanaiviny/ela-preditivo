@@ -61,6 +61,17 @@ Y_FUS = dict(
     alt="T",
     vid="777",
 )
+SEM_MUDANCA = dict(  # SOD1 c.358-304=: alelo alternativo igual ao de referência; não entra na anotação
+    allele_id="29825",
+    gene="SOD1",
+    nome="NM_000454.5(SOD1):c.358-304=",
+    rs="1555836889",
+    crom="21",
+    pos=31668167,
+    ref="C",
+    alt="C",
+    vid="14786",
+)
 MULTI = "criteria provided, multiple submitters, no conflicts"
 SINGLE = "criteria provided, single submitter"
 
@@ -486,6 +497,7 @@ def test_base_de_anotacao_enviada_registrada_e_comparada_pela_interface(
         [
             linha_vs(clnsig="Pathogenic", revstat="reviewed by expert panel", **A5V),
             linha_vs(clnsig="Likely pathogenic", revstat=SINGLE, **Y_FUS),
+            linha_vs(clnsig="Pathogenic", revstat="no assertion criteria provided", **SEM_MUDANCA),
         ],
     )
 
@@ -499,6 +511,7 @@ def test_base_de_anotacao_enviada_registrada_e_comparada_pela_interface(
     # sem base: todos veem a situação; só o administrador gere
     b = medico.get("/api/base").json()
     assert b["em_uso"] is None and "só a tabela curada" in b["sem_base"] and b["pode_gerir"] is False
+    assert b["anotacao"] is None
     assert admin.get("/api/base").json()["pode_gerir"] is True and pesquisador.get("/api/base").status_code == 200
     for cliente in (medico, pesquisador):
         assert enviar(cliente, v1.read_bytes(), release="2026-09-28").status_code == 403
@@ -531,8 +544,10 @@ def test_base_de_anotacao_enviada_registrada_e_comparada_pela_interface(
         d["atual"]["release"] == "2026-09-28" and "caminho" not in d["atual"] and str(cfg.dir_bases) not in d["resumo"]
     )
     assert (cfg.dir_bases / "variant_summary.txt").read_bytes() == v1.read_bytes()
+    assert d["fora_da_anotacao"] == 0
     b = pesquisador.get("/api/base").json()
     assert b["em_uso"]["nome"] == "variant_summary.txt" and b["sem_base"] is None and len(b["versoes"]) == 1
+    assert b["anotacao"] == {"anotaveis": 2, "de_risco": 1, "n_fora_da_anotacao": 0, "fora_da_anotacao": []}
     assert b["arquivos"][0]["registrada"] is True and b["arquivos"][0]["sha256"] == d["atual"]["sha256"]
     # segunda versão com o mesmo nome: a anterior vai para anteriores/ e sai o relatório do que mudou
     r = enviar(admin, v2.read_bytes(), release="2026-10-26")
@@ -541,8 +556,13 @@ def test_base_de_anotacao_enviada_registrada_e_comparada_pela_interface(
     assert d2["substituida"] == f"{d['atual']['sha256'][:8]}_variant_summary.txt"
     assert (cfg.dir_bases / "anteriores" / d2["substituida"]).read_bytes() == v1.read_bytes()
     assert d2["relatorio"] == "atualizacao_2026-09-28_2026-10-26.md" and d2["anterior"]["release"] == "2026-09-28"
+    # a segunda traz uma linha com alternativo igual à referência: fica fora da anotação, com o motivo, e é contada
+    assert d2["variantes"] == 2 and d2["fora_da_anotacao"] == 1
     b = medico.get("/api/base").json()
     assert [v["release"] for v in b["versoes"]] == ["2026-10-26", "2026-09-28"] and b["relatorios"] == [d2["relatorio"]]
+    assert (b["anotacao"]["anotaveis"], b["anotacao"]["de_risco"], b["anotacao"]["n_fora_da_anotacao"]) == (2, 2, 1)
+    fora = b["anotacao"]["fora_da_anotacao"][0]
+    assert fora["variation_id_clinvar"] == "14786" and fora["rs"] == "rs1555836889" and "referência" in fora["motivo"]
     texto = medico.get(f"/api/base/relatorios/{d2['relatorio']}").json()["texto"]
     assert "2026-09-28" in texto and "2026-10-26" in texto
     for fora in ("versoes.json", "..%2Fvariant_summary.txt", "atualizacao_x.md"):

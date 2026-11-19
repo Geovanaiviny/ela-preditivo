@@ -70,6 +70,53 @@ def test_anotacao_por_rs_quando_posicao_difere(curada):
     assert a.classe.item() == "risco" and a.fonte_anotacao.item() == "tabela_curada:rs"
 
 
+def _registro_a5v(alt: str, rs: str | None, posicao: int = 31659783) -> pd.DataFrame:
+    """Um registro heterozigoto aprovado na posição da SOD1 p.Ala5Val (21:31659783 C>T, rs121912442)."""
+    return pd.DataFrame(
+        [
+            {
+                "amostra": "X",
+                "cromossomo": "21",
+                "posicao": posicao,
+                "id": rs,
+                "ref": "C",
+                "alt": alt,
+                "tipo": "snv",
+                "dosagem": 1,
+                "repeticoes": float("nan"),
+                "gene": "SOD1",
+                "aprovado": True,
+            }
+        ]
+    )
+
+
+def test_rs_so_anota_quando_o_alelo_confere(curada):
+    """O dbSNP usa um rs para todos os alelos da posição; a classificação da base é de um alelo (TCC 4.2.2: o rsID é
+    complementar, a chave de coordenadas e alelos é o critério primário)."""
+    # C>A com o rs da p.Ala5Val (que é C>T): alelo que a base não classifica; não herda a classificação do outro
+    a = anotacao.anotar(_registro_a5v("A", "rs121912442"), curada)
+    assert a.classe.item() == "nao_anotada" and not a.anotada.item() and a.clnsig.item() is None
+    assert a.fonte_anotacao.item() == "rs presente na base com outro alelo: C>T"
+    ind = anotacao.indicadores_qualidade(a)
+    assert ind["rs_com_outro_alelo"] == ["21:31659783 C>A (rs121912442; na base: C>T)"] and ind["n_risco"] == 0
+    # o mesmo registro sem o rs já saía sem anotação, e continua
+    sem_rs = anotacao.anotar(_registro_a5v("A", None), curada)
+    assert sem_rs.classe.item() == "nao_anotada" and sem_rs.fonte_anotacao.item() is None
+    assert anotacao.indicadores_qualidade(sem_rs)["rs_com_outro_alelo"] == []
+    # C>T: risco p.Ala5Val, com o rs ou sem ele, sempre pela chave de coordenadas e alelos
+    for rs in ("rs121912442", None):
+        b = anotacao.anotar(_registro_a5v("T", rs), curada)
+        assert b.classe.item() == "risco" and b.fonte_anotacao.item() == "tabela_curada:posicao_alelos"
+        assert "A4V" in b.nome_curto.item() or "Ala5Val" in b.nome_curto.item()
+    # o rs continua valendo como chave complementar quando só a posição difere e o alelo confere
+    c = anotacao.anotar(_registro_a5v("T", "rs121912442", posicao=1), curada)
+    assert c.classe.item() == "risco" and c.fonte_anotacao.item() == "tabela_curada:rs"
+    # minúsculas no VCF: a mesma normalização da chave de coordenadas
+    d = _registro_a5v("t", "rs121912442", posicao=1).assign(ref="c")
+    assert anotacao.anotar(d, curada).classe.item() == "risco"
+
+
 def test_rs_ambiguo_nao_anota(curada):
     """Um rs que cobre vários alelos (ex.: FUS p.Arg521Cys/Gly/Ser no ClinVar) só anota pela chave de coordenadas."""
     t = pd.concat(

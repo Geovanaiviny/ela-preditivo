@@ -130,4 +130,6 @@ def test_interface_nao_escreve_valor_ausente():
     assert "function rotuloDosagem(" in JS and "rotuloDosagem(l.dosagem_mae, inf)" in JS
     assert "${l.dosagem_mae}/${l.dosagem_pai}" not in JS
     # genitor sem laudo do C9orf72: a tela usa a regra do servidor (inferido quando um parente tem laudo)
-    assert "g.c9orf72_por_parentes" in JS and "Sem laudo: C9orf72 inferido por parentes" in JS
+    # e nesse caso diz de quem é o laudo, em vez do aviso de lócus indeterminado
+    assert "g.c9orf72_por_parentes" in JS and "C9orf72 inferido pelo laudo de ${parentes}" in JS
+    assert "Sem laudo: C9orf72 inferido por parentes" not in JS

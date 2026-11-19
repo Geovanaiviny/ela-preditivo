@@ -571,7 +571,7 @@ def popular(bd: Session, cifra: Cifra, config, analisar: bool = True) -> dict:
                 for d in alvos:  # o filho que já fez o teste é evidência, não pessoa em risco
                     # registros fictícios: todos declarados sem sintomas (confirmação exigida para pessoa analisada)
                     exec_ = Execucao(
-                        n=2000, seed=42, motor="numpy", cox=False, assumir=assumir, assintomatico=d is not None
+                        n=2000, seed=42, motor="pymc", cox=False, assumir=assumir, assintomatico=d is not None
                     )
                     executar_para_registro(bd, config, cifra, registro_an, medico, p, d, exec_)
                     n_analises += 1

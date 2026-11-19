@@ -7,6 +7,7 @@ download. Só o hash SHA-256 do conteúdo em claro fica no banco, para reproduti
 
 from __future__ import annotations
 
+import gzip
 import hashlib
 import secrets
 import shutil
@@ -115,6 +116,17 @@ def decifrar_para(config: Configuracao, cifra: Cifra, genitor: Genitor, pasta: P
     destino = pasta / (f"{lado}.vcf.gz" if genitor.vcf_arquivo.endswith(".gz.bin") else f"{lado}.vcf")
     destino.write_bytes(cifra.decifrar_bytes(bruto))
     return destino
+
+
+def texto_em_memoria(config: Configuracao, cifra: Cifra, dono) -> str:
+    """Texto do VCF anexado (de genitor, parente ou filho), decifrado só em memória: nenhum arquivo é gravado.
+    Serve a leituras internas que não entregam o arquivo a ninguém, como a que decide o que a ficha mostra."""
+    if not dono.vcf_arquivo:
+        raise FileNotFoundError("sem VCF anexado")
+    dados = cifra.decifrar_bytes((config.dir_vcfs / dono.vcf_arquivo).read_bytes())
+    if dono.vcf_arquivo.endswith(".gz.bin"):
+        dados = gzip.decompress(dados)
+    return dados.decode("utf-8", errors="replace")
 
 
 def sem_variantes(destino: Path, amostra: str) -> Path:

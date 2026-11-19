@@ -47,6 +47,11 @@ def _texto_qualidade(ind: dict) -> str:
         f"classes {ind['por_classe']}; significado incerto: {ind['n_vus']} ({ind['proporcao_vus']:.0%} das anotadas); "
         f"classificação conflitante: {ind['n_conflitante']} ({ind['proporcao_conflitante']:.0%}); "
         f"risco com frequência > 1%: {ind['risco_com_frequencia_acima_1pct']}"
+        + (
+            f"; {anotacao.OBS_RS_OUTRO_ALELO} (sem anotação): {'; '.join(ind['rs_com_outro_alelo'])}"
+            if ind.get("rs_com_outro_alelo")
+            else ""
+        )
     )
 
 
@@ -64,6 +69,14 @@ def _idades_tabela_4(idade_atual: float | None) -> tuple:
         if a not in idades:
             idades = sorted(idades + [a])
     return tuple(idades)
+
+
+def _fora_da_anotacao_txt(fontes: dict) -> str:
+    """Trecho do relatório para as linhas da base que ficaram fora do casamento (ref = alt); vazio quando não há."""
+    n = int(fontes.get("n_fora_da_anotacao") or 0)
+    if not n:
+        return ""
+    return f"; {n} registro{'s' if n > 1 else ''} da base fora da anotação, por ter alelo alternativo igual ao de referência"
 
 
 def _vcf_txt(caminho, resumo: dict) -> str:
@@ -272,7 +285,7 @@ def executar(
             "Tabela 1 — Variantes aprovadas no filtro de qualidade e sua anotação, por genitor",
             f"Registros lidos/aprovados: mãe {ing['mae']['registros']}/{ing['mae']['aprovados']}, pai {ing['pai']['registros']}/{ing['pai']['aprovados']}. "
             f"Reprovações: mãe {ing['mae']['por_motivo']}, pai {ing['pai']['por_motivo']}. Base de anotação: {fontes.get('base_real') or 'tabela curada'}"
-            f"{' (' + str(fontes.get('n_real')) + ' variantes do ClinVar + ' + str(fontes.get('n_curada_extra')) + ' da tabela curada)' if fontes.get('base_real') else ''}.",
+            f"{' (' + str(fontes.get('n_real')) + ' variantes do ClinVar + ' + str(fontes.get('n_curada_extra')) + ' da tabela curada' + _fora_da_anotacao_txt(fontes) + ')' if fontes.get('base_real') else ''}.",
         )
     ]
     figs = []
@@ -1295,7 +1308,8 @@ def tudo(
         "",
         f"Base de anotação: {fontes.get('base_real') or 'tabela curada'}"
         + (
-            f" ({fontes.get('n_real')} variantes do ClinVar dos quatro genes + {fontes.get('n_curada_extra')} da tabela curada)."
+            f" ({fontes.get('n_real')} variantes do ClinVar dos quatro genes + {fontes.get('n_curada_extra')} da tabela curada"
+            f"{_fora_da_anotacao_txt(fontes)})."
             if fontes.get("base_real")
             else "."
         ),

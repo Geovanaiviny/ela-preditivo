@@ -12,6 +12,7 @@ do motivo com Biopython) é mantida apenas como caminho secundário, para arquiv
 
 from __future__ import annotations
 
+import io
 import re
 import warnings
 from pathlib import Path
@@ -279,6 +280,7 @@ def ler_vcf(
     amostra: str | None = None,
     montagem_esperada: str | None = MONTAGEM_ESPERADA,
     normalizar: bool = True,
+    conteudo: str | None = None,
 ) -> pd.DataFrame:
     """Lê um VCF (uma amostra) e devolve uma linha por ALT com dosagem, qualidade, gene e situação no filtro.
 
@@ -287,12 +289,13 @@ def ler_vcf(
     - `normalizar`: aplica `normalizar_alelos` a cada ALT após a decomposição multialélica; os valores originais
       ficam em `posicao_vcf`, `ref_vcf`, `alt_vcf`.
     - `amostra`: nome da coluna de amostra num VCF multiamostra (padrão: a primeira).
+    - `conteudo`: o texto do VCF já em memória; nada é lido do disco e `caminho` só dá nome à origem nas mensagens.
     Os metadados do cabeçalho ficam em `df.attrs["vcf"]`.
     """
     caminho = Path(caminho)
     regioes = carregar_regioes() if regioes is None else regioes
     filtro = {**FILTRO_PADRAO, **(filtro or {})}
-    leitor = vcf.Reader(filename=str(caminho))
+    leitor = vcf.Reader(fsock=io.StringIO(conteudo)) if conteudo is not None else vcf.Reader(filename=str(caminho))
     if not leitor.samples:
         raise ValueError(f"{caminho.name}: o VCF não tem coluna de amostra (FORMAT/genótipo)")
     if amostra and amostra not in leitor.samples:

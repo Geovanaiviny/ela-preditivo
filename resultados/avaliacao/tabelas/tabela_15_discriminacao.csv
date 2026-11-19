@@ -1,0 +1,10 @@
+verdade,metrica,valor,dp_entre_mundos,mundos,casos,controles
+verdade = modelo,C-index de Harrell (risco residual até o horizonte),0.6296315576246747,0.015242220521198719,200,57028,268978
+verdade = modelo,"AUC dependente do tempo, 10 anos (Mann-Whitney)",0.8055528907222067,0.025240137709588304,200,10198,315808
+verdade = modelo,"AUC dependente do tempo, 20 anos (Mann-Whitney)",0.7865363445305683,0.02132285634381119,200,20599,305407
+verdade alternativa: parâmetros do exemplo do orientador,C-index de Harrell (risco residual até o horizonte),0.6547599973748184,0.012490681574808368,200,87524,205526
+verdade alternativa: parâmetros do exemplo do orientador,"AUC dependente do tempo, 10 anos (Mann-Whitney)",0.7865303015314197,0.01873543318164658,200,17170,275880
+verdade alternativa: parâmetros do exemplo do orientador,"AUC dependente do tempo, 20 anos (Mann-Whitney)",0.7709188504630299,0.017618689917283235,200,34404,258646
+verdade alternativa: penetrância log-normal truncada em 1,C-index de Harrell (risco residual até o horizonte),0.6308608069356617,0.015372118075172221,200,59728,264102
+verdade alternativa: penetrância log-normal truncada em 1,"AUC dependente do tempo, 10 anos (Mann-Whitney)",0.8074043676317036,0.025407814875354793,200,10751,313079
+verdade alternativa: penetrância log-normal truncada em 1,"AUC dependente do tempo, 20 anos (Mann-Whitney)",0.7885816245578865,0.020200089179280144,200,21591,302239

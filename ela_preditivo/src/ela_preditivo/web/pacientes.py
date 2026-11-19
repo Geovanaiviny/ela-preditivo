@@ -18,6 +18,9 @@ from fastapi.responses import Response
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import select
 
+from .. import anotacao, ingestao
+from .. import parentes as parentes_mod
+from ..calibracao import carregar_parametros
 from . import arquivos, auditoria, textos, vcfs
 from .bd import agora
 from .comum import (
@@ -549,6 +552,8 @@ def analise_compacta(a: dict) -> dict:
         "tem_resultado": a.get("tem_resultado", False),
         "sem_locus": r.get("sem_locus", True),
         "genes_de_risco": r.get("genes_de_risco", []),
+        # C9orf72 fora do cálculo por falta do nº de repetições de um genitor: o resultado é parcial para o gene
+        "c9orf72_indeterminado": bool(r.get("c9orf72_indeterminado")),
         "condicionado": condicionado,
         "idade_referencia": r.get("idade_referencia") if condicionado else None,
         "p_portador": r["transmissao"] if r.get("transmissao") is not None else comb.get("p_portador_qualquer_exato"),
@@ -573,7 +578,40 @@ def analise_compacta(a: dict) -> dict:
     }
 
 
-def paciente_dict(p: Paciente, cifra, resumo: bool = False) -> dict:
+def tem_locus_de_risco(lido, tabela, parametros) -> bool:
+    """O VCF já lido traz ao menos um lócus de risco (classe risco, dosagem ≥ 1)? Mesma conta da análise: anotação
+    pela tabela dada e `parentes.dosagens_do_vcf` (a expansão do C9orf72 não é lida do VCF)."""
+    anotadas = anotacao.anotar(lido, tabela, parametros.limiar_repeticoes)
+    return any((d.get("dosagem") or 0) >= 1 for d in parentes_mod.dosagens_do_vcf(anotadas, parametros).values())
+
+
+def filho_testado_com_locus_de_risco(config, cifra, p: Paciente) -> bool:
+    """Algum filho já testado do registro tem lócus de risco? É o que permite inferir o genitor sem exame só pelo
+    filho; o filho sem variante de risco é evidência, mas não basta sozinho.
+
+    Calculado na hora, com a base de anotação em uso (a mesma que a análise usa por padrão), para a ficha nunca
+    mostrar uma classificação antiga depois de uma troca de base. O VCF é decifrado e lido só em memória: nada é
+    gravado, nenhum arquivo é entregue e a leitura não gera registro de auditoria. VCF que não abre não infere
+    nada; a análise relata o erro."""
+    filhos = [d for d in p.descendentes if d.tem_vcf]
+    if not filhos or config is None:
+        return False
+    parametros = carregar_parametros()
+    base = anotacao.localizar_base_real(config.dir_bases)
+    tabela = anotacao.tabela_anotacao(base_real=base if base is not None else False)
+    regioes = ingestao.carregar_regioes()
+    for d in filhos:
+        try:
+            texto = vcfs.texto_em_memoria(config, cifra, d)
+            lido = ingestao.ler_vcf(f"filho_{d.id}.vcf", regioes, parametros.filtro_qualidade, conteudo=texto)
+        except Exception:  # noqa: BLE001
+            continue
+        if tem_locus_de_risco(lido, tabela, parametros):
+            return True
+    return False
+
+
+def paciente_dict(p: Paciente, cifra, resumo: bool = False, config=None) -> dict:
     hoje = agora().date()
     idades_desc = idades(p, cifra, hoje)
     analises = [analise_dict(a, cifra) for a in p.analises]
@@ -608,9 +646,17 @@ def paciente_dict(p: Paciente, cifra, resumo: bool = False) -> dict:
         )
         for g in p.genitores
     }
-    filho_testado = any(d.tem_vcf for d in p.descendentes)
-    for g in genitores.values():  # um filho já testado também permite inferir o genitor sem exame
-        g["inferido_por_parentes"] = g["inferido_por_parentes"] or (not g["vcf"]["presente"] and filho_testado)
+    # um filho já testado também permite inferir o genitor sem exame, mas só quando traz ao menos um lócus de risco;
+    # a leitura do VCF do filho acontece apenas se algum genitor depender dela
+    sem_dado = [g for g in genitores.values() if not g["vcf"]["presente"] and not g["inferido_por_parentes"]]
+    if sem_dado and filho_testado_com_locus_de_risco(config, cifra, p):
+        for g in sem_dado:
+            g["inferido_por_parentes"] = True
+    for papel, g in genitores.items():  # sem exame: a ficha já diz o que a análise vai exigir, com o mesmo texto
+        g["sem_exame"] = not g["vcf"]["presente"] and not g["inferido_por_parentes"]
+        g["falta_exame"] = (
+            textos.GENITOR_SEM_VCF.format(rotulo=textos.ROTULO_GENITOR[p.tipo][papel]) if g["sem_exame"] else None
+        )
     prontuario_doc = next((documento_dict(x, cifra) for x in p.documentos if x.tipo == "PRONTUARIO"), None)
     requisitos = requisitos_pesquisa(p, idades_desc, nomes)
     genes = sorted({g for a in ultimas.values() for g in a["genes_de_risco"]})
@@ -780,15 +826,15 @@ def genes_do_modelo() -> list[str]:
 # ---------------------------------------------------------------------------
 # Rotas: lista, opções, criação, busca
 # ---------------------------------------------------------------------------
-def _lista_do_medico(bd, cifra, usuario: Usuario) -> list[dict]:
+def _lista_do_medico(bd, cifra, usuario: Usuario, config=None) -> list[dict]:
     pacientes = bd.execute(select(Paciente).where(Paciente.medico_id == usuario.id).order_by(Paciente.id)).scalars()
-    return [paciente_dict(p, cifra, resumo=True) for p in pacientes]
+    return [paciente_dict(p, cifra, resumo=True, config=config) for p in pacientes]
 
 
 @router.get("")
 def listar(request: Request, usuario: Usuario = Depends(exigir(PACIENTES_GERIR))):
     bd, cifra = obter_bd(request), obter_cifra(request)
-    itens = filtrar_pacientes(_lista_do_medico(bd, cifra, usuario), {})
+    itens = filtrar_pacientes(_lista_do_medico(bd, cifra, usuario, obter_config(request)), {})
     return {"total": len(itens), "pacientes": itens, "base_legal": BASE_LEGAL_ATENDIMENTO}
 
 
@@ -824,6 +870,7 @@ def _analises_do_medico(pacientes: list[Paciente], itens: list[dict], cifra) -> 
                     "hipoteses": c["hipoteses"],
                     "genes_de_risco": c["genes_de_risco"],
                     "sem_locus": c["sem_locus"],
+                    "c9orf72_indeterminado": c["c9orf72_indeterminado"],
                     "p_portador": c["p_portador"],
                     "p_manifesta": c["p_manifesta"],
                     "q025": c["q025"],
@@ -844,7 +891,7 @@ def listar_analises(request: Request, usuario: Usuario = Depends(exigir(PACIENTE
     """Seção "Análises" do médico: todas as execuções já feitas, com acesso ao resultado guardado."""
     bd, cifra = obter_bd(request), obter_cifra(request)
     pacientes = list(bd.execute(select(Paciente).where(Paciente.medico_id == usuario.id)).scalars())
-    itens = [paciente_dict(p, cifra, resumo=True) for p in pacientes]
+    itens = [paciente_dict(p, cifra, resumo=True, config=obter_config(request)) for p in pacientes]
     analises = _analises_do_medico(pacientes, itens, cifra)
     registros = sorted(
         (
@@ -869,7 +916,7 @@ def painel(request: Request, usuario: Usuario = Depends(exigir(PACIENTES_GERIR))
     """Visão geral do médico para a tela inicial: totais, pendências, registros e análises recentes (só os próprios)."""
     bd, cifra = obter_bd(request), obter_cifra(request)
     pacientes = list(bd.execute(select(Paciente).where(Paciente.medico_id == usuario.id)).scalars())
-    itens = [paciente_dict(p, cifra, resumo=True) for p in pacientes]
+    itens = [paciente_dict(p, cifra, resumo=True, config=obter_config(request)) for p in pacientes]
     por_tipo = {t: sum(1 for d in itens if d["tipo"] == t) for t in TIPOS_ATENDIMENTO}
     analises = _analises_do_medico(pacientes, itens, cifra)
     recentes = sorted(itens, key=lambda d: d["atualizado_em"] or "", reverse=True)
@@ -948,7 +995,7 @@ def criar(entrada: PacienteEntrada, request: Request, usuario: Usuario = Depends
     )
     bd.commit()
     bd.refresh(p)
-    return paciente_dict(p, cifra)
+    return paciente_dict(p, cifra, config=obter_config(request))
 
 
 @router.post("/busca")
@@ -977,7 +1024,7 @@ def buscar(entrada: Busca, request: Request, usuario: Usuario = Depends(exigir(P
     for k in ("tipo", "pesquisa", "vcfs", "analise", "momento", "sexo"):
         if f[k]:
             f[k] = f[k].upper()
-    achados = filtrar_pacientes(_lista_do_medico(bd, cifra, usuario), f)
+    achados = filtrar_pacientes(_lista_do_medico(bd, cifra, usuario, obter_config(request)), f)
     ativos = {k: v for k, v in f.items() if v not in (None, "", [], "nome", "asc")}
     return {"total": len(achados), "pacientes": achados, "filtros": ativos}
 
@@ -991,7 +1038,7 @@ def ver(paciente_id: int, request: Request, usuario: Usuario = Depends(exigir(PA
     p = do_medico(bd, usuario, paciente_id)
     auditoria.registrar(bd, acao=auditoria.PACIENTE_VISUALIZADO, usuario=usuario, alvo_tipo="paciente", alvo_id=p.id)
     bd.commit()
-    return paciente_dict(p, cifra)
+    return paciente_dict(p, cifra, config=obter_config(request))
 
 
 @router.put("/{paciente_id}")
@@ -1009,7 +1056,7 @@ def editar(
     atualizar_liberacao(bd, p, cifra, usuario)
     auditoria.registrar(bd, acao=auditoria.PACIENTE_EDITADO, usuario=usuario, alvo_tipo="paciente", alvo_id=p.id)
     bd.commit()
-    return paciente_dict(p, cifra)
+    return paciente_dict(p, cifra, config=obter_config(request))
 
 
 @router.delete("/{paciente_id}")
@@ -1054,7 +1101,7 @@ def exportar(paciente_id: int, request: Request, usuario: Usuario = Depends(exig
     """Acesso e portabilidade (art. 18, II e V): dados cadastrais, consentimentos e resumos, em JSON (sem os VCFs)."""
     bd, cifra = obter_bd(request), obter_cifra(request)
     p = do_medico(bd, usuario, paciente_id)
-    dados = paciente_dict(p, cifra)
+    dados = paciente_dict(p, cifra, config=obter_config(request))
     dados.pop("termo_consentimento", None)
     auditoria.registrar(bd, acao=auditoria.PACIENTE_EXPORTADO, usuario=usuario, alvo_tipo="paciente", alvo_id=p.id)
     bd.commit()
@@ -1102,7 +1149,7 @@ def editar_genitor(
         detalhe=f"genitor {g.papel}",
     )
     bd.commit()
-    return paciente_dict(p, cifra)
+    return paciente_dict(p, cifra, config=obter_config(request))
 
 
 @router.post("/{paciente_id}/genitores/{papel}/vcf", status_code=201)
@@ -1139,7 +1186,7 @@ def anexar_vcf(
         detalhe=f"genitor {g.papel}; {g.vcf_tamanho} bytes; substituiu={'sim' if substituiu else 'não'}",
     )
     bd.commit()
-    return paciente_dict(p, cifra)
+    return paciente_dict(p, cifra, config=obter_config(request))
 
 
 @router.delete("/{paciente_id}/genitores/{papel}/vcf")
@@ -1161,7 +1208,7 @@ def remover_vcf(paciente_id: int, papel: str, request: Request, usuario: Usuario
         detalhe=f"genitor {g.papel}",
     )
     bd.commit()
-    return paciente_dict(p, cifra)
+    return paciente_dict(p, cifra, config=obter_config(request))
 
 
 # ---------------------------------------------------------------------------
@@ -1210,7 +1257,7 @@ def definir_situacao_genitor(
         detalhe=f"situação clínica do genitor {g.papel} {'definida' if situacao else 'removida'}",
     )
     bd.commit()
-    return paciente_dict(p, cifra)
+    return paciente_dict(p, cifra, config=obter_config(request))
 
 
 @router.post("/{paciente_id}/genitores/{papel}/parentes", status_code=201)
@@ -1281,7 +1328,7 @@ def adicionar_parente(
     )
     bd.commit()
     bd.refresh(p)
-    return paciente_dict(p, cifra)
+    return paciente_dict(p, cifra, config=obter_config(request))
 
 
 @router.delete("/{paciente_id}/parentes/{parente_id}")
@@ -1306,7 +1353,7 @@ def remover_parente(
     )
     bd.commit()
     bd.expire(p)
-    return paciente_dict(do_medico(bd, usuario, paciente_id), cifra)
+    return paciente_dict(do_medico(bd, usuario, paciente_id), cifra, config=obter_config(request))
 
 
 @router.post("/{paciente_id}/descendentes/{descendente_id}/vcf", status_code=201)
@@ -1346,7 +1393,7 @@ def anexar_vcf_descendente(
         detalhe=f"descendente {d.id} (filho já testado); {d.vcf_tamanho} bytes; substituiu={'sim' if substituiu else 'não'}",
     )
     bd.commit()
-    return paciente_dict(p, cifra)
+    return paciente_dict(p, cifra, config=obter_config(request))
 
 
 @router.delete("/{paciente_id}/descendentes/{descendente_id}/vcf")
@@ -1370,7 +1417,7 @@ def remover_vcf_descendente(
         detalhe=f"descendente {d.id} (filho já testado)",
     )
     bd.commit()
-    return paciente_dict(p, cifra)
+    return paciente_dict(p, cifra, config=obter_config(request))
 
 
 # ---------------------------------------------------------------------------
@@ -1441,7 +1488,7 @@ def anexar_documento(
     )
     bd.commit()
     bd.refresh(p)
-    return paciente_dict(p, cifra)
+    return paciente_dict(p, cifra, config=obter_config(request))
 
 
 @router.get("/{paciente_id}/documentos/{documento_id}")
@@ -1492,7 +1539,7 @@ def remover_documento(
     )
     bd.commit()
     bd.refresh(p)
-    return paciente_dict(p, cifra)
+    return paciente_dict(p, cifra, config=obter_config(request))
 
 
 # ---------------------------------------------------------------------------
@@ -1529,7 +1576,7 @@ def incluir_descendente(
         detalhe=f"paciente {p.id}; incluído",
     )
     bd.commit()
-    return paciente_dict(p, cifra)
+    return paciente_dict(p, cifra, config=obter_config(request))
 
 
 @router.put("/{paciente_id}/descendentes/{descendente_id}")
@@ -1560,7 +1607,7 @@ def editar_descendente(
         detalhe=f"paciente {p.id}; editado",
     )
     bd.commit()
-    return paciente_dict(p, cifra)
+    return paciente_dict(p, cifra, config=obter_config(request))
 
 
 @router.delete("/{paciente_id}/descendentes/{descendente_id}")
@@ -1593,7 +1640,7 @@ def remover_descendente(
     )
     bd.commit()
     bd.expire(p)
-    return paciente_dict(do_medico(bd, usuario, paciente_id), cifra)
+    return paciente_dict(do_medico(bd, usuario, paciente_id), cifra, config=obter_config(request))
 
 
 # ---------------------------------------------------------------------------
@@ -1603,7 +1650,7 @@ def remover_descendente(
 def listar_consentimentos(paciente_id: int, request: Request, usuario: Usuario = Depends(exigir(CONSENTIMENTOS_GERIR))):
     bd, cifra = obter_bd(request), obter_cifra(request)
     p = do_medico(bd, usuario, paciente_id)
-    d = paciente_dict(p, cifra)
+    d = paciente_dict(p, cifra, config=obter_config(request))
     return {
         "paciente_id": p.id,
         "tipo": p.tipo,
@@ -1706,7 +1753,7 @@ def registrar_consentimento(
     atualizar_liberacao(bd, p, cifra, usuario)
     bd.commit()
     bd.refresh(p)
-    return paciente_dict(p, cifra)
+    return paciente_dict(p, cifra, config=obter_config(request))
 
 
 @router.post("/{paciente_id}/consentimentos/{consentimento_id}/revogar")
@@ -1738,4 +1785,4 @@ def revogar_consentimento(
     atualizar_liberacao(bd, p, cifra, usuario)
     bd.commit()
     bd.refresh(p)
-    return paciente_dict(p, cifra)
+    return paciente_dict(p, cifra, config=obter_config(request))

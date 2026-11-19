@@ -1,6 +1,6 @@
-**Tabela 4 — Risco condicional à idade atual sem sintomas: P(portador | assintomático), risco nos próximos 10 e 20 anos e risco vitalício residual, com banda de 95%**
+**Tabela 4 — Risco condicional à idade atual sem sintomas: P(portador | assintomático), risco nos próximos 10 e 20 anos e risco residual (da idade atual até os 90 anos), com banda de 95%**
 
-| unidade | idade_atual | p_portador_condicional | risco_10_anos | risco_10_anos_q025 | risco_10_anos_q975 | risco_20_anos | risco_20_anos_q025 | risco_20_anos_q975 | risco_vitalicio | risco_vitalicio_q025 | risco_vitalicio_q975 |
+| unidade | idade_atual | p_portador_condicional | risco_10_anos | risco_10_anos_q025 | risco_10_anos_q975 | risco_20_anos | risco_20_anos_q025 | risco_20_anos_q975 | risco_residual | risco_residual_q025 | risco_residual_q975 |
 |---|---|---|---|---|---|---|---|---|---|---|---|
 | C9orf72 expansão GGGGCC | 0 | 0.5 | 1.30e-06 | 8.02e-07 | 1.84e-06 | 0.0001 | 6.65e-05 | 0.0002 | 0.1664 | 0.103 | 0.2368 |
 | C9orf72 expansão GGGGCC | 20 | 0.4999 | 0.0014 | 0.0009 | 0.002 | 0.01 | 0.0062 | 0.0142 | 0.1663 | 0.103 | 0.2366 |
@@ -11,3 +11,5 @@
 | C9orf72 expansão GGGGCC | 70 | 0.4085 | 0.0134 | 0.0078 | 0.0207 | 0.0137 | 0.0079 | 0.0212 | 0.0137 | 0.0079 | 0.0212 |
 
 *Fonte: elaborado pela autora (2026), a partir do artefato ela_preditivo.*
+
+risco_residual: probabilidade de manifestar entre a idade atual e o horizonte, para quem chegou a essa idade sem sintomas. Na idade 0 é o risco vitalício da Tabela 3.

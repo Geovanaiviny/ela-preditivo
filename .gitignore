@@ -9,6 +9,9 @@ dist/
 .pytest_cache/
 .ipynb_checkpoints/
 dados_brutos/
+# base de anotação: só o arquivo consolidado é versionado; envios, downloads e o registro de versões ficam fora
+dados_reais/*
+!dados_reais/base_consolidada_ela.csv
 *.vcf.gz
 clinvar*.vcf
 variant_summary*.txt

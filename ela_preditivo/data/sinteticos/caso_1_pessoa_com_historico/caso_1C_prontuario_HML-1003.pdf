@@ -1,0 +1,65 @@
+%PDF-1.4
+%âãÏÓ
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Contents 4 0 R /Resources << /Font << /F1 5 0 R /F2 6 0 R >> >> >>
+endobj
+4 0 obj
+<< /Length 2002 >>
+stream
+q 0.90 g BT /F2 104 Tf 0.7071 0.7071 -0.7071 0.7071 150 210 Tm (FICTÍCIO) Tj ET Q
+0.22 g 0.0 796.0 595.0 46.0 re f
+1.00 g BT /F2 12.5 Tf 50.0 813.0 Td (PRONTUÁRIO FICTÍCIO — NÃO É DOCUMENTO CLÍNICO) Tj ET
+0.00 g BT /F2 13.0 Tf 50.0 764.0 Td (Serviço Fictício de Aconselhamento Genético) Tj ET
+0.40 g BT /F1 8.5 Tf 50.0 748.0 Td (Nomes, datas e números inventados. Nenhum dado vem de uma pessoa.) Tj ET
+0.60 G 0.6 w 50.0 738.0 m 545.0 738.0 l S
+0.00 g BT /F2 15.0 Tf 50.0 710.0 Td (Prontuário nº HML-1003) Tj ET
+0.00 g BT /F1 11.0 Tf 50.0 691.0 Td (Caso 1 · Pessoa assintomática com histórico familiar) Tj ET
+0.45 g BT /F2 7.5 Tf 50.0 661.0 Td (MOMENTO DO ACONSELHAMENTO) Tj ET
+0.00 g BT /F1 10.5 Tf 50.0 648.0 Td (Depois do laudo laboratorial) Tj ET
+0.45 g BT /F2 7.5 Tf 297.5 661.0 Td (DATA DE ABERTURA) Tj ET
+0.00 g BT /F1 10.5 Tf 297.5 648.0 Td (24/10/2026) Tj ET
+0.45 g BT /F2 7.5 Tf 50.0 626.8 Td (MÃE) Tj ET
+0.00 g BT /F1 10.5 Tf 50.0 613.8 Td (Glória Fictícia Rocha, nascimento em 12/01/1971. Laudo do C9orf72: 23 repetições. VCF:) Tj ET
+0.00 g BT /F1 10.5 Tf 50.0 598.6 Td (cenario_5_mae.vcf.) Tj ET
+0.45 g BT /F2 7.5 Tf 50.0 577.4 Td (PAI) Tj ET
+0.00 g BT /F1 10.5 Tf 50.0 564.4 Td (Henrique Fictício Rocha, nascimento em 02/08/1969. Laudo do C9orf72: 23 repetições. VCF:) Tj ET
+0.00 g BT /F1 10.5 Tf 50.0 549.1 Td (cenario_5_pai.vcf.) Tj ET
+0.45 g BT /F2 7.5 Tf 50.0 527.9 Td (PESSOA ATENDIDA) Tj ET
+0.00 g BT /F1 10.5 Tf 50.0 514.9 Td (Mateus Fictício Rocha, nascimento em 23/09/1999, sexo masculino. Sem sintomas de ELA.) Tj ET
+0.45 g BT /F2 7.5 Tf 50.0 493.7 Td (OBSERVAÇÕES) Tj ET
+0.00 g BT /F1 10.5 Tf 50.0 480.7 Td (Registro fictício de homologação. Pai com TARDBP p.Met337Val e mãe com FUS p.Arg521Cys.) Tj ET
+0.60 G 0.6 w 50.0 62.0 m 545.0 62.0 l S
+0.35 g BT /F1 8.0 Tf 50.0 48.0 Td (Documento fictício, gerado pelo artefato ela_preditivo para teste da plataforma. Sem valor clínico.) Tj ET
+0.35 g BT /F1 8.0 Tf 50.0 36.0 Td (Ficha de teste 1C · caso_1C_prontuario_HML-1003.pdf) Tj ET
+endstream
+endobj
+5 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>
+endobj
+6 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>
+endobj
+7 0 obj
+<< /Title (Prontuário fictício HML-1003 - ficha de teste 1C) /Producer (ela_preditivo) >>
+endobj
+xref
+0 8
+0000000000 65535 f 
+0000000015 00000 n 
+0000000064 00000 n 
+0000000121 00000 n 
+0000000257 00000 n 
+0000002311 00000 n 
+0000002408 00000 n 
+0000002510 00000 n 
+trailer
+<< /Size 8 /Root 1 0 R /Info 7 0 R >>
+startxref
+2615
+%%EOF

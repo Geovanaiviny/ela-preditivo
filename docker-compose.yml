@@ -30,7 +30,8 @@ services:
     volumes:
       # banco, chave, VCFs e documentos cifrados, resultados e execuções do artefato
       - elosense_dados:/app/dados_web
-      # base real do ClinVar: envie pela tela Base de anotação (ou copie base_consolidada_ela.csv para ./dados_reais)
+      # base real do ClinVar: a pasta ./dados_reais do repositório, com base_consolidada_ela.csv; a tela Base de
+      # anotação grava nela
       - ./dados_reais:/app/dados_reais:z
     restart: unless-stopped
 

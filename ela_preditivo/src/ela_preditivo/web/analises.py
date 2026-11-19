@@ -25,7 +25,8 @@ import pandas as pd
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, Response
 
-from .. import AVISO_LEGAL, DIR_DADOS, __version__, anotacao, cenarios, pipeline, repeticoes
+from .. import AVISO_LEGAL, DIR_DADOS, __version__, anotacao, cenarios, ingestao, pipeline, repeticoes
+from .. import parentes as parentes_mod
 from ..calibracao import carregar_parametros
 from ..ingestao import MontagemDivergente
 from . import arquivos, auditoria, textos, vcfs
@@ -33,12 +34,12 @@ from .bd import agora
 from .comum import exigir_campos, interpretar_laudo, iso, obter_bd, obter_cifra, quantil_inicio, texto_curto
 from .config import Configuracao
 from .modelos import AnalisePaciente, Descendente, Paciente, Usuario
-from .pacientes import descendente_de, do_medico, idades, situacao_do_genitor
+from .pacientes import descendente_de, do_medico, idades, situacao_do_genitor, tem_locus_de_risco
 from .permissoes import ANALISES_BAIXAR, ANALISES_EXECUTAR, MODELO_VER, exigir
 
 router = APIRouter(prefix="/api", tags=["analises"])
 DIR_SINTETICOS = DIR_DADOS / "sinteticos"
-MOTORES = ("numpy", "pymc")
+MOTORES = ("pymc", "numpy")  # o primeiro é o padrão da plataforma: o motor declarado no TCC
 RE_NOME_FIGURA = re.compile(r"^figura_\d{2}_[a-z0-9_]+\.png$")
 EXTENSOES_VCF = vcfs.EXTENSOES_VCF
 UNIDADE_COMBINADA = "qualquer lócus"
@@ -472,6 +473,8 @@ def serializar_resultado(ident: str, r: dict, saida: Path, entrada: dict) -> dic
         pass
     combinado = _limpar(r.get("combinado") or {})
     sem_locus = r["res"] is None
+    sem_numero, tipo = entrada.get("laudo_sem_numero"), entrada.get("tipo")
+    supostos = (entrada.get("suposicoes") or {}).get("laudo_normal_suposto") or []
     return _limpar(
         {
             "id": ident,
@@ -486,10 +489,10 @@ def serializar_resultado(ident: str, r: dict, saida: Path, entrada: dict) -> dic
             "suposicoes_texto": {
                 "nao_portador": textos.SUPOSICAO_NAO_PORTADOR,
                 "laudo_sem_vcf": textos.SUPOSICAO_LAUDO_SEM_VCF,
-                "laudo_normal_suposto": textos.SUPOSICAO_LAUDO_NORMAL,
+                "laudo_normal_suposto": textos.suposicao_laudo_normal(sem_numero, tipo, supostos),
             },
             "c9orf72_indeterminado": _c9orf72_indeterminado(_registros(r.get("vetor"))),
-            "texto_c9orf72_indeterminado": textos.C9ORF72_INDETERMINADO,
+            "texto_c9orf72_indeterminado": textos.c9orf72_indeterminado(sem_numero, tipo, supostos),
             # genitor sem exame inferido por parentes: o que entrou, as suposições e os avisos
             "parentes": _limpar(r.get("parentes")),
             "texto_inferencia": textos.INFERENCIA_POR_PARENTES,
@@ -685,7 +688,7 @@ class Execucao:
         self,
         n: int = 10_000,
         seed: int = 42,
-        motor: str = "numpy",
+        motor: str = "pymc",
         cox: bool = True,
         hipoteses=None,
         assumir: frozenset[str] = frozenset(),
@@ -710,6 +713,26 @@ class Execucao:
         self.assintomatico = bool(assintomatico)
 
 
+def _algum_filho_com_locus_de_risco(caminhos_dos_filhos: list[Path], base_clinvar) -> bool:
+    """O VCF de algum filho já testado traz ao menos um lócus de risco (classe risco, dosagem ≥ 1)?
+
+    Lido como o pipeline lê os parentes: mesma ingestão, mesma tabela de anotação e `parentes.dosagens_do_vcf` (a
+    expansão do C9orf72 não é lida do VCF). Arquivo que não abre não infere nada; a leitura completa relata o erro."""
+    if not caminhos_dos_filhos:
+        return False
+    parametros = carregar_parametros()
+    tabela = anotacao.tabela_anotacao(base_real=base_clinvar)
+    regioes = ingestao.carregar_regioes()
+    for caminho in caminhos_dos_filhos:
+        try:
+            lido = ingestao.ler_vcf(caminho, regioes, parametros.filtro_qualidade)
+        except Exception:  # noqa: BLE001
+            continue
+        if tem_locus_de_risco(lido, tabela, parametros):
+            return True
+    return False
+
+
 def _preparar_vcfs_do_registro(
     config,
     cifra,
@@ -719,13 +742,17 @@ def _preparar_vcfs_do_registro(
     campos: dict,
     descendente: Descendente | None = None,
     prior_avos: str = "nao_portador",
+    base_clinvar=None,
 ):
     """Decifra os anexos para a pasta temporária e monta a evidência de parentes.
 
-    Genitor com VCF: observado. Genitor sem VCF: inferido por parentes quando algum parente dele (ou um filho já
-    testado, no caso de família) tem VCF, e então a situação clínica dele é obrigatória; senão, VCF sem variantes se
-    assumido não portador; senão, erro de campo. Devolve (VCF da mãe, VCF do pai, suposições, argumento `parentes` do
-    pipeline, resumo sem caminhos para a entrada)."""
+    Genitor com VCF: observado. Genitor sem VCF: inferido por parentes quando algum parente dele tem VCF ou, no caso de
+    família, quando um filho já testado traz ao menos um lócus de risco (aí é certo que um dos genitores o porta), e
+    então a situação clínica dele é obrigatória; senão, VCF sem variantes se assumido não portador; senão, erro de
+    campo. O filho testado sem variante de risco entra como evidência quando há outro dado genético, mas sozinho não
+    diz qual é o genótipo dos genitores: sem VCF, parente com VCF ou suposição declarada, a análise é recusada.
+    Devolve (VCF da mãe, VCF do pai, suposições, argumento `parentes` do pipeline, resumo sem caminhos para a entrada).
+    `base_clinvar`: a base de anotação da análise (como em `pipeline.executar`), usada para ler os filhos testados."""
     caminhos: dict[str, Path] = {}
     suposicoes: dict[str, list[str]] = {"nao_portador": [], "laudo_sem_vcf": []}
     parentes_arg: dict = {}
@@ -735,6 +762,8 @@ def _preparar_vcfs_do_registro(
         if p.tipo == "FAMILIA"
         else []
     )
+    vcfs_dos_filhos = [vcfs.decifrar_para(config, cifra, d, pasta, f"filho_{d.id}") for d in filhos]
+    filho_com_risco = _algum_filho_com_locus_de_risco(vcfs_dos_filhos, base_clinvar)
     for papel, lado in (("MAE", "mae"), ("PAI", "pai")):
         g = p.genitor(papel)
         rotulo = textos.ROTULO_GENITOR[p.tipo][papel]
@@ -742,7 +771,7 @@ def _preparar_vcfs_do_registro(
             caminhos[lado] = vcfs.decifrar_para(config, cifra, g, pasta, lado)
             continue
         meus = p.parentes_de(papel) if g is not None else []
-        inferido = any(x.tem_vcf for x in meus) or bool(filhos)
+        inferido = any(x.tem_vcf for x in meus) or filho_com_risco
         if not inferido:
             if papel in assumir:
                 caminhos[lado] = vcfs.sem_variantes(pasta / f"{lado}.vcf", f"{lado}_sem_exame")
@@ -750,10 +779,7 @@ def _preparar_vcfs_do_registro(
                 if g is not None and cifra.decifrar(g.laudo_c9orf72_cifrado):
                     suposicoes["laudo_sem_vcf"].append(papel)
             else:
-                campos[f"vcf_{lado}"] = (
-                    f"{rotulo} sem VCF anexado: anexe o arquivo na ficha, adicione um parente testado ou marque a "
-                    "suposição de não portador."
-                )
+                campos[f"vcf_{lado}"] = textos.GENITOR_SEM_VCF.format(rotulo=rotulo)
         if not (meus or inferido) or g is None:
             continue
         # parentes do genitor sem exame: VCFs inferem as variantes dele; laudos, o C9orf72
@@ -788,9 +814,7 @@ def _preparar_vcfs_do_registro(
             "com_laudo": any(cifra.decifrar(x.laudo_c9orf72_cifrado) for x in meus),
         }
     if filhos and len(caminhos) < 2:  # filho já testado só é evidência quando algum genitor não tem VCF
-        parentes_arg["filhos_testados"] = [
-            {"vcf": vcfs.decifrar_para(config, cifra, d, pasta, f"filho_{d.id}")} for d in filhos
-        ]
+        parentes_arg["filhos_testados"] = [{"vcf": caminho} for caminho in vcfs_dos_filhos]
         resumo["filhos_testados"] = len(filhos)
     if assumir >= {"MAE", "PAI"}:
         campos["assumir_nao_portador"] = "É preciso o VCF de ao menos um genitor."
@@ -806,6 +830,19 @@ def _laudo_do_registro(cifra, p: Paciente, campos: dict) -> dict:
         if v is not None:
             laudo[lado] = v
     return laudo
+
+
+def _laudo_sem_numero(p: Paciente, laudo: dict, resumo_parentes: dict) -> dict:
+    """Genitores sem o nº de repetições do C9orf72 (nem o deles, nem o de um parente): papel → se o arquivo do laudo
+    está anexado. O modelo só usa o número digitado; o arquivo é o documento. Serve para o aviso do resultado separar
+    "sem laudo" de "laudo anexado, falta digitar o número"."""
+    sem_numero = {}
+    for papel, lado in (("MAE", "mae"), ("PAI", "pai")):
+        g = p.genitor(papel)
+        if g is None or lado in laudo or (resumo_parentes.get(papel) or {}).get("com_laudo"):
+            continue
+        sem_numero[papel] = any(d.tipo == "LAUDO_C9ORF72" and d.genitor_id == g.id for d in p.documentos)
+    return sem_numero
 
 
 def _zip_em_memoria(saida: Path) -> bytes:
@@ -977,6 +1014,7 @@ def executar_para_registro(
     suposicoes: dict = {}
     parentes_arg: dict = {}
     resumo_parentes: dict = {}
+    laudo_sem_numero: dict = {}
     try:
         if exec_.modo == "cenario":
             num = exec_.cenario
@@ -994,9 +1032,18 @@ def executar_para_registro(
                 laudo = dict(c.laudo_c9orf72)
         else:
             caminho_mae, caminho_pai, suposicoes, parentes_arg, resumo_parentes = _preparar_vcfs_do_registro(
-                config, cifra, p, pasta, exec_.assumir, campos, descendente, exec_.prior_avos
+                config,
+                cifra,
+                p,
+                pasta,
+                exec_.assumir,
+                campos,
+                descendente,
+                exec_.prior_avos,
+                exec_.base if exec_.base is not None else (base_padrao(config) if config is not None else None),
             )
             exigir_campos(campos)
+            laudo_sem_numero = _laudo_sem_numero(p, laudo, resumo_parentes)
             # genitor assumido não portador e sem laudo: a suposição cobre também o C9orf72 (laudo normal suposto),
             # senão o lócus ficaria indeterminado e o caso com um só parceiro testado nunca avaliaria o gene. Se algum
             # parente dele tem laudo, o C9orf72 do genitor é inferido por esse laudo, sem supor nada.
@@ -1026,6 +1073,7 @@ def executar_para_registro(
         "assintomatico_confirmado": True if descendente is not None else None,
         "assintomatico_confirmado_em": iso(agora()) if descendente is not None else None,
         "suposicoes": suposicoes,
+        "laudo_sem_numero": laudo_sem_numero or None,
         "parentes": resumo_parentes or None,
         "prior_avos": exec_.prior_avos if resumo_parentes else None,
         "vcf_hash": {
@@ -1072,7 +1120,7 @@ def executar_analise(
     idade_atual: str | None = Form(None),
     n: str | None = Form(None),
     semente: str | None = Form(None),
-    motor: str = Form("numpy"),
+    motor: str = Form("pymc"),
     cox: str | None = Form("1"),
     tornado: str | None = Form(None),
     paciente_id: str | None = Form(None),

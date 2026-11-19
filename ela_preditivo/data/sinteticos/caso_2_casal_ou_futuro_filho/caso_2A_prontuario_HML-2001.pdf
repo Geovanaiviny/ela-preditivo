@@ -1,0 +1,68 @@
+%PDF-1.4
+%âãÏÓ
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Contents 4 0 R /Resources << /Font << /F1 5 0 R /F2 6 0 R >> >> >>
+endobj
+4 0 obj
+<< /Length 2288 >>
+stream
+q 0.90 g BT /F2 104 Tf 0.7071 0.7071 -0.7071 0.7071 150 210 Tm (FICTÍCIO) Tj ET Q
+0.22 g 0.0 796.0 595.0 46.0 re f
+1.00 g BT /F2 12.5 Tf 50.0 813.0 Td (PRONTUÁRIO FICTÍCIO — NÃO É DOCUMENTO CLÍNICO) Tj ET
+0.00 g BT /F2 13.0 Tf 50.0 764.0 Td (Serviço Fictício de Aconselhamento Genético) Tj ET
+0.40 g BT /F1 8.5 Tf 50.0 748.0 Td (Nomes, datas e números inventados. Nenhum dado vem de uma pessoa.) Tj ET
+0.60 G 0.6 w 50.0 738.0 m 545.0 738.0 l S
+0.00 g BT /F2 15.0 Tf 50.0 710.0 Td (Prontuário nº HML-2001) Tj ET
+0.00 g BT /F1 11.0 Tf 50.0 691.0 Td (Caso 2 · Casal ou pessoa que planeja filhos) Tj ET
+0.45 g BT /F2 7.5 Tf 50.0 661.0 Td (MOMENTO DO ACONSELHAMENTO) Tj ET
+0.00 g BT /F1 10.5 Tf 50.0 648.0 Td (Antes do teste ou da consulta) Tj ET
+0.45 g BT /F2 7.5 Tf 297.5 661.0 Td (DATA DE ABERTURA) Tj ET
+0.00 g BT /F1 10.5 Tf 297.5 648.0 Td (24/10/2026) Tj ET
+0.45 g BT /F2 7.5 Tf 50.0 626.8 Td (NOME DO CASAL) Tj ET
+0.00 g BT /F1 10.5 Tf 50.0 613.8 Td (Juliana Fictícia Prates e Eduardo Fictício Prates) Tj ET
+0.45 g BT /F2 7.5 Tf 50.0 592.6 Td (PARCEIRA \(FUTURA MÃE\)) Tj ET
+0.00 g BT /F1 10.5 Tf 50.0 579.6 Td (Juliana Fictícia Prates, nascimento em 19/04/1993. Laudo do C9orf72: 45 repetições. VCF:) Tj ET
+0.00 g BT /F1 10.5 Tf 50.0 564.4 Td (casal_1_mae.vcf.) Tj ET
+0.45 g BT /F2 7.5 Tf 50.0 543.1 Td (PARCEIRO \(FUTURO PAI\)) Tj ET
+0.00 g BT /F1 10.5 Tf 50.0 530.1 Td (Eduardo Fictício Prates, nascimento em 01/12/1991. Sem laudo do C9orf72. Sem exame genético) Tj ET
+0.00 g BT /F1 10.5 Tf 50.0 514.9 Td (\(sem VCF\). Não fez exame genético: na análise, usar a suposição de não portador.) Tj ET
+0.45 g BT /F2 7.5 Tf 50.0 493.7 Td (PESSOA ANALISADA) Tj ET
+0.00 g BT /F1 10.5 Tf 50.0 480.7 Td (Futuro filho do casal: não há descendente a cadastrar.) Tj ET
+0.45 g BT /F2 7.5 Tf 50.0 459.5 Td (OBSERVAÇÕES) Tj ET
+0.00 g BT /F1 10.5 Tf 50.0 446.5 Td (Registro fictício de homologação. Parceira com expansão do C9orf72 em laudo; parceiro não fez) Tj ET
+0.00 g BT /F1 10.5 Tf 50.0 431.2 Td (exame genético.) Tj ET
+0.60 G 0.6 w 50.0 62.0 m 545.0 62.0 l S
+0.35 g BT /F1 8.0 Tf 50.0 48.0 Td (Documento fictício, gerado pelo artefato ela_preditivo para teste da plataforma. Sem valor clínico.) Tj ET
+0.35 g BT /F1 8.0 Tf 50.0 36.0 Td (Ficha de teste 2A · caso_2A_prontuario_HML-2001.pdf) Tj ET
+endstream
+endobj
+5 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>
+endobj
+6 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>
+endobj
+7 0 obj
+<< /Title (Prontuário fictício HML-2001 - ficha de teste 2A) /Producer (ela_preditivo) >>
+endobj
+xref
+0 8
+0000000000 65535 f 
+0000000015 00000 n 
+0000000064 00000 n 
+0000000121 00000 n 
+0000000257 00000 n 
+0000002597 00000 n 
+0000002694 00000 n 
+0000002796 00000 n 
+trailer
+<< /Size 8 /Root 1 0 R /Info 7 0 R >>
+startxref
+2901
+%%EOF

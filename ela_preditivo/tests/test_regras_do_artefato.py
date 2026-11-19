@@ -61,6 +61,119 @@ A5V_VS = dict(
 # ---------------------------------------------------------------------------
 # A1 — genótipo não determinado num genitor descarta o lócus inteiro (TCC 4.3)
 # ---------------------------------------------------------------------------
+def test_rs_com_outro_alelo_nao_vira_risco_e_fica_declarado(tmp_path, vcf_minimo):
+    """Chave complementar por rs (TCC 4.2.2): um registro com o rs da SOD1 p.Ala5Val (C>T) e outro alelo (C>A) não
+    herda a classificação. Fica sem anotação, fora do cálculo, e o motivo vai para a Tabela 1, para o texto de
+    qualidade do relatório e para `metadados.json`."""
+    mae = vcf_minimo(tmp_path / "mae.vcf", "MAE", [("21", 31659783, "rs121912442", "C", "A", "0/1"), R521C + ("0/1",)])
+    pai = vcf_minimo(tmp_path / "pai.vcf", "PAI", [R521C + ("0/0",)])
+    r = pipeline.executar(
+        mae,
+        pai,
+        tmp_path / "s",
+        n=300,
+        seed=1,
+        motor="numpy",
+        figuras=False,
+        base_clinvar=False,
+        laudo_c9orf72=LAUDO_NORMAL_2,
+    )
+    assert [l.gene for l in r["loci"]] == ["FUS"]  # o SOD1 C>A não entra; antes entrava como risco p.Ala5Val
+    t1 = pd.read_csv(tmp_path / "s" / "tabelas" / "tabela_01_variantes_anotadas.csv")
+    linha = t1[(t1.amostra == "MAE") & (t1.posicao == 31659783)].iloc[0]
+    assert linha.classe == "nao_anotada" and linha.fonte_anotacao == "rs presente na base com outro alelo: C>T"
+    meta = json.loads((tmp_path / "s" / "metadados.json").read_text(encoding="utf-8"))
+    assert meta["indicadores_qualidade"]["mae"]["rs_com_outro_alelo"] == ["21:31659783 C>A (rs121912442; na base: C>T)"]
+    assert meta["indicadores_qualidade"]["pai"]["rs_com_outro_alelo"] == []
+    texto = (tmp_path / "s" / "relatorio.md").read_text(encoding="utf-8")
+    assert "rs presente na base com outro alelo (sem anotação): 21:31659783 C>A (rs121912442; na base: C>T)" in texto
+    # com o alelo da base (C>T), o mesmo rs segue anotando como risco, pela chave de coordenadas e alelos
+    mae2 = vcf_minimo(tmp_path / "mae2.vcf", "MAE", [A5V + ("0/1",), R521C + ("0/1",)])
+    r2 = pipeline.executar(
+        mae2,
+        pai,
+        tmp_path / "s2",
+        n=300,
+        seed=1,
+        motor="numpy",
+        figuras=False,
+        base_clinvar=False,
+        laudo_c9orf72=LAUDO_NORMAL_2,
+    )
+    assert sorted(l.gene for l in r2["loci"]) == ["FUS", "SOD1"]
+    assert "rs presente na base com outro alelo" not in (tmp_path / "s2" / "relatorio.md").read_text(encoding="utf-8")
+
+
+SEM_MUDANCA_VS = dict(  # SOD1 c.358-304=: no ClinVar o "=" indica ausência de mudança; ref = alt = C
+    allele_id="29825",
+    gene="SOD1",
+    nome="NM_000454.5(SOD1):c.358-304=",
+    rs="1555836889",
+    crom="21",
+    pos=31668167,
+    ref="C",
+    alt="C",
+    vid="14786",
+)
+
+
+def test_linha_da_base_com_alternativo_igual_a_referencia_fica_fora_da_anotacao(
+    tmp_path, variant_summary_fake, linha_vs, vcf_minimo
+):
+    """Linha da base com ref = alt não descreve um alelo alternativo: não entra no casamento com os VCFs, nem pelo rs.
+    O registro continua no arquivo, é listado com o motivo e contado nos metadados e no relatório."""
+    vs = variant_summary_fake(
+        tmp_path / "variant_summary.txt",
+        [
+            linha_vs(clnsig="Pathogenic", revstat="criteria provided, multiple submitters, no conflicts", **A5V_VS),
+            linha_vs(clnsig="Pathogenic", revstat="no assertion criteria provided", **SEM_MUDANCA_VS),
+        ],
+    )
+    antes = vs.read_bytes()
+    base = anotacao.carregar_base_real(vs)
+    assert len(base) == 1 and base.nome_curto.item() == "p.Ala5Val" and not (base.ref == base.alt).any()
+    fora = base.attrs["fora_da_anotacao"]
+    assert [(f["gene"], f["variation_id_clinvar"], f["rs"], f["ref"], f["alt"]) for f in fora] == [
+        ("SOD1", "14786", "rs1555836889", "C", "C")
+    ]
+    assert fora[0]["motivo"] == anotacao.MOTIVO_SEM_MUDANCA and fora[0]["nome"].endswith("c.358-304=")
+    assert fora[0]["clnsig"] == "Pathogenic" and vs.read_bytes() == antes  # o arquivo da base não é tocado
+    t = anotacao.tabela_anotacao(base_real=vs)
+    fontes = t.attrs["fontes"]
+    assert fontes["n_real"] == 1 and fontes["n_fora_da_anotacao"] == 1 and fontes["fora_da_anotacao"] == fora
+    assert not ((t.ref == t.alt) & (t.tipo != "repeticao")).any()
+    # nem pelo rs: um registro de VCF nessa posição, com o rs da linha, fica sem anotação
+    mae = vcf_minimo(tmp_path / "mae.vcf", "MAE", [("21", 31668167, "rs1555836889", "C", "T", "0/1"), A5V + ("0/1",)])
+    pai = vcf_minimo(tmp_path / "pai.vcf", "PAI", [A5V + ("0/0",)])
+    a = anotacao.anotar(ingestao.ler_vcf(mae), t).set_index("posicao")
+    assert a.loc[31668167, "classe"] == "nao_anotada" and a.loc[31668167, "fonte_anotacao"] is None
+    assert a.loc[31659783, "classe"] == "risco"
+    r = pipeline.executar(
+        mae,
+        pai,
+        tmp_path / "s",
+        n=300,
+        seed=1,
+        motor="numpy",
+        figuras=False,
+        base_clinvar=vs,
+        laudo_c9orf72=LAUDO_NORMAL_2,
+    )
+    assert [l.gene for l in r["loci"]] == ["SOD1"] and len(r["loci"]) == 1  # só a p.Ala5Val
+    meta = json.loads((tmp_path / "s" / "metadados.json").read_text(encoding="utf-8"))
+    assert meta["base_anotacao"]["n_real"] == 1 and meta["base_anotacao"]["n_fora_da_anotacao"] == 1
+    assert meta["base_anotacao"]["fora_da_anotacao"][0]["motivo"] == anotacao.MOTIVO_SEM_MUDANCA
+    texto = (tmp_path / "s" / "relatorio.md").read_text(encoding="utf-8")
+    assert "1 registro da base fora da anotação, por ter alelo alternativo igual ao de referência" in texto
+    # base sem linha desse tipo: nada é dito
+    (tmp_path / "limpa").mkdir()
+    so_a5v = variant_summary_fake(
+        tmp_path / "limpa" / "variant_summary.txt",
+        [linha_vs(clnsig="Pathogenic", revstat="criteria provided, multiple submitters, no conflicts", **A5V_VS)],
+    )
+    assert anotacao.tabela_anotacao(base_real=so_a5v).attrs["fontes"]["n_fora_da_anotacao"] == 0
+
+
 def test_genotipo_indeterminado_descarta_o_locus_inteiro(tmp_path, parametros, curada, vcf_minimo):
     mae = anotacao.anotar(
         ingestao.ler_vcf(vcf_minimo(tmp_path / "mae.vcf", "MAE", [A5V + ("./.",), R521C + ("0/1",)])), curada

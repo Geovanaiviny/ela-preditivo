@@ -17,8 +17,8 @@ GENES = ("SOD1", "C9orf72", "TARDBP", "FUS")
 RAIZ_PROJETO = Path(os.environ.get("ELA_PREDITIVO_RAIZ", Path(__file__).resolve().parents[2]))
 DIR_CONFIG = RAIZ_PROJETO / "config"
 DIR_DADOS = RAIZ_PROJETO / "data"
-# Dados reais (subconjunto do ClinVar/dbSNP dos quatro genes, TCC 4.2.2): fora do pacote e fora do versionamento.
-# Caminho em ELA_DADOS_BRUTOS; padrão: pasta `dados_reais/` na raiz do repositório (ignorada pelo git).
+# Dados reais (subconjunto do ClinVar/dbSNP dos quatro genes, TCC 4.2.2): fora do pacote, na raiz do repositório.
+# Caminho em ELA_DADOS_BRUTOS; padrão: pasta `dados_reais/`, que traz a base consolidada versionada.
 DIR_DADOS_BRUTOS = Path(os.environ.get("ELA_DADOS_BRUTOS", RAIZ_PROJETO.parent / "dados_reais"))
 
 AVISO_LEGAL = (

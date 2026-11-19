@@ -421,6 +421,18 @@ def _num(v) -> str:
     return f"{float(v):.4f}".replace(".", ",")
 
 
+# Análise sem lócus de risco no CSV: o texto da coluna de genes e os campos que continuam sendo escritos
+SEM_LOCUS_NO_CSV = "nenhum lócus de risco encontrado"
+CAMPOS_DA_ANALISE_SEM_LOCUS = (
+    "executado_em",
+    "modo",
+    "motor",
+    "n",
+    "hipoteses",
+    "suposicoes",
+    "faixa_idade_referencia",
+)
+
 COLUNAS_CSV = [
     "codigo",
     "tipo",
@@ -468,7 +480,11 @@ def csv_casos(casos: list[dict]) -> str:
     horizonte, com a banda), `F_50`, `F_60`, `F_70` e a idade de início (mediana e faixa de 25 % a 75 %). A partir da idade de
     referência,
     para a pessoa sem sintomas, só quando `faixa_idade_referencia` está preenchida: `p_portador_sem_sintomas`,
-    `risco_residual` (da idade até o horizonte, com a banda), `risco_10_anos`, `risco_20_anos` e a idade de início."""
+    `risco_residual` (da idade até o horizonte, com a banda), `risco_10_anos`, `risco_20_anos` e a idade de início.
+
+    Análise sem lócus de risco: `genes_de_risco` traz o texto `SEM_LOCUS_NO_CSV` e as colunas de probabilidade e de
+    idade ficam vazias. Zero ali seria lido como risco calculado, e o que a análise diz é que nenhum lócus de risco
+    foi encontrado nos genes avaliados."""
     linhas = [";".join(COLUNAS_CSV)]
     for c in casos:
         pessoas = [
@@ -478,6 +494,9 @@ def csv_casos(casos: list[dict]) -> str:
             pessoas.append(("futuro filho", c["futuro_filho"]["sexo"], "", c["futuro_filho"]))
         for pessoa, sexo, faixa, a in pessoas:
             a = a or {}
+            sem_locus = bool(a) and bool(a.get("sem_locus"))
+            if sem_locus:  # só a identificação da análise; nenhuma probabilidade é escrita
+                a = {k: v for k, v in a.items() if k in CAMPOS_DA_ANALISE_SEM_LOCUS}
             F = a.get("F_desde_nascimento") or {}
             jan = a.get("janelas") or {}
             ini = a.get("inicio") or {}
@@ -495,7 +514,7 @@ def csv_casos(casos: list[dict]) -> str:
                 str(a.get("n") or ""),
                 "sim" if a.get("hipoteses") else "não",
                 ",".join((a.get("suposicoes") or {}).get("nao_portador", [])),
-                ",".join(a.get("genes_de_risco") or []),
+                SEM_LOCUS_NO_CSV if sem_locus else ",".join(a.get("genes_de_risco") or []),
                 ",".join(a.get("herancas") or []),
                 _num(a.get("p_portador_desde_nascimento")),
                 _num(a.get("risco_vitalicio")),

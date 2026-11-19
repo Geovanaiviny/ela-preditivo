@@ -1,0 +1,28 @@
+cenario,origem,unidade,n_sorteios,n_manifestam,ks_F,ks_referencia_amostral,wasserstein_idade_inicio_anos
+cenário 1,sorteios do artefato (verdade = modelo),SOD1 p.Ala5Val,10000,2630,0.006462183106698383,0.013600000000000001,0.35483924782431125
+cenário 2,sorteios do artefato (verdade = modelo),C9orf72 expansão GGGGCC,10000,1676,0.005250399830404581,0.013600000000000001,0.37318524690433497
+cenário 3,sorteios do artefato (verdade = modelo),SOD1 p.Ala5Val,10000,2696,0.004273642335963418,0.013600000000000001,0.2684767924331077
+cenário 3,sorteios do artefato (verdade = modelo),C9orf72 expansão GGGGCC,10000,1662,0.004792012842234281,0.013600000000000001,0.4575512236607905
+cenário 3,sorteios do artefato (verdade = modelo),qualquer lócus,10000,3903,0.0049253529722426415,0.013600000000000001,0.21697924971097968
+cenário 4,sorteios do artefato (verdade = modelo),SOD1 p.Asp91Ala,10000,1333,0.002624531921393501,0.013600000000000001,0.3604616348821481
+cenário 5,sorteios do artefato (verdade = modelo),TARDBP p.Met337Val,10000,1954,0.007781208099510023,0.013600000000000001,0.5919890983687913
+cenário 5,sorteios do artefato (verdade = modelo),FUS p.Arg521Cys,10000,925,0.0041887196045340275,0.013600000000000001,1.576348552893678
+cenário 5,sorteios do artefato (verdade = modelo),qualquer lócus,10000,2696,0.009893653293576249,0.013600000000000001,0.7269357156693637
+cenário 1,verdade alternativa: parâmetros do exemplo do orientador,SOD1 p.Ala5Val,10000,4531,0.18711344616423004,0.013600000000000001,4.819822163784632
+cenário 2,verdade alternativa: parâmetros do exemplo do orientador,C9orf72 expansão GGGGCC,10000,3000,0.13364490686402136,0.013600000000000001,2.9688990187834015
+cenário 3,verdade alternativa: parâmetros do exemplo do orientador,SOD1 p.Ala5Val,10000,4536,0.1858530128481325,0.013600000000000001,4.314964205863604
+cenário 3,verdade alternativa: parâmetros do exemplo do orientador,C9orf72 expansão GGGGCC,10000,2968,0.1304459165473683,0.013600000000000001,2.3901232929110847
+cenário 3,verdade alternativa: parâmetros do exemplo do orientador,qualquer lócus,10000,6182,0.22729293258412986,0.013600000000000001,4.1337353700437305
+cenário 4,verdade alternativa: parâmetros do exemplo do orientador,SOD1 p.Asp91Ala,10000,2230,0.08948100424469685,0.013600000000000001,4.570799568311704
+cenário 5,verdade alternativa: parâmetros do exemplo do orientador,TARDBP p.Met337Val,10000,4057,0.21423157336371562,0.013600000000000001,5.57845931455982
+cenário 5,verdade alternativa: parâmetros do exemplo do orientador,FUS p.Arg521Cys,10000,2234,0.1478301859575794,0.013600000000000001,8.012141289517706
+cenário 5,verdade alternativa: parâmetros do exemplo do orientador,qualquer lócus,10000,5400,0.28021018712470136,0.013600000000000001,6.8548441012613495
+cenário 1,verdade alternativa: penetrância log-normal truncada em 1,SOD1 p.Ala5Val,10000,2766,0.008096535962286905,0.013600000000000001,0.21752677845272667
+cenário 2,verdade alternativa: penetrância log-normal truncada em 1,C9orf72 expansão GGGGCC,10000,1751,0.010039376361939717,0.013600000000000001,0.2814444532269751
+cenário 3,verdade alternativa: penetrância log-normal truncada em 1,SOD1 p.Ala5Val,10000,2799,0.011923954323964259,0.013600000000000001,0.1558562963145361
+cenário 3,verdade alternativa: penetrância log-normal truncada em 1,C9orf72 expansão GGGGCC,10000,1649,0.004780979541997847,0.013600000000000001,0.3564424307448556
+cenário 3,verdade alternativa: penetrância log-normal truncada em 1,qualquer lócus,10000,3996,0.012462590717634114,0.013600000000000001,0.2121656399730117
+cenário 4,verdade alternativa: penetrância log-normal truncada em 1,SOD1 p.Asp91Ala,10000,1375,0.004773758860358399,0.013600000000000001,0.2833067515580306
+cenário 5,verdade alternativa: penetrância log-normal truncada em 1,TARDBP p.Met337Val,10000,2004,0.009588578627080818,0.013600000000000001,0.13761467429467963
+cenário 5,verdade alternativa: penetrância log-normal truncada em 1,FUS p.Arg521Cys,10000,876,0.005268252126315584,0.013600000000000001,0.9779968477426872
+cenário 5,verdade alternativa: penetrância log-normal truncada em 1,qualquer lócus,10000,2697,0.004844626977152822,0.013600000000000001,0.6386966615754626

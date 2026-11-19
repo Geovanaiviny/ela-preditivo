@@ -2,12 +2,10 @@
 
 > AVISO: instrumento experimental de apoio à decisão no aconselhamento genético preditivo da ELA, construído com dados sintéticos e parâmetros populacionais da literatura. Não constitui diagnóstico, não substitui o julgamento clínico e não deve ser usado isoladamente em decisões sobre pacientes.
 
-Gerado em 13/11/2026 17:00 com seed 42, N = 10.000 por execução, avaliação com N ∈ [1000, 10000, 100000] × 30 repetições. Tempo total: 837 s.
+Gerado em 18/11/2026 22:50 com seed 42, N = 10.000 por execução, avaliação com N ∈ [1000, 10000, 100000] × 30 repetições. Tempo total: 363 s.
 
-Base de anotação: clinvar_base_consolidada (1458 variantes do ClinVar dos quatro genes + 1 da tabela curada).
+Base de anotação: clinvar_base_consolidada (1457 variantes do ClinVar dos quatro genes + 1 da tabela curada; 1 registro da base fora da anotação, por ter alelo alternativo igual ao de referência).
 A expansão do C9orf72 entra pelo laudo laboratorial de cada cenário (TCC 4.2.1), não pelo VCF.
-
-Sem lócus de risco nesta base de anotação (relatório explica o motivo): cenário 4 (F), cenário 4 (M).
 
 ## Relatórios por cenário
 
@@ -24,34 +22,38 @@ Sem lócus de risco nesta base de anotação (relatório explica o motivo): cen�
 
 ## Avaliação transversal
 
-- [`avaliacao/relatorio.md`](avaliacao/relatorio.md) (Tabelas 5 a 9; Figuras 2, 3 e 7)
+- [`avaliacao/relatorio.md`](avaliacao/relatorio.md) (Tabelas 5 a 9 e 12 a 20; Figuras 2, 3, 7 e 10 a 12)
 
 ## Tabela consolidada
 
-**Tabela 3 (consolidada) — Probabilidade de transmissão, risco vitalício de manifestação (IC 95%) e idade mediana de início por cenário, lócus e sexo do descendente**
+**Tabela 3 (consolidada) — Probabilidade de transmissão, risco vitalício de manifestação até o horizonte (IC 95%), fração que manifesta em algum momento (sem limite de idade) e idade mediana de início por cenário, lócus e sexo do descendente**
 
-| cenario | descricao | sexo | variante | heranca | p_portador | p_manifesta | ic95 | idade_mediana |
-|---|---|---|---|---|---|---|---|---|
-| 1 | Pai heterozigoto SOD1 p.Ala5Val (alta penetrância) × mãe selvagem | F | SOD1 p.Ala5Val | dominante | 0.5 | 0.2694 | 0.163–0.372 | 50.8673 |
-| 1 | Pai heterozigoto SOD1 p.Ala5Val (alta penetrância) × mãe selvagem | F | qualquer lócus | independência | 0.5 | 0.2694 | 0.165–0.373 | 51.1501 |
-| 1 | Pai heterozigoto SOD1 p.Ala5Val (alta penetrância) × mãe selvagem | M | SOD1 p.Ala5Val | dominante | 0.5 | 0.2694 | 0.163–0.372 | 50.8673 |
-| 1 | Pai heterozigoto SOD1 p.Ala5Val (alta penetrância) × mãe selvagem | M | qualquer lócus | independência | 0.5 | 0.2694 | 0.165–0.373 | 51.1501 |
-| 2 | Mãe com expansão de hexanucleotídeos no C9orf72 (45 repetições, laudo) × pai selvagem | F | C9orf72 expansão GGGGCC | dominante | 0.5 | 0.1664 | 0.102–0.237 | 59.3045 |
-| 2 | Mãe com expansão de hexanucleotídeos no C9orf72 (45 repetições, laudo) × pai selvagem | F | qualquer lócus | independência | 0.5 | 0.1664 | 0.103–0.237 | 59.0751 |
-| 2 | Mãe com expansão de hexanucleotídeos no C9orf72 (45 repetições, laudo) × pai selvagem | M | C9orf72 expansão GGGGCC | dominante | 0.5 | 0.1664 | 0.102–0.237 | 57.3045 |
-| 2 | Mãe com expansão de hexanucleotídeos no C9orf72 (45 repetições, laudo) × pai selvagem | M | qualquer lócus | independência | 0.5 | 0.1664 | 0.103–0.237 | 57.0751 |
-| 3 | Pai heterozigoto SOD1 p.Ala5Val × mãe com expansão C9orf72 (45 repetições, laudo; exemplo literal do TCC, 4.5) | F | SOD1 p.Ala5Val | dominante | 0.5 | 0.2694 | 0.163–0.372 | 50.8673 |
-| 3 | Pai heterozigoto SOD1 p.Ala5Val × mãe com expansão C9orf72 (45 repetições, laudo; exemplo literal do TCC, 4.5) | F | C9orf72 expansão GGGGCC | dominante | 0.5 | 0.1664 | 0.102–0.237 | 59.3045 |
-| 3 | Pai heterozigoto SOD1 p.Ala5Val × mãe com expansão C9orf72 (45 repetições, laudo; exemplo literal do TCC, 4.5) | F | qualquer lócus | independência | 0.75 | 0.3909 | 0.288–0.486 | 52.8451 |
-| 3 | Pai heterozigoto SOD1 p.Ala5Val × mãe com expansão C9orf72 (45 repetições, laudo; exemplo literal do TCC, 4.5) | M | SOD1 p.Ala5Val | dominante | 0.5 | 0.2694 | 0.163–0.372 | 50.8673 |
-| 3 | Pai heterozigoto SOD1 p.Ala5Val × mãe com expansão C9orf72 (45 repetições, laudo; exemplo literal do TCC, 4.5) | M | C9orf72 expansão GGGGCC | dominante | 0.5 | 0.1664 | 0.102–0.237 | 57.3045 |
-| 3 | Pai heterozigoto SOD1 p.Ala5Val × mãe com expansão C9orf72 (45 repetições, laudo; exemplo literal do TCC, 4.5) | M | qualquer lócus | independência | 0.75 | 0.3909 | 0.288–0.486 | 52.1706 |
-| 5 | Pai heterozigoto TARDBP p.Met337Val × mãe heterozigota FUS p.Arg521Cys | F | TARDBP p.Met337Val | dominante | 0.5 | 0.1916 | 0.105–0.287 | 58.3 |
-| 5 | Pai heterozigoto TARDBP p.Met337Val × mãe heterozigota FUS p.Arg521Cys | F | FUS p.Arg521Cys | dominante | 0.5 | 0.096 | 0.063–0.133 | 46.7083 |
-| 5 | Pai heterozigoto TARDBP p.Met337Val × mãe heterozigota FUS p.Arg521Cys | F | qualquer lócus | independência | 0.75 | 0.2691 | 0.185–0.359 | 55.7505 |
-| 5 | Pai heterozigoto TARDBP p.Met337Val × mãe heterozigota FUS p.Arg521Cys | M | TARDBP p.Met337Val | dominante | 0.5 | 0.1916 | 0.105–0.287 | 58.3 |
-| 5 | Pai heterozigoto TARDBP p.Met337Val × mãe heterozigota FUS p.Arg521Cys | M | FUS p.Arg521Cys | dominante | 0.5 | 0.096 | 0.063–0.133 | 46.7083 |
-| 5 | Pai heterozigoto TARDBP p.Met337Val × mãe heterozigota FUS p.Arg521Cys | M | qualquer lócus | independência | 0.75 | 0.2691 | 0.185–0.359 | 55.7505 |
+| cenario | descricao | sexo | variante | heranca | p_portador | p_manifesta | ic95 | fração que manifesta em algum momento (sem limite de idade) | idade_mediana |
+|---|---|---|---|---|---|---|---|---|---|
+| 1 | Pai heterozigoto SOD1 p.Ala5Val (alta penetrância) × mãe selvagem | F | SOD1 p.Ala5Val | dominante | 0.5 | 0.2694 | 0.163–0.372 | 0.2694 | 50.8673 |
+| 1 | Pai heterozigoto SOD1 p.Ala5Val (alta penetrância) × mãe selvagem | F | qualquer lócus | independência | 0.5 | 0.2694 | 0.165–0.373 | 0.2694 | 51.1501 |
+| 1 | Pai heterozigoto SOD1 p.Ala5Val (alta penetrância) × mãe selvagem | M | SOD1 p.Ala5Val | dominante | 0.5 | 0.2694 | 0.163–0.372 | 0.2694 | 50.8673 |
+| 1 | Pai heterozigoto SOD1 p.Ala5Val (alta penetrância) × mãe selvagem | M | qualquer lócus | independência | 0.5 | 0.2694 | 0.165–0.373 | 0.2694 | 51.1501 |
+| 2 | Mãe com expansão de hexanucleotídeos no C9orf72 (45 repetições, laudo) × pai selvagem | F | C9orf72 expansão GGGGCC | dominante | 0.5 | 0.1664 | 0.102–0.237 | 0.1664 | 59.3045 |
+| 2 | Mãe com expansão de hexanucleotídeos no C9orf72 (45 repetições, laudo) × pai selvagem | F | qualquer lócus | independência | 0.5 | 0.1664 | 0.103–0.237 | 0.1664 | 59.0751 |
+| 2 | Mãe com expansão de hexanucleotídeos no C9orf72 (45 repetições, laudo) × pai selvagem | M | C9orf72 expansão GGGGCC | dominante | 0.5 | 0.1664 | 0.102–0.237 | 0.1664 | 57.3045 |
+| 2 | Mãe com expansão de hexanucleotídeos no C9orf72 (45 repetições, laudo) × pai selvagem | M | qualquer lócus | independência | 0.5 | 0.1664 | 0.103–0.237 | 0.1664 | 57.0751 |
+| 3 | Pai heterozigoto SOD1 p.Ala5Val × mãe com expansão C9orf72 (45 repetições, laudo; exemplo literal do TCC, 4.5) | F | SOD1 p.Ala5Val | dominante | 0.5 | 0.2694 | 0.163–0.372 | 0.2694 | 50.8673 |
+| 3 | Pai heterozigoto SOD1 p.Ala5Val × mãe com expansão C9orf72 (45 repetições, laudo; exemplo literal do TCC, 4.5) | F | C9orf72 expansão GGGGCC | dominante | 0.5 | 0.1664 | 0.102–0.237 | 0.1664 | 59.3045 |
+| 3 | Pai heterozigoto SOD1 p.Ala5Val × mãe com expansão C9orf72 (45 repetições, laudo; exemplo literal do TCC, 4.5) | F | qualquer lócus | independência | 0.75 | 0.3909 | 0.288–0.486 | 0.3909 | 52.8451 |
+| 3 | Pai heterozigoto SOD1 p.Ala5Val × mãe com expansão C9orf72 (45 repetições, laudo; exemplo literal do TCC, 4.5) | M | SOD1 p.Ala5Val | dominante | 0.5 | 0.2694 | 0.163–0.372 | 0.2694 | 50.8673 |
+| 3 | Pai heterozigoto SOD1 p.Ala5Val × mãe com expansão C9orf72 (45 repetições, laudo; exemplo literal do TCC, 4.5) | M | C9orf72 expansão GGGGCC | dominante | 0.5 | 0.1664 | 0.102–0.237 | 0.1664 | 57.3045 |
+| 3 | Pai heterozigoto SOD1 p.Ala5Val × mãe com expansão C9orf72 (45 repetições, laudo; exemplo literal do TCC, 4.5) | M | qualquer lócus | independência | 0.75 | 0.3909 | 0.288–0.486 | 0.3909 | 52.1706 |
+| 4 | Ambos os pais heterozigotos para SOD1 p.Asp91Ala (herança recessiva) | F | SOD1 p.Asp91Ala | recessiva | 0.25 | 0.1347 | 0.082–0.186 | 0.1347 | 50.8673 |
+| 4 | Ambos os pais heterozigotos para SOD1 p.Asp91Ala (herança recessiva) | F | qualquer lócus | independência | 0.25 | 0.1347 | 0.082–0.186 | 0.1347 | 50.7447 |
+| 4 | Ambos os pais heterozigotos para SOD1 p.Asp91Ala (herança recessiva) | M | SOD1 p.Asp91Ala | recessiva | 0.25 | 0.1347 | 0.082–0.186 | 0.1347 | 50.8673 |
+| 4 | Ambos os pais heterozigotos para SOD1 p.Asp91Ala (herança recessiva) | M | qualquer lócus | independência | 0.25 | 0.1347 | 0.082–0.186 | 0.1347 | 50.7447 |
+| 5 | Pai heterozigoto TARDBP p.Met337Val × mãe heterozigota FUS p.Arg521Cys | F | TARDBP p.Met337Val | dominante | 0.5 | 0.1915 | 0.105–0.287 | 0.1916 | 58.3 |
+| 5 | Pai heterozigoto TARDBP p.Met337Val × mãe heterozigota FUS p.Arg521Cys | F | FUS p.Arg521Cys | dominante | 0.5 | 0.0918 | 0.061–0.128 | 0.096 | 46.7083 |
+| 5 | Pai heterozigoto TARDBP p.Met337Val × mãe heterozigota FUS p.Arg521Cys | F | qualquer lócus | independência | 0.75 | 0.2657 | 0.182–0.356 | 0.2691 | 55.7505 |
+| 5 | Pai heterozigoto TARDBP p.Met337Val × mãe heterozigota FUS p.Arg521Cys | M | TARDBP p.Met337Val | dominante | 0.5 | 0.1915 | 0.105–0.287 | 0.1916 | 58.3 |
+| 5 | Pai heterozigoto TARDBP p.Met337Val × mãe heterozigota FUS p.Arg521Cys | M | FUS p.Arg521Cys | dominante | 0.5 | 0.0918 | 0.061–0.128 | 0.096 | 46.7083 |
+| 5 | Pai heterozigoto TARDBP p.Met337Val × mãe heterozigota FUS p.Arg521Cys | M | qualquer lócus | independência | 0.75 | 0.2657 | 0.182–0.356 | 0.2691 | 55.7505 |
 
 *Fonte: elaborado pela autora (2026), a partir do artefato ela_preditivo.*
 
@@ -61,4 +63,5 @@ Sem lócus de risco nesta base de anotação (relatório explica o motivo): cen�
 ![Cenário 1](cenarios/figura_05_idade_inicio_cenario_1.png)
 ![Cenário 2](cenarios/figura_05_idade_inicio_cenario_2.png)
 ![Cenário 3](cenarios/figura_05_idade_inicio_cenario_3.png)
+![Cenário 4](cenarios/figura_05_idade_inicio_cenario_4.png)
 ![Cenário 5](cenarios/figura_05_idade_inicio_cenario_5.png)

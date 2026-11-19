@@ -8,6 +8,10 @@ Fontes da base de anotação, em ordem de preferência:
 2. tabela curada `data/variantes_curadas.csv`, que complementa o ClinVar com o modo de herança, nomes curtos e a
    expansão do C9orf72 (sem posição em VCF no ClinVar) e que, sozinha, mantém o protótipo funcional sem os dados reais.
 Quando as duas fontes classificam a mesma variante de forma diferente, prevalece o ClinVar e a divergência fica registrada.
+
+A chave de coordenadas e alelos é o critério primário do cruzamento; o rs é chave complementar e só anota quando ref e
+alt também conferem. Linhas da base com alelo alternativo igual ao de referência não entram no cruzamento: ficam
+listadas, com o motivo, em `attrs["fora_da_anotacao"]` da tabela e em `base_anotacao` nos metadados.
 """
 
 from __future__ import annotations
@@ -271,6 +275,10 @@ def _anotar_repeticao(linha: pd.Series, tabela: pd.DataFrame, limiar: dict) -> d
     return base
 
 
+# Texto que `anotar` grava em `fonte_anotacao` quando o rs do registro existe na base com outro alelo
+OBS_RS_OUTRO_ALELO = "rs presente na base com outro alelo"
+
+
 def anotar(
     variantes: pd.DataFrame, tabela: pd.DataFrame | None = None, limiar_repeticoes: dict | None = None
 ) -> pd.DataFrame:
@@ -278,6 +286,12 @@ def anotar(
 
     Ordem das chaves: (cromossomo, posição, ref, alt) → identificador rs (coluna ID do VCF) → para repetições,
     gene + contagem de repetições. Variantes sem correspondência recebem classe "nao_anotada".
+
+    O rs é chave complementar (TCC 4.2.2): o dbSNP usa um mesmo rs para todos os alelos de uma posição, e a classificação
+    do ClinVar é de um alelo. Por isso o rs só anota quando ref e alt do registro conferem com os da linha da base, na
+    mesma normalização da chave de coordenadas (maiúsculas). Com o rs presente na base e outro alelo, a variante fica
+    "nao_anotada" e `fonte_anotacao` registra o motivo (`OBS_RS_OUTRO_ALELO`), que segue para a Tabela 1 e, pela
+    contagem `rs_com_outro_alelo`, para os indicadores de qualidade.
     """
     tabela = tabela_anotacao() if tabela is None else tabela
     limiar = {**LIMIAR_PADRAO, **(limiar_repeticoes or {})}
@@ -325,7 +339,11 @@ def anotar(
             if r is None and isinstance(v.id, str) and v.id.startswith("rs"):
                 cands = por_rs.get(v.id, [])
                 if len(cands) == 1:  # o rs só é chave complementar (TCC 4.2.2): um rs pode cobrir vários alelos
-                    r, chave = cands[0], "rs"
+                    c = cands[0]
+                    if (str(c.ref).upper(), str(c.alt).upper()) == (str(v.ref).upper(), str(v.alt).upper()):
+                        r, chave = c, "rs"
+                    else:  # mesmo rs, outro alelo: a classificação da base não é deste alelo
+                        a["fonte_anotacao"] = f"{OBS_RS_OUTRO_ALELO}: {c.ref}>{c.alt}"
                 elif len(cands) > 1:
                     a["fonte_anotacao"] = f"rs_ambiguo:{len(cands)}_alelos"
             if r is not None:
@@ -390,8 +408,17 @@ def indicadores_qualidade(anotadas: pd.DataFrame) -> dict:
         else pd.Series(dtype=float)
     )
     incoerentes = int(((anot.classe == "risco") & (freq > 0.01)).sum()) if len(anot) else 0
+    if "fonte_anotacao" in ap.columns and len(ap):
+        outro_alelo = ap[ap.fonte_anotacao.fillna("").astype(str).str.startswith(OBS_RS_OUTRO_ALELO)]
+    else:
+        outro_alelo = ap.iloc[0:0]
     return {
         "risco_com_frequencia_acima_1pct": incoerentes,
+        # registros aprovados cujo rs existe na base com outro alelo: ficam sem anotação e são listados
+        "rs_com_outro_alelo": [
+            f"{r.cromossomo}:{int(r.posicao)} {r.ref}>{r.alt} ({r.id}; na base: {str(r.fonte_anotacao).rsplit(': ', 1)[-1]})"
+            for r in outro_alelo.itertuples(index=False)
+        ],
         "registros": n,
         "aprovados": int(len(ap)),
         "taxa_aprovacao": (float(len(ap)) / n if n else float("nan")),
@@ -494,6 +521,35 @@ def _nome_curto_de(name: pd.Series) -> pd.Series:
     return p.where(p.notna(), c.where(c.notna(), name))
 
 
+# Motivo registrado para as linhas da base que ficam fora do casamento com os VCFs
+MOTIVO_SEM_MUDANCA = "alelo alternativo igual ao de referência: o registro não descreve mudança de sequência"
+
+
+def _separar_sem_mudanca(t: pd.DataFrame) -> tuple[pd.DataFrame, list[dict]]:
+    """Linhas da base com ref = alt (no ClinVar, nomes terminados em "=", como `c.358-304=`) não descrevem um alelo
+    alternativo e não podem classificar o alelo de um VCF. Ficam fora da tabela de anotação, listadas com o motivo;
+    o arquivo da base não é alterado. Devolve (linhas anotáveis, linhas fora da anotação)."""
+    if not len(t):
+        return t, []
+    igual = t["ref"].astype(str).str.upper() == t["alt"].astype(str).str.upper()
+    fora = [
+        {
+            "gene": r.gene,
+            "cromossomo": str(r.cromossomo),
+            "posicao_grch38": int(r.posicao_grch38),
+            "ref": r.ref,
+            "alt": r.alt,
+            "rs": r.rs if isinstance(r.rs, str) else None,
+            "variation_id_clinvar": str(r.variation_id_clinvar),
+            "nome": r.hgvs_c if isinstance(r.hgvs_c, str) else None,
+            "clnsig": r.clnsig if isinstance(r.clnsig, str) else None,
+            "motivo": MOTIVO_SEM_MUDANCA,
+        }
+        for r in t[igual].itertuples(index=False)
+    ]
+    return t[~igual].copy(), fora
+
+
 def carregar_variant_summary(
     caminho: str | Path, genes=GENES, montagem: str = "GRCh38", regra: dict | None = None
 ) -> pd.DataFrame:
@@ -501,6 +557,7 @@ def carregar_variant_summary(
     `base_consolidada_ela.csv` (o mesmo + colunas do VCF e do casamento com o dbSNP, TCC 4.2.2) para o formato da
     tabela de anotação, filtrando pelos genes-alvo e pela montagem. Registros sem posição em VCF (ex.: microssatélites
     do C9orf72) ficam de fora e são cobertos pela tabela curada. Chaves duplicadas ficam com o maior número de estrelas.
+    Linhas com ref = alt ficam fora da anotação, listadas com o motivo em `attrs["fora_da_anotacao"]`.
     """
     caminho = Path(caminho)
     sep = "\t" if caminho.suffix.lower() in (".txt", ".tsv") else ","
@@ -556,11 +613,14 @@ def carregar_variant_summary(
             "fenotipos": (df[col["phenotypelist"]].replace("", None) if "phenotypelist" in col else None),
         }
     )
+    out, fora = _separar_sem_mudanca(out)
     out = out.sort_values("estrelas", ascending=False).drop_duplicates(
         ["cromossomo", "posicao_grch38", "ref", "alt"], keep="first"
     )
     out = _completar_colunas(out, "clinvar_base_consolidada" if consolidada else "clinvar_variant_summary", regra)
-    return out.sort_values(["cromossomo", "posicao_grch38", "alt"]).reset_index(drop=True)
+    out = out.sort_values(["cromossomo", "posicao_grch38", "alt"]).reset_index(drop=True)
+    out.attrs["fora_da_anotacao"] = fora
+    return out
 
 
 def carregar_clinvar_vcf(caminho: str | Path, genes=GENES, regra: dict | None = None) -> pd.DataFrame:
@@ -614,12 +674,14 @@ def carregar_clinvar_vcf(caminho: str | Path, genes=GENES, regra: dict | None = 
                     "fenotipos": info.get("CLNDN"),
                 }
             )
-    out = pd.DataFrame(linhas)
+    out, fora = _separar_sem_mudanca(pd.DataFrame(linhas))
     out = out.sort_values("estrelas", ascending=False).drop_duplicates(
         ["cromossomo", "posicao_grch38", "ref", "alt"], keep="first"
     )
     out = _completar_colunas(out, "clinvar_vcf", regra)
-    return out.sort_values(["cromossomo", "posicao_grch38", "alt"]).reset_index(drop=True)
+    out = out.sort_values(["cromossomo", "posicao_grch38", "alt"]).reset_index(drop=True)
+    out.attrs["fora_da_anotacao"] = fora
+    return out
 
 
 def carregar_base_real(
@@ -732,11 +794,15 @@ def tabela_anotacao(
     else:
         extra, t = cur.iloc[0:0], real.reset_index(drop=True)
     base = real.attrs.get("base", {})
+    fora = list(real.attrs.get("fora_da_anotacao") or [])
     t.attrs["fontes"] = {
         "base_real": str(real.fonte.iloc[0]) if len(real) else None,
         "curada": _descrever_curada(curada),
         "n_real": int(len(real)),
         "n_curada_extra": int(len(extra)),
+        # linhas da base que não entram no casamento (ref = alt), com o motivo de cada uma
+        "n_fora_da_anotacao": len(fora),
+        "fora_da_anotacao": fora,
         "arquivo_base_real": base.get("arquivo"),
         "release_base_real": base.get("release"),
         "sha256_base_real": base.get("sha256"),

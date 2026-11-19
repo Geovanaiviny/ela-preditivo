@@ -25,6 +25,7 @@ import subprocess
 import sys
 import threading
 import time
+import warnings
 import zipfile
 from pathlib import Path
 
@@ -250,8 +251,9 @@ COMANDOS: dict[str, Comando] = {
         Comando(
             "gerar-cenarios",
             "Gerar cenários sintéticos",
-            "Gera os VCFs sintéticos dos cinco cenários familiares e dos cenários com genitor sem exame. O pacote traz "
-            "os arquivos; a execução pode servir de origem para a avaliação.",
+            "Gera os VCFs sintéticos dos cenários (os cinco familiares, os de genitor sem exame e os de casal) e os "
+            "documentos fictícios das fichas de teste: prontuário e laudo do C9orf72, em PDF. O pacote traz os arquivos; "
+            "a execução pode servir de origem para a avaliação.",
             ARTEFATO_EXECUTAR,
             (
                 Opcao("semente", "--seed", "inteiro", "Semente", 2026, 0, SEMENTE_MAXIMA),
@@ -983,6 +985,30 @@ def _identidade(caminho: Path) -> dict:
     return _identidades[chave]
 
 
+_anotacoes_de_base: dict[tuple, dict | None] = {}
+
+
+def _anotacao_da_base(caminho: Path) -> dict | None:
+    """Quantas linhas da base entram no casamento com os VCFs, quantas sustentam risco e quais ficam fora (alelo
+    alternativo igual ao de referência), com o motivo. Memória por (arquivo, data, tamanho); None se a base não abre."""
+    st = caminho.stat()
+    chave = (str(caminho), st.st_mtime_ns, st.st_size)
+    if chave not in _anotacoes_de_base:
+        try:
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                b = anotacao.carregar_base_real(caminho)
+            _anotacoes_de_base[chave] = {
+                "anotaveis": int(len(b)),
+                "de_risco": int((b.classe == "risco").sum()),
+                "n_fora_da_anotacao": len(b.attrs.get("fora_da_anotacao") or []),
+                "fora_da_anotacao": list(b.attrs.get("fora_da_anotacao") or []),
+            }
+        except Exception:  # noqa: BLE001
+            _anotacoes_de_base[chave] = None
+    return _anotacoes_de_base[chave]
+
+
 def _versao_publica(v: dict) -> dict:
     return {k: x for k, x in v.items() if k != "caminho"}
 
@@ -1022,6 +1048,8 @@ def ver_base(request: Request, usuario: Usuario = Depends(exigir(BASE_VER))):
     return {
         "pasta": d.name,
         "em_uso": next((a for a in arquivos if a["em_uso"]), None),
+        # linhas da base em uso que entram na anotação e as que ficam fora, com o motivo (alternativo = referência)
+        "anotacao": _anotacao_da_base(em_uso) if em_uso is not None else None,
         "sem_base": (
             "Nenhuma base real na pasta de bases: as análises usam só a tabela curada." if em_uso is None else None
         ),
@@ -1140,7 +1168,8 @@ def enviar_base(
         recebido = guardar_envio(arquivo, chegada / nome, "arquivo", campos, config.tamanho_maximo_base)
         exigir_campos(campos)
         try:
-            n = len(anotacao.carregar_base_real(recebido))
+            lida = anotacao.carregar_base_real(recebido)
+            n, n_fora = len(lida), len(lida.attrs.get("fora_da_anotacao") or [])
         except Exception as e:  # noqa: BLE001
             raise ErroCampos(
                 422,
@@ -1167,7 +1196,13 @@ def enviar_base(
             (d / "_envio").rmdir()
     r = _registrar_versao(config, destino, rel, f"enviada pela interface (usuário {usuario.id})")
     em_uso = anotacao.localizar_base_real(d)
-    r.update(arquivo=nome, variantes=n, substituida=substituida, em_uso=em_uso is not None and em_uso.name == nome)
+    r.update(
+        arquivo=nome,
+        variantes=n,
+        fora_da_anotacao=n_fora,
+        substituida=substituida,
+        em_uso=em_uso is not None and em_uso.name == nome,
+    )
     auditoria.registrar(
         bd,
         acao=auditoria.BASE_ENVIADA,

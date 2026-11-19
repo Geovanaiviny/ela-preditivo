@@ -1,0 +1,2 @@
+variante,n_portadores,eventos,pi_entrada,lambda_entrada,rho_entrada,delta_sexo,pi_lifelines,lambda_lifelines,rho_lifelines,erro_rel_pi,erro_rel_lambda,erro_rel_rho,weibull_lambda_manifestantes,weibull_rho_manifestantes,mediana_weibull_manifestantes
+SOD1 p.Asp91Ala,2513,1354,0.5387262992281477,54.39585492422319,5.464781223633043,0.0,0.5387970325076115,54.15027978707563,5.566382121058788,0.0001312972460506597,0.004514592839650296,0.018591942342789602,54.15035926227917,5.56642819606304,50.699758279076676

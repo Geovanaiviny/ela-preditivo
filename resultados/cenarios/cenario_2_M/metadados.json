@@ -2,35 +2,88 @@
   "pacote": "ela_preditivo",
   "versao": "0.1.0",
   "aviso_legal": "AVISO: instrumento experimental de apoio à decisão no aconselhamento genético preditivo da ELA, construído com dados sintéticos e parâmetros populacionais da literatura. Não constitui diagnóstico, não substitui o julgamento clínico e não deve ser usado isoladamente em decisões sobre pacientes.",
-  "data": "2026-11-13T16:46:45",
+  "data": "2026-11-18T22:44:56",
   "horizonte": 90.0,
   "tabela_variantes": "data/variantes_curadas.csv",
   "loci": [
     "C9orf72 expansão GGGGCC"
   ],
-  "tempo_total_s": 4.71,
+  "indicadores_condicionados": {
+    "idade_referencia": 30.0,
+    "horizonte": 90.0,
+    "unidade": "C9orf72 expansão GGGGCC",
+    "p_portador": 0.4992329405042879,
+    "risco_residual": {
+      "valor": 0.16507716561332655,
+      "q025": 0.10216462041966769,
+      "q975": 0.2350970644123054
+    },
+    "janelas": {
+      "10": {
+        "valor": 0.008560411268353073,
+        "q025": 0.005297953624404454,
+        "q975": 0.012191435150188678,
+        "ate": 40.0
+      },
+      "20": {
+        "valor": 0.038866380951073545,
+        "q025": 0.02405401766016314,
+        "q975": 0.05535212597077741,
+        "ate": 50.0
+      }
+    },
+    "inicio": {
+      "q25": 50.50195795676964,
+      "mediana": 57.417681149906485,
+      "q75": 63.59180486443704
+    }
+  },
+  "parentes": null,
+  "limite_inferior": false,
+  "sorteios_rejeitados": null,
+  "tempo_total_s": 4.3,
   "seed": 42,
   "n": 10000,
   "motor": "pymc",
   "sexo": "M",
   "idade_atual": 30.0,
   "laudo_c9orf72": {
-    "mae": 45
+    "mae": 45,
+    "pai": 23
   },
+  "hipoteses_c9orf72": null,
+  "transmissao_c9orf72": null,
+  "comparar_cox": true,
+  "tornado": false,
   "parametros": "config/parametros_literatura.yaml",
   "versao_parametros": 1,
   "data_parametros": "2026-10-24",
   "base_anotacao": {
     "base_real": "clinvar_base_consolidada",
     "curada": "data/variantes_curadas.csv",
-    "n_real": 1458,
+    "n_real": 1457,
     "n_curada_extra": 1,
+    "n_fora_da_anotacao": 1,
+    "fora_da_anotacao": [
+      {
+        "gene": "SOD1",
+        "cromossomo": "21",
+        "posicao_grch38": 31668167,
+        "ref": "C",
+        "alt": "C",
+        "rs": "rs1555836889",
+        "variation_id_clinvar": "14786",
+        "nome": "NM_000454.5(SOD1):c.358-304=",
+        "clnsig": "Pathogenic",
+        "motivo": "alelo alternativo igual ao de referência: o registro não descreve mudança de sequência"
+      }
+    ],
     "arquivo_base_real": "base_consolidada_ela.csv",
     "release_base_real": null,
-    "sha256_base_real": "f4b24b06b46f8440db33b15cd1fa70bcd126c59c74f6e1f6948ad39d88909945"
+    "sha256_base_real": "4bf97424ca8fd9a4aa68ce53d027e5e8c68f90132ac26ad8b2531434ada793b2"
   },
-  "vcf_mae": "resultados/sinteticos/cenario_2_mae.vcf",
-  "vcf_pai": "resultados/sinteticos/cenario_2_pai.vcf",
+  "vcf_mae": "resultados/sinteticos/caso_1_pessoa_com_historico/cenario_2_mae.vcf",
+  "vcf_pai": "resultados/sinteticos/caso_1_pessoa_com_historico/cenario_2_pai.vcf",
   "montagem": {
     "mae": "GRCh38",
     "pai": "GRCh38"
@@ -38,6 +91,7 @@
   "indicadores_qualidade": {
     "mae": {
       "risco_com_frequencia_acima_1pct": 0,
+      "rs_com_outro_alelo": [],
       "registros": 6,
       "aprovados": 4,
       "taxa_aprovacao": 0.6666666666666666,
@@ -60,6 +114,7 @@
     },
     "pai": {
       "risco_com_frequencia_acima_1pct": 0,
+      "rs_com_outro_alelo": [],
       "registros": 6,
       "aprovados": 4,
       "taxa_aprovacao": 0.6666666666666666,
@@ -82,5 +137,13 @@
     }
   },
   "loci_descartados": [],
+  "loci_regra_qualificada": [],
+  "regra_conflitante": {
+    "maioria_minima": 0.5,
+    "estrita": true,
+    "exigir_heranca_declarada": true,
+    "citacao": "TCC 4.2.2 (ajuste em redação). Caso que motivou a regra: SOD1 p.Asp91Ala (rs80265967), 14 de 20 classificações patogênicas ou provavelmente patogênicas e fenótipo de ELA com herança recessiva declarada; YAMASHITA; ANDO, 2015 (transmissão dominante e recessiva); BERDYŃSKI et al., 2022 (mutações codificantes do SOD1 como causadoras de doença)",
+    "confirmar": true
+  },
   "saida_limpa": []
 }

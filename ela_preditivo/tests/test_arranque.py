@@ -126,4 +126,8 @@ def test_arquivos_do_docker_apontam_para_o_arranque_e_para_as_pastas_de_dados():
         if linha.startswith(("ELA_WEB_CHAVE", "ELA_ADMIN_")):
             assert linha.endswith("="), linha
     ignorados = (RAIZ / ".gitignore").read_text(encoding="utf-8").splitlines()
-    assert ".env" in ignorados and "dados_web/" in ignorados and "dados_reais/" in ignorados
+    # banco e opções locais nunca são versionados; em dados_reais/ só a base consolidada do ClinVar (pública) é
+    # versionada: o que a tela Base de anotação e o `atualizar-base` gravam ali (envios, downloads, versoes/) fica fora
+    assert ".env" in ignorados and "dados_web/" in ignorados
+    assert "dados_reais/*" in ignorados and "!dados_reais/base_consolidada_ela.csv" in ignorados
+    assert "dados_reais/" not in ignorados and "dados_reais" not in ignorados  # a pasta inteira não é ignorada

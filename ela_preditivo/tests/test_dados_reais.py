@@ -52,7 +52,14 @@ def test_impacto_da_regra_qualificada_na_base_real(base, base_real):
     bruto = pd.read_csv(base_real, dtype=str, keep_default_na=False, encoding="utf-8-sig", low_memory=False)
     col = {c.lower().lstrip("#"): c for c in bruto.columns}
     sig = col.get("germlineclassification") or col.get("clinicalsignificance")
-    assert len(bruto) == 1463  # variantes na base consolidada (as 1.458 com posição em VCF entram na anotação)
+    assert len(bruto) == 1463  # variantes na base consolidada; 1.458 têm posição em VCF
+    # uma delas (SOD1 c.358-304=) tem alelo alternativo igual ao de referência e fica fora: 1.457 entram na anotação
+    assert len(base) == 1457 and int((base.classe == "risco").sum()) == 216
+    assert [
+        (f["gene"], f["variation_id_clinvar"], f["rs"], f["ref"], f["alt"]) for f in base.attrs["fora_da_anotacao"]
+    ] == [("SOD1", "14786", "rs1555836889", "C", "C")]
+    assert base.attrs["fora_da_anotacao"][0]["motivo"] == anotacao.MOTIVO_SEM_MUDANCA
+    assert not (base.ref == base.alt).any() and "rs1555836889" not in set(base.rs.dropna())
     assert int(bruto[sig].str.contains("Conflicting", case=False).sum()) == 73
     conflitantes = base[base.clnsig.fillna("").str.contains("onflicting")]
     assert int((conflitantes.proporcao_patogenica > 0.5).sum()) == 8  # maioria patogênica

@@ -1,27 +1,29 @@
-**Tabela 4 — Risco condicional à idade atual sem sintomas: P(portador | assintomático), risco nos próximos 10 e 20 anos e risco vitalício residual, com banda de 95%**
+**Tabela 4 — Risco condicional à idade atual sem sintomas: P(portador | assintomático), risco nos próximos 10 e 20 anos e risco residual (da idade atual até os 90 anos), com banda de 95%**
 
-| unidade | idade_atual | p_portador_condicional | risco_10_anos | risco_10_anos_q025 | risco_10_anos_q975 | risco_20_anos | risco_20_anos_q025 | risco_20_anos_q975 | risco_vitalicio | risco_vitalicio_q025 | risco_vitalicio_q975 |
+| unidade | idade_atual | p_portador_condicional | risco_10_anos | risco_10_anos_q025 | risco_10_anos_q975 | risco_20_anos | risco_20_anos_q025 | risco_20_anos_q975 | risco_residual | risco_residual_q025 | risco_residual_q975 |
 |---|---|---|---|---|---|---|---|---|---|---|---|
 | SOD1 p.Ala5Val | 0 | 0.5 | 2.57e-05 | 1.55e-05 | 3.54e-05 | 0.0011 | 0.0007 | 0.0016 | 0.2694 | 0.1626 | 0.3708 |
 | C9orf72 expansão GGGGCC | 0 | 0.5 | 1.30e-06 | 8.02e-07 | 1.84e-06 | 0.0001 | 6.65e-05 | 0.0002 | 0.1664 | 0.103 | 0.2368 |
-| qualquer lócus | 0 |  | 2.70e-05 | 1.68e-05 | 3.67e-05 | 0.0012 | 0.0008 | 0.0017 | 0.3909 | 0.2879 | 0.4861 |
+| qualquer lócus | 0 | 0.75 | 2.70e-05 | 1.68e-05 | 3.67e-05 | 0.0012 | 0.0008 | 0.0017 | 0.3909 | 0.2879 | 0.4861 |
 | SOD1 p.Ala5Val | 20 | 0.4994 | 0.0091 | 0.0055 | 0.0125 | 0.0447 | 0.027 | 0.0616 | 0.2685 | 0.162 | 0.3699 |
 | C9orf72 expansão GGGGCC | 20 | 0.4999 | 0.0014 | 0.0009 | 0.002 | 0.01 | 0.0062 | 0.0142 | 0.1663 | 0.103 | 0.2366 |
-| qualquer lócus | 20 |  | 0.0105 | 0.0069 | 0.014 | 0.0542 | 0.0364 | 0.0713 | 0.3902 | 0.2873 | 0.4853 |
+| qualquer lócus | 20 | 0.7497 | 0.0105 | 0.0069 | 0.014 | 0.0542 | 0.0364 | 0.0713 | 0.3902 | 0.2873 | 0.4853 |
 | SOD1 p.Ala5Val | 30 | 0.4948 | 0.0359 | 0.0216 | 0.0497 | 0.117 | 0.0703 | 0.1617 | 0.2618 | 0.1574 | 0.3619 |
 | C9orf72 expansão GGGGCC | 30 | 0.4992 | 0.0086 | 0.0053 | 0.0122 | 0.0389 | 0.0241 | 0.0554 | 0.1651 | 0.1022 | 0.2351 |
-| qualquer lócus | 30 |  | 0.0442 | 0.0297 | 0.0582 | 0.1513 | 0.1047 | 0.1964 | 0.3837 | 0.2822 | 0.478 |
+| qualquer lócus | 30 | 0.747 | 0.0442 | 0.0297 | 0.0582 | 0.1513 | 0.1047 | 0.1964 | 0.3837 | 0.2822 | 0.478 |
 | SOD1 p.Ala5Val | 40 | 0.476 | 0.0841 | 0.0498 | 0.1179 | 0.1832 | 0.1085 | 0.2568 | 0.2343 | 0.1387 | 0.3285 |
 | C9orf72 expansão GGGGCC | 40 | 0.4949 | 0.0306 | 0.0189 | 0.0437 | 0.0925 | 0.057 | 0.1322 | 0.1579 | 0.0974 | 0.2257 |
-| qualquer lócus | 40 |  | 0.1121 | 0.0772 | 0.1467 | 0.2587 | 0.1836 | 0.3318 | 0.3552 | 0.2595 | 0.4461 |
+| qualquer lócus | 40 | 0.7353 | 0.1121 | 0.0772 | 0.1467 | 0.2587 | 0.1836 | 0.3318 | 0.3552 | 0.2595 | 0.4461 |
 | SOD1 p.Ala5Val | 50 | 0.4279 | 0.1082 | 0.0618 | 0.1575 | 0.1582 | 0.0903 | 0.2303 | 0.164 | 0.0936 | 0.2387 |
 | C9orf72 expansão GGGGCC | 50 | 0.479 | 0.0639 | 0.0389 | 0.0925 | 0.1192 | 0.0727 | 0.1728 | 0.1313 | 0.08 | 0.1903 |
-| qualquer lócus | 50 |  | 0.1651 | 0.1155 | 0.2166 | 0.2585 | 0.1852 | 0.3335 | 0.2738 | 0.1968 | 0.3517 |
+| qualquer lócus | 50 | 0.7019 | 0.1651 | 0.1155 | 0.2166 | 0.2585 | 0.1852 | 0.3335 | 0.2738 | 0.1968 | 0.3517 |
 | SOD1 p.Ala5Val | 60 | 0.3585 | 0.056 | 0.0304 | 0.0864 | 0.0625 | 0.0339 | 0.0963 | 0.0626 | 0.034 | 0.0964 |
 | C9orf72 expansão GGGGCC | 60 | 0.4434 | 0.0591 | 0.0351 | 0.0884 | 0.0718 | 0.0426 | 0.1073 | 0.072 | 0.0428 | 0.1077 |
-| qualquer lócus | 60 |  | 0.1119 | 0.078 | 0.1499 | 0.1298 | 0.0908 | 0.1739 | 0.1301 | 0.091 | 0.1743 |
+| qualquer lócus | 60 | 0.643 | 0.1119 | 0.078 | 0.1499 | 0.1298 | 0.0908 | 0.1739 | 0.1301 | 0.091 | 0.1743 |
 | SOD1 p.Ala5Val | 70 | 0.3204 | 0.0068 | 0.0036 | 0.0109 | 0.0069 | 0.0037 | 0.011 | 0.0069 | 0.0037 | 0.011 |
 | C9orf72 expansão GGGGCC | 70 | 0.4085 | 0.0134 | 0.0078 | 0.0207 | 0.0137 | 0.0079 | 0.0212 | 0.0137 | 0.0079 | 0.0212 |
-| qualquer lócus | 70 |  | 0.0202 | 0.0136 | 0.0283 | 0.0205 | 0.0138 | 0.0288 | 0.0205 | 0.0138 | 0.0288 |
+| qualquer lócus | 70 | 0.598 | 0.0202 | 0.0136 | 0.0283 | 0.0205 | 0.0138 | 0.0288 | 0.0205 | 0.0138 | 0.0288 |
 
 *Fonte: elaborado pela autora (2026), a partir do artefato ela_preditivo.*
+
+risco_residual: probabilidade de manifestar entre a idade atual e o horizonte, para quem chegou a essa idade sem sintomas. Na idade 0 é o risco vitalício da Tabela 3.

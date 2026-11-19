@@ -16,7 +16,7 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import select, text
 
-from ela_preditivo import DIR_DADOS, cenarios
+from ela_preditivo import DIR_DADOS, anotacao, cenarios
 from ela_preditivo.web import auditoria, demo, permissoes, textos
 from ela_preditivo.web.api import COOKIE_SESSAO, criar_app, exigencia_da_rota, rotas_api
 from ela_preditivo.web.config import Configuracao, gerar_chave
@@ -2106,10 +2106,15 @@ def test_parentes_situacao_clinica_e_filho_testado_pela_api(plataforma, medico, 
     assert (
         res["metadados"]["parentes"]["genitores"]["pai"]["idade"] == 60 and res["metadados"]["sorteios_rejeitados"] > 0
     )
-    # Hardy-Weinberg pedido, mas a tabela curada não tem frequência: volta à suposição de não portador, registrada
+    # Hardy-Weinberg pedido: a prior usa a frequência alélica da base real do ClinVar; só com a tabela curada não há
+    # frequência e a prior volta à suposição de não portador. A saída registra qual das duas valeu
     r = analisar(prior_avos="hardy_weinberg")
     assert r.status_code == 201 and r.json()["entrada"]["prior_avos"] == "hardy_weinberg"
-    assert r.json()["parentes"]["loci_inferidos"][0]["prior_dos_avos_sem_exame"] == "suposto não portador"
+    prior = r.json()["parentes"]["loci_inferidos"][0]["prior_dos_avos_sem_exame"]
+    if anotacao.localizar_base_real(plataforma["cfg"].dir_bases) is None:
+        assert prior == "suposto não portador"
+    else:
+        assert prior.startswith("Hardy-Weinberg (f = ")
     assert analisar(prior_avos="uniforme").status_code == 422
     # genitor afetado: sem condicionamento, resultado rotulado como limite inferior
     assert (

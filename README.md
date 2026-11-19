@@ -26,7 +26,7 @@ Com Docker, a plataforma sobe em `http://localhost:8000`:
 docker compose up --build
 ```
 
-Daí em diante tudo acontece no navegador. Na primeira vez a plataforma abre na tela Primeiro acesso, onde se cria o administrador e, em homologação (o padrão), os usuários e registros fictícios, com as senhas mostradas na tela. A base real do ClinVar é enviada pela tela Base de anotação. Análises, envio de VCFs e documentos, resultados, avaliação com as métricas de verificação, reprodução completa e cenários também são feitos pela interface, com permissões por papel (médico, pesquisador e administrador).
+Daí em diante tudo acontece no navegador. Na primeira vez a plataforma abre na tela Primeiro acesso, onde se cria o administrador e, em homologação (o padrão), os usuários e registros fictícios, com as senhas mostradas na tela. A base real do ClinVar vem com o repositório, na pasta `dados_reais/`, e pode ser trocada pela tela Base de anotação. Análises, envio de VCFs e documentos, resultados, avaliação com as métricas de verificação, reprodução completa e cenários também são feitos pela interface, com permissões por papel (médico, pesquisador e administrador).
 
 Sem Docker:
 
