@@ -329,6 +329,30 @@ def _laudo(args) -> dict | None:
 
 
 def main(argv=None) -> int:
+    """Erro de operação sai como mensagem, não como traceback; erro de programação continua subindo inteiro.
+
+    `ELA_DEPURAR=1` relança a exceção original, para depurar. Códigos de saída: 2 para configuração e operação (o
+    mesmo de `_comando_web`), 1 para adulteração da auditoria, 130 para interrupção pelo teclado.
+    """
+    try:
+        return _rodar(argv)
+    except KeyboardInterrupt:
+        print("interrompido.", file=sys.stderr)
+        return 130
+    except OSError as e:  # arquivo que não existe, sem permissão, caminho que é pasta, disco cheio
+        if os.environ.get("ELA_DEPURAR"):
+            raise
+        alvo = f" {e.filename}" if e.filename else ""
+        print(f"não foi possível acessar o arquivo{alvo}: {e.strerror or e}", file=sys.stderr)
+        return 2
+    except ValueError as e:  # as mensagens do pipeline já são escritas para quem lê; faltava só tirar o traceback
+        if os.environ.get("ELA_DEPURAR"):
+            raise
+        print(str(e), file=sys.stderr)
+        return 2
+
+
+def _rodar(argv) -> int:
     args = construir_parser().parse_args(argv)
     from . import cenarios, pipeline
 
@@ -498,6 +522,14 @@ def _comando_web(args) -> int:
         )
         uvicorn.run(criar_app(config), host=args.host, port=args.porta, log_level="info")
         return 0
+    if args.comando == "verificar-auditoria" and not config.bd.exists():
+        # conferir a cadeia não pode criar banco: `criar_engine` faria a pasta e `criar_tabelas` o esquema, e um
+        # caminho errado em ELA_WEB_BD viraria um banco novo e vazio com resposta "íntegra"
+        print(
+            f"banco de dados não encontrado em {config.bd}; a verificação não cria banco. Confira ELA_WEB_BD.",
+            file=sys.stderr,
+        )
+        return 2
     engine = criar_engine(config.bd)
     criar_tabelas(engine)
     cifra = Cifra(config.chave)
@@ -531,11 +563,13 @@ def _comando_web(args) -> int:
             print("\nGuarde as senhas: elas não ficam em claro no banco.")
         elif args.comando == "verificar-auditoria":
             r = auditoria.verificar(bd)
-            if r["ok"]:
-                print(f"Auditoria íntegra: {r['total']} registros encadeados.")
-            else:
+            if not r["ok"]:
                 print(f"ADULTERAÇÃO DETECTADA na sequência {r['primeira_falha']} (de {r['total']} registros).")
                 return 1
+            if not r["total"]:  # banco recém-instalado: não há cadeia a atestar, e dizer "íntegra" enganaria
+                print("Banco sem registro de auditoria: não há cadeia a conferir.")
+            else:
+                print(f"Auditoria íntegra: {r['total']} registros encadeados.")
     return 0
 
 

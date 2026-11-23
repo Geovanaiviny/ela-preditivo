@@ -8,13 +8,15 @@ homem de 36 anos na data de referência; na família, o irmão avaliado tem 33 a
 from __future__ import annotations
 
 import datetime as _dt
+import json
 from pathlib import Path
 
+import numpy as np
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import select
 
-from ela_preditivo import DIR_DADOS
+from ela_preditivo import DIR_DADOS, cenarios, cli
 from ela_preditivo.web import demo, pacientes, textos
 from ela_preditivo.web.api import criar_app
 from ela_preditivo.web.config import Configuracao, gerar_chave
@@ -380,3 +382,232 @@ def test_csv_do_pesquisador_nao_escreve_zero_para_analise_sem_locus_de_risco():
     assert com["genes_de_risco"] == "SOD1" and com["p_transmissao"] == "0,5000" and com["risco_vitalicio"] == "0,2500"
     assert com["p_portador_sem_sintomas"] == "0,4000" and com["risco_10_anos"] == "0,0000"
     assert nada["genes_de_risco"] == "" and nada["motor"] == ""  # pessoa sem análise: linha vazia, sem o texto
+
+
+SEM_VARIANTE_NOS_GENES = "lido como genitor sem variante nos genes avaliados (o C9orf72 vem do laudo)"
+TEXTO_SEM_REGISTRO = {  # um texto por situação, com a montagem e as contagens lidas (N) e dentro dos genes (M)
+    "cabecalho": f"montagem GRCh38 (coerente); nenhum registro no arquivo; {SEM_VARIANTE_NOS_GENES}",
+    "fora": f"montagem GRCh38 (coerente); 1 registro lido, fora dos genes avaliados; {SEM_VARIANTE_NOS_GENES}",
+    "qualidade": "montagem GRCh38 (coerente); nenhum registro aprovado no filtro de qualidade (1 lido, 1 no gene "
+    f"avaliado); {SEM_VARIANTE_NOS_GENES}",
+}
+
+
+@pytest.fixture
+def vcfs_sem_registros_aproveitaveis(tmp_path):
+    rng = np.random.default_rng(1)
+    arquivos = {
+        "cabecalho": cenarios.escrever_vcf(tmp_path / "cabecalho.vcf", "CAB", [], rng, incluir_ruido=False),
+        "fora": cenarios.escrever_vcf_sem_variantes(tmp_path / "fora.vcf", "FORA"),
+    }
+    pai = CASO_1 / "cenario_1_pai.vcf"
+    linhas = pai.read_text(encoding="utf-8").splitlines()
+    for linha in linhas:
+        if "\trs121912442\t" in linha:
+            campos = linha.split("\t")
+            campos[6] = "LowQual"
+            arquivos["qualidade"] = tmp_path / "qualidade.vcf"
+            arquivos["qualidade"].write_text(
+                "\n".join([*(l for l in linhas if l.startswith("#")), "\t".join(campos)]) + "\n",
+                encoding="utf-8",
+            )
+            break
+    return arquivos
+
+
+@pytest.mark.parametrize("caso", ["cabecalho", "fora", "qualidade"])
+def test_cli_genitor_sem_registros_aproveitaveis(caso, vcfs_sem_registros_aproveitaveis, tmp_path):
+    saida = tmp_path / "resultado"
+    assert (
+        cli.main(
+            [
+                "executar",
+                "--vcf-mae",
+                str(vcfs_sem_registros_aproveitaveis[caso]),
+                "--vcf-pai",
+                str(CASO_1 / "cenario_1_pai.vcf"),
+                "--saida",
+                str(saida),
+                "--c9orf72-mae",
+                "23",
+                "--c9orf72-pai",
+                "23",
+                "--n",
+                "300",
+                "--sem-figuras",
+            ]
+        )
+        == 0
+    )
+    meta = json.loads((saida / "metadados.json").read_text(encoding="utf-8"))
+    assert meta["loci"]
+    assert set(meta["tempo_motores_s"]) == {"pymc", "numpy"}
+    assert all(tempo > 0 for tempo in meta["tempo_motores_s"].values())
+    texto = (saida / "relatorio.md").read_text(encoding="utf-8")
+    assert f"- Mãe: {TEXTO_SEM_REGISTRO[caso]}." in texto
+    assert "- Pai: montagem GRCh38 (coerente); " in texto and "registros aprovados" in texto.split("- Pai: ")[1]
+
+
+def test_analise_avulsa_genitor_sem_registros_aproveitaveis(medico, vcfs_sem_registros_aproveitaveis):
+    pai = CASO_1 / "cenario_1_pai.vcf"
+    dados = {"n": "300", "cox": "0", "sexo": "M", "c9orf72_mae": "23", "c9orf72_pai": "23"}
+    referencia = CASO_1 / "cenario_1_mae.vcf"
+    resultados = {}
+    for caso, mae in {"referencia": referencia, **vcfs_sem_registros_aproveitaveis}.items():
+        arquivos = {"vcf_mae": (mae.name, mae.read_bytes()), "vcf_pai": (pai.name, pai.read_bytes())}
+        r = medico.post("/api/analises", data=dados, files=arquivos)
+        assert r.status_code == 201, r.text
+        resultado = r.json()
+        assert not resultado["sem_locus"]
+        principais = resultado["principais"]
+        resultados[caso] = (principais["transmissao"], principais["vida"]["valor"])
+        if caso != "referencia":
+            assert resultado["avisos_qualidade_vcf"] == {"mae": TEXTO_SEM_REGISTRO[caso]}
+    assert all(v == resultados["referencia"] for v in resultados.values())
+    vazio = vcfs_sem_registros_aproveitaveis["cabecalho"]
+    arquivos = {lado: (vazio.name, vazio.read_bytes()) for lado in ("vcf_mae", "vcf_pai")}
+    r = medico.post("/api/analises", data=dados, files=arquivos)
+    assert r.status_code == 201, r.text
+    assert r.json()["sem_locus"]
+    assert r.json()["metadados"]["tempo_motores_s"] == {"pymc": None, "numpy": None}
+
+
+def test_ficha_mostra_aviso_do_vcf_apenas_com_cabecalho(medico, vcfs_sem_registros_aproveitaveis):
+    painel = "/api/pacientes/painel"
+    total = medico.get(painel).json()["totais"]["pendencias_analise"]
+    pid, [did] = registro(medico, laudo_mae="23", laudo_pai="23")
+    assert medico.get(painel).json()["totais"]["pendencias_analise"] == total + 1
+    vcf_do_genitor(medico, pid, "MAE", vcfs_sem_registros_aproveitaveis["cabecalho"])
+    pendencias = medico.get(painel).json()
+    assert pendencias["totais"]["pendencias_analise"] == total
+    assert all(p["id"] != pid for p in pendencias["pendencias"]["sem_dados_para_analise"])
+    vcf_do_genitor(medico, pid, "PAI", CASO_1 / "cenario_1_pai.vcf")
+    status, resultado = analisar(medico, pid, did)
+    assert status == 201, resultado
+    assert not resultado["sem_locus"]
+    ficha = medico.get(f"/api/pacientes/{pid}").json()
+    assert ficha["genitores"]["MAE"]["aviso_qualidade"] == TEXTO_SEM_REGISTRO["cabecalho"]
+    assert "aviso_qualidade" not in ficha["genitores"]["PAI"] or not ficha["genitores"]["PAI"]["aviso_qualidade"]
+
+
+def test_analise_avulsa_cita_nome_do_vcf_enviado(medico):
+    dados = {"n": "300", "cox": "0", "sexo": "M"}
+    pai = CASO_1 / "cenario_1_pai.vcf"
+    grch37 = b"##fileformat=VCFv4.2\n##reference=GRCh37\n#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\tM\n"
+    r = medico.post(
+        "/api/analises",
+        data=dados,
+        files={
+            "vcf_mae": ("amostra-original.vcf", grch37),
+            "vcf_pai": (pai.name, pai.read_bytes()),
+        },
+    )
+    assert r.status_code == 422, r.text
+    assert "amostra-original.vcf" in r.text
+
+
+# ---------------------------------------------------------------------------
+# Aviso de qualidade só para genitor com VCF próprio; genitor assumido ou inferido não tem arquivo a avisar
+# ---------------------------------------------------------------------------
+
+
+def linha_da_qualidade(res: dict, rotulo: str) -> str:
+    secao = next(s for s in res["secoes"] if s["titulo"].startswith("Qualidade dos dados"))
+    return next(l for l in secao["texto"].splitlines() if l.startswith(f"- {rotulo}:"))
+
+
+def test_genitor_assumido_sem_vcf_nao_mostra_registros_nem_aviso(medico):
+    pid, (did,) = registro(medico, laudo_mae="23", laudo_pai="23")
+    vcf_do_genitor(medico, pid, "PAI", CASO_1 / "cenario_1_pai.vcf")
+    status, res = analisar(medico, pid, did, assumir_nao_portador="MAE")
+    assert status == 201, res
+    assert res["entrada"]["suposicoes"]["nao_portador"] == ["MAE"]
+    mae = linha_da_qualidade(res, "Mãe")
+    assert mae == "- Mãe: sem VCF; genitor assumido sem variante de risco (limite inferior)."
+    assert "registro" not in mae and "regiões" not in mae
+    assert "registros aprovados" in linha_da_qualidade(res, "Pai")  # quem tem VCF continua com a leitura completa
+    assert res["avisos_qualidade_vcf"] == {}
+    ficha = medico.get(f"/api/pacientes/{pid}").json()
+    assert not ficha["genitores"]["MAE"].get("aviso_qualidade")
+    assert not ficha["genitores"]["PAI"].get("aviso_qualidade")
+
+
+def test_genitor_inferido_por_parente_nao_mostra_registros_nem_aviso(medico):
+    pid, (did,) = registro(medico, laudo_mae="23", laudo_pai="23")
+    vcf_do_genitor(medico, pid, "MAE", SEM_VARIANTE_1)
+    parente(medico, pid, "PAI", "MAE_DO_GENITOR", PORTADOR, laudo=23)
+    situacao(medico, pid, "PAI", "FALECIDO_SEM_ELA", 60)
+    status, res = analisar(medico, pid, did)
+    assert status == 201, res
+    pai = linha_da_qualidade(res, "Pai")
+    assert pai == "- Pai: sem VCF próprio; dosagem inferida a partir de parente testado."
+    assert "registro" not in pai
+    assert res["avisos_qualidade_vcf"] == {}
+    assert not medico.get(f"/api/pacientes/{pid}").json()["genitores"]["PAI"].get("aviso_qualidade")
+
+
+def test_vcf_so_com_cabecalho_no_genitor_assumido_continua_gerando_o_aviso(medico, vcfs_sem_registros_aproveitaveis):
+    """Mesmo genitor do teste do assumido, agora com um arquivo que só tem cabeçalho: o aviso do arquivo aparece."""
+    pid, (did,) = registro(medico, laudo_mae="23", laudo_pai="23")
+    vcf_do_genitor(medico, pid, "MAE", vcfs_sem_registros_aproveitaveis["cabecalho"])
+    vcf_do_genitor(medico, pid, "PAI", CASO_1 / "cenario_1_pai.vcf")
+    status, res = analisar(medico, pid, did)
+    assert status == 201, res
+    assert res["avisos_qualidade_vcf"] == {"mae": TEXTO_SEM_REGISTRO["cabecalho"]}
+    assert linha_da_qualidade(res, "Mãe") == f"- Mãe: {TEXTO_SEM_REGISTRO['cabecalho']}."
+
+
+# ---------------------------------------------------------------------------
+# Campos que a tela usa, painel de pendências e a lista de situações da ficha
+# ---------------------------------------------------------------------------
+
+
+def test_painel_conta_pendencias_inferidos_e_lista_so_o_que_falta(medico):
+    painel = "/api/pacientes/painel"
+    antes = medico.get(painel).json()["totais"]
+    sem_dados, _ = registro(medico)  # nenhum dado genético
+    um_vcf, _ = registro(medico)
+    vcf_do_genitor(medico, um_vcf, "MAE", SEM_VARIANTE_1)
+    inferido, _ = registro(medico)
+    parente(medico, inferido, "PAI", "MAE_DO_GENITOR", PORTADOR, laudo=23)
+    situacao(medico, inferido, "PAI", "FALECIDO_SEM_ELA", 60)
+    vcf_do_genitor(medico, inferido, "MAE", SEM_VARIANTE_1)
+    d = medico.get(painel).json()
+    assert d["totais"]["pendencias_analise"] == antes["pendencias_analise"] + 1
+    assert d["totais"]["com_genitor_inferido"] == antes["com_genitor_inferido"] + 1
+    sem = [p["id"] for p in d["pendencias"]["sem_dados_para_analise"]]
+    assert sem_dados in sem and um_vcf not in sem and inferido not in sem
+    assert not medico.get(f"/api/pacientes/{sem_dados}").json()["pode_analisar"]
+    assert medico.get(f"/api/pacientes/{um_vcf}").json()["pode_analisar"] is True  # o outro genitor pode ser assumido
+    assert medico.get(f"/api/pacientes/{inferido}").json()["genitores_inferidos"] == ["PAI"]
+
+
+def test_ficha_e_painel_devolvem_os_campos_de_risco_que_a_tela_usa(medico):
+    pid, (did,) = registro(medico, laudo_mae="23", laudo_pai="23")
+    vcf_do_genitor(medico, pid, "MAE", CASO_1 / "cenario_1_mae.vcf")
+    vcf_do_genitor(medico, pid, "PAI", CASO_1 / "cenario_1_pai.vcf")
+    status, res = analisar(medico, pid, did)
+    assert status == 201, res
+    ficha = medico.get(f"/api/pacientes/{pid}").json()
+    campos = ("condicionado", "idade_referencia", "p_manifesta", "risco_vitalicio")
+    assert ficha["ultima_analise"] and all(c in ficha["ultima_analise"] for c in campos)
+    assert ficha["ultimas_por_descendente"] and all(
+        all(c in u for c in campos) for u in ficha["ultimas_por_descendente"].values()
+    )
+    assert ficha["ultima_analise"]["condicionado"] is True  # o avaliado tem 36 anos e está sem sintomas
+    recentes = medico.get("/api/pacientes/painel").json()["analises_recentes"]
+    assert recentes and all(c in recentes[0] for c in campos)
+
+
+def test_situacao_clinica_comeca_vazia_e_desabilitada_e_a_regra_do_servidor_nao_mudou(medico):
+    js = (Path(pacientes.__file__).parent / "static" / "app.js").read_text(encoding="utf-8")
+    assert "opcao.disabled = def.placeholderVazio && valor === ''" in js  # a opção vazia não pode ser reescolhida
+    assert "placeholderVazio: true" in js
+    pid, (did,) = registro(medico)
+    parente(medico, pid, "PAI", "MAE_DO_GENITOR", PORTADOR, laudo=23)
+    parente(medico, pid, "MAE", "MAE_DO_GENITOR", SEM_VARIANTE_1)
+    status, res = analisar(medico, pid, did)  # parente testado sem a situação clínica: continua recusado
+    assert status == 422 and sorted(recusada_por(res)) == ["situacao_mae", "situacao_pai"]
+    situacao(medico, pid, "PAI", "DESCONHECIDA")  # "Situação desconhecida" é uma resposta aceita pelo servidor
+    situacao(medico, pid, "MAE", "DESCONHECIDA")
+    assert analisar(medico, pid, did)[0] == 201

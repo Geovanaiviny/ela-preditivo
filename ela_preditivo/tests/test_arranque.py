@@ -7,6 +7,7 @@ import os
 import stat
 from pathlib import Path
 
+import pytest
 from cryptography.fernet import Fernet
 from fastapi.testclient import TestClient
 from sqlalchemy import select
@@ -131,3 +132,76 @@ def test_arquivos_do_docker_apontam_para_o_arranque_e_para_as_pastas_de_dados():
     assert ".env" in ignorados and "dados_web/" in ignorados
     assert "dados_reais/*" in ignorados and "!dados_reais/base_consolidada_ela.csv" in ignorados
     assert "dados_reais/" not in ignorados and "dados_reais" not in ignorados  # a pasta inteira não é ignorada
+
+
+# ---------------------------------------------------------------------------
+# Linha de comando: verificação da auditoria e erro de operação
+# ---------------------------------------------------------------------------
+def _ambiente_web(monkeypatch, tmp_path, banco: Path) -> None:
+    monkeypatch.setenv("ELA_WEB_BD", str(banco))
+    monkeypatch.setenv("ELA_WEB_VCFS", str(tmp_path / "vcfs"))
+    monkeypatch.setenv("ELA_WEB_CHAVE", Fernet.generate_key().decode())
+    monkeypatch.setenv("ELA_WEB_AMBIENTE", "homologacao")
+
+
+def test_verificar_auditoria_sem_banco_avisa_e_nao_cria_nada(monkeypatch, tmp_path, capsys):
+    """Conferir a cadeia não pode criar banco: um caminho errado viraria um banco novo com resposta "íntegra"."""
+    from ela_preditivo import cli
+
+    pasta = tmp_path / "pasta_que_nao_existe"
+    _ambiente_web(monkeypatch, tmp_path, pasta / "ela_web.sqlite3")
+    assert cli.main(["verificar-auditoria"]) == 2
+    erro = capsys.readouterr().err
+    assert "não encontrado" in erro and str(pasta / "ela_web.sqlite3") in erro and "ELA_WEB_BD" in erro
+    assert not pasta.exists()  # nem a pasta nem o arquivo foram criados
+
+
+def test_verificar_auditoria_distingue_banco_vazio_de_cadeia_integra(monkeypatch, tmp_path, capsys):
+    from ela_preditivo import cli
+
+    banco = tmp_path / "dados" / "ela_web.sqlite3"
+    _ambiente_web(monkeypatch, tmp_path, banco)
+    from ela_preditivo.web.bd import criar_tabelas
+
+    criar_tabelas(criar_engine(banco))  # banco existe, ainda sem nenhum registro
+    assert cli.main(["verificar-auditoria"]) == 0
+    saida = capsys.readouterr().out
+    assert "não há cadeia a conferir" in saida and "íntegra" not in saida
+    # com registros (a criação do administrador é auditada), volta o texto de sempre
+    criar = ["criar-admin", "--nome", "Administradora de Teste", "--cpf", _cpf_valido(101)]
+    assert cli.main([*criar, "--email", "adm@teste.local", "--senha", "senha-segura-123"]) == 0
+    capsys.readouterr()
+    assert cli.main(["verificar-auditoria"]) == 0
+    saida = capsys.readouterr().out
+    assert "Auditoria íntegra:" in saida and "registros encadeados" in saida
+
+
+def test_erro_de_operacao_na_linha_de_comando_sai_como_mensagem(tmp_path, capsys):
+    """Arquivo que não existe e entrada incompleta saem como mensagem; só erro de programação mostra traceback."""
+    from ela_preditivo import cli
+
+    ausente = tmp_path / "nao_existe.vcf"
+    saida = ["--saida", str(tmp_path / "r")]
+    assert cli.main(["executar", "--vcf-mae", str(ausente), "--vcf-pai", str(ausente), *saida]) == 2
+    erro = capsys.readouterr().err
+    assert "Traceback" not in erro and str(ausente) in erro and "não foi possível acessar o arquivo" in erro
+    assert cli.main(["executar", *saida]) == 2  # sem VCF nenhum: a mensagem do pipeline aparece inteira
+    erro = capsys.readouterr().err
+    assert "Traceback" not in erro and "VCF da mãe não informado" in erro
+
+
+def test_depurar_devolve_a_excecao_e_erro_de_programacao_sempre_sobe(monkeypatch, tmp_path):
+    from ela_preditivo import cli
+
+    ausente = tmp_path / "nao_existe.vcf"
+    monkeypatch.setenv("ELA_DEPURAR", "1")
+    with pytest.raises(FileNotFoundError):
+        cli.main(["executar", "--vcf-mae", str(ausente), "--vcf-pai", str(ausente), "--saida", str(tmp_path / "r")])
+    monkeypatch.delenv("ELA_DEPURAR")
+
+    def _estourar():
+        raise RuntimeError("falha de programação")
+
+    monkeypatch.setattr(cli, "construir_parser", _estourar)
+    with pytest.raises(RuntimeError, match="falha de programação"):  # não é OSError nem ValueError: sobe inteiro
+        cli.main([])

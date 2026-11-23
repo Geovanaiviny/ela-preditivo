@@ -38,13 +38,68 @@ def _n(x) -> str:
     return f"{int(x):,}".replace(",", ".")
 
 
+def tempo_legivel(segundos: float | None) -> str:
+    """Tempo de um motor para o texto: segundos com duas casas a partir de 10 ms, milissegundos com uma casa abaixo
+    disso, "não executado" quando não houve medida. O `metadados.json` guarda o valor bruto."""
+    if segundos is None or segundos != segundos:
+        return "não executado"
+    if segundos >= 0.01:
+        return f"{segundos:.2f} s"
+    return f"{segundos * 1000:.1f} ms"
+
+
+def _montagem_txt(ind: dict) -> str:
+    return f"montagem {ind['montagem']} ({'coerente' if ind['montagem_coerente'] else 'NÃO conferida'})"
+
+
+def aviso_qualidade(ind: dict) -> str | None:
+    """Aviso de um VCF válido sem nenhuma variante aproveitável (só cabeçalho, só registros fora dos genes avaliados ou
+    todos reprovados no filtro de qualidade); `None` quando há registro aprovado ou quando o genitor não tem VCF
+    próprio (assumido sem variante ou inferido por parentes: não há arquivo a avisar)."""
+    if ind.get("sem_vcf") or ind["aprovados"]:
+        return None
+    lidos, nos_genes = ind["registros"], ind["registros_nas_regioes"]
+    if not lidos:
+        situacao = "nenhum registro no arquivo"
+    elif not nos_genes:
+        situacao = (
+            "1 registro lido, fora dos genes avaliados"
+            if lidos == 1
+            else f"{lidos} registros lidos, todos fora dos genes avaliados"
+        )
+    else:
+        situacao = (
+            f"nenhum registro aprovado no filtro de qualidade ({lidos} {'lido' if lidos == 1 else 'lidos'}, "
+            f"{nos_genes} {'no gene avaliado' if nos_genes == 1 else 'nos genes avaliados'})"
+        )
+    return (
+        f"{_montagem_txt(ind)}; {situacao}; lido como genitor sem variante nos genes avaliados (o C9orf72 vem do laudo)"
+    )
+
+
 def _texto_qualidade(ind: dict) -> str:
+    aviso = aviso_qualidade(ind)
+    if aviso:
+        return aviso
+    rotulos = {
+        "nao_anotada": ("não anotada", "não anotadas"),
+        "nao_classificada": ("não classificada", "não classificadas"),
+        "benigna": ("benigna", "benignas"),
+        "normal": ("normal", "normais"),
+        "risco": ("de risco", "de risco"),
+        "vus": ("de significado incerto", "de significado incerto"),
+        "conflitante": ("com classificação conflitante", "com classificação conflitante"),
+        "intermediaria": ("intermediária", "intermediárias"),
+    }
+    classes = ", ".join(
+        f"{n} {rotulos.get(classe, (classe, classe))[n != 1]}" for classe, n in ind["por_classe"].items()
+    )
     est = ", ".join(f"{k}★: {v}" for k, v in ind["por_estrelas"].items()) or "—"
     return (
         f"montagem {ind['montagem']} ({'coerente' if ind['montagem_coerente'] else 'NÃO conferida'}); "
         f"{ind['aprovados']}/{ind['registros']} registros aprovados ({ind['taxa_aprovacao']:.0%}); "
         f"{ind['anotadas']} aprovados encontrados na base de anotação ({ind['taxa_anotacao']:.0%}; estado de revisão {est}); "
-        f"classes {ind['por_classe']}; significado incerto: {ind['n_vus']} ({ind['proporcao_vus']:.0%} das anotadas); "
+        f"classes: {classes}; significado incerto: {ind['n_vus']} ({ind['proporcao_vus']:.0%} das anotadas); "
         f"classificação conflitante: {ind['n_conflitante']} ({ind['proporcao_conflitante']:.0%}); "
         f"risco com frequência > 1%: {ind['risco_com_frequencia_acima_1pct']}"
         + (
@@ -86,7 +141,9 @@ def _vcf_txt(caminho, resumo: dict) -> str:
 
 
 def _qualidade_ou_sem_exame(indicadores: dict, com_vcf: bool) -> str:
-    return _texto_qualidade(indicadores) if com_vcf else "sem exame; genótipo inferido por parentes"
+    if indicadores.get("sem_vcf") == "assumido":
+        return "sem VCF; genitor assumido sem variante de risco (limite inferior)"
+    return _texto_qualidade(indicadores) if com_vcf else "sem VCF próprio; dosagem inferida a partir de parente testado"
 
 
 def _dose_txt(d) -> str:
@@ -164,9 +221,12 @@ def executar(
     comparar_cox: bool = False,
     parentes: dict | None = None,
     tornado: bool = False,
+    genitores_assumidos: tuple[str, ...] = (),
 ) -> dict:
     """Executa as três camadas para um casal e grava tabelas, figuras, relatório e metadados em `saida`.
 
+    - `genitores_assumidos`: lados ("mae", "pai") que não têm VCF e entram assumidos sem variante de risco; o arquivo
+      recebido para eles é só um marcador, e a qualidade deles não é relatada como a de um VCF vazio.
     - `laudo_c9orf72`: {"mae": repetições, "pai": repetições} do laudo laboratorial (TCC 4.2.1; a expansão não é lida do VCF).
     - `base_clinvar`: caminho da base real do ClinVar (padrão: procura em `ELA_DADOS_BRUTOS`/`dados_reais/`); `False` usa só a tabela curada.
     - `tabela_variantes`: CSV no formato da tabela curada (padrão: `data/variantes_curadas.csv`), que complementa a base real.
@@ -228,6 +288,8 @@ def executar(
     perfil = genotipo.perfil_variantes(mae, pai)
     ing = {"mae": ingestao.resumo_ingestao(mae), "pai": ingestao.resumo_ingestao(pai)}
     ind = {"mae": anotacao.indicadores_qualidade(mae), "pai": anotacao.indicadores_qualidade(pai)}
+    for lado in ("mae", "pai"):  # genitor sem VCF próprio: assumido ou inferido por parentes
+        ind[lado]["sem_vcf"] = "assumido" if lado in genitores_assumidos else (None if com_vcf[lado] else "inferido")
     pessoas = []
     if familia is None:
         vetor = genotipo.vetor_dosagem(mae, pai, par, laudo_c9orf72=laudo, tabela=tabela)
@@ -255,6 +317,27 @@ def executar(
         nota_descarte += (
             f" Resultado parcial para o {genotipo.GENE_EXPANSAO}: o lócus não foi avaliado porque falta o laudo de um "
             "genitor (não testado); o risco de transmissão da expansão não pode ser estimado nem afastado."
+        )
+    # Variantes e alelos que não sustentam atribuição de risco, mas que o aconselhamento precisa conhecer. Vale nos dois
+    # ramos do relatório (com e sem lócus utilizável): antes só saía quando nenhum lócus era utilizável, e a informação
+    # desaparecia justamente quando havia outro lócus de risco no caso.
+    quase = perfil[(perfil.classe.isin(["vus", "conflitante", "intermediaria"])) & (perfil.dosagem.fillna(0) > 0)]
+    nota_zona_cinzenta = ""
+    if len(quase):
+        itens = "; ".join(
+            f"{r.amostra}: {r.gene} {r.nome_curto or (str(r.posicao) + ' ' + r.ref + '>' + r.alt)} ({r.clnsig or r.classe})"
+            for r in quase.itertuples()
+        )
+        nota_zona_cinzenta += (
+            " Foram encontradas variantes que não sustentam atribuição de risco pela regra do TCC 4.2.2 (significado "
+            f"incerto, classificação conflitante ou faixa intermediária): {itens}."
+        )
+    if vetor.attrs.get("c9orf72_intermediario"):
+        nota_zona_cinzenta += (
+            f" No laudo do {genotipo.GENE_EXPANSAO}: "
+            + "; ".join(vetor.attrs["c9orf72_intermediario"])
+            + f". A transmissão do {genotipo.GENE_EXPANSAO} por repetições, com instabilidade na transmissão e "
+            "antecipação, é a extensão experimental que trata esse alelo."
         )
     anotadas = genotipo.concatenar_anotadas(mae, pai)
     for p in pessoas:  # variantes dos parentes entram no mesmo arquivo, identificadas pelo parentesco
@@ -355,17 +438,6 @@ def executar(
             )
         )
     if uteis.empty:
-        quase = perfil[(perfil.classe.isin(["vus", "conflitante", "intermediaria"])) & (perfil.dosagem.fillna(0) > 0)]
-        extra = ""
-        if len(quase):
-            itens = "; ".join(
-                f"{r.amostra}: {r.gene} {r.nome_curto or (str(r.posicao) + ' ' + r.ref + '>' + r.alt)} ({r.clnsig or r.classe})"
-                for r in quase.itertuples()
-            )
-            extra = (
-                f" Foram encontradas variantes que não sustentam atribuição de risco pela regra do TCC 4.2.2 (significado incerto, classificação "
-                f"conflitante ou faixa intermediária): {itens}."
-            )
         if descartados.empty:
             texto = (
                 "Nenhum lócus de risco (classe patogênica/provavelmente patogênica) foi encontrado nos genes-alvo dos dois genitores. "
@@ -376,7 +448,8 @@ def executar(
                 "Nenhum lócus de risco utilizável: os lóci de risco encontrados têm genótipo não determinado num dos genitores e foram descartados "
                 "(TCC 4.3). O risco de transmissão dessas variantes não pode ser estimado sem um genótipo válido; o risco populacional de base não é modelado."
             )
-        secoes.append(("Resultado", texto + extra + nota_descarte + nota_regra))
+        secoes.append(("Resultado", texto + nota_zona_cinzenta + nota_descarte + nota_regra))
+        secoes.append(("Verificações", f"PyMC: {tempo_legivel(None)}; NumPy: {tempo_legivel(None)}."))
         if transmissao is not None:
             secoes.append(("Transmissão do C9orf72 por repetições (hipótese experimental)", transmissao.texto()))
         if familia is not None:
@@ -386,6 +459,7 @@ def executar(
             saida,
             data=_dt.datetime.now().isoformat(timespec="seconds"),
             loci=0,
+            tempo_motores_s={"pymc": None, "numpy": None},
             parentes=parentes_mod.resumo_metadados(vetor, []) if familia is not None else None,
             **meta_comum,
         )
@@ -425,6 +499,9 @@ def executar(
     cruzado = simular_numpy if motor == "pymc" else simular_pymc
     res = principal(loci, n=n, seed=seed)
     res_x = cruzado(loci, n=n, seed=seed)
+    nome_cruzado = "numpy" if motor == "pymc" else "pymc"
+    tempos_motores = {motor: res.tempo_s, nome_cruzado: res_x.tempo_s}
+    tempos_texto = "; ".join(f"{nome}: {tempo_legivel(tempo)}" for nome, tempo in tempos_motores.items())
     res.sexo = res_x.sexo = sexo
     resumo = res.resumo()
     comb = res.resumo_combinado()
@@ -632,7 +709,9 @@ def executar(
         if limite_inferior and inferidos
         else ""
     )
-    secoes.append(("Resultado", "\n".join(linhas) + extra + nota_limite + nota_descarte + nota_regra))
+    secoes.append(
+        ("Resultado", "\n".join(linhas) + extra + nota_limite + nota_zona_cinzenta + nota_descarte + nota_regra)
+    )
     if familia is not None:
         secoes.append(("Genitor inferido por parentes", parentes_mod.texto_relatorio(vetor, loci)))
     if transmissao is not None:
@@ -680,7 +759,7 @@ def executar(
             f"Aderência: maior desvio entre Monte Carlo e valor exato = {desvio_max:.2f} erros padrão (limite usual: 4). "
             f"Coerência: risco vitalício por Kaplan-Meier = {', '.join(f'{r.unidade}: {_p(r.risco_vitalicio_km)}' for r in km.itertuples())}. "
             f"Recuperação Lifelines: {txt_rec}. Tempo: {time.perf_counter() - t_ini:.1f} s no total "
-            f"({motor}: {res.tempo_s:.2f} s; motor cruzado: {res_x.tempo_s:.2f} s).",
+            f"({tempos_texto}).",
         )
     )
     provis = [g.nome for g in par.genes.values() if g.pen_confirmar or g.inicio_confirmar]
@@ -719,6 +798,7 @@ def executar(
         parentes=info_parentes,
         limite_inferior=bool(limite_inferior and inferidos),
         sorteios_rejeitados=(res.sorteados - res.n) if res.sorteados is not None else None,
+        tempo_motores_s=tempos_motores,
         tempo_total_s=round(time.perf_counter() - t_ini, 2),
         **meta_comum,
     )

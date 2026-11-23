@@ -6,6 +6,7 @@ na primeira casa decimal conforme o motor e o N, por isso só a ordem dela é co
 
 from __future__ import annotations
 
+import itertools
 import datetime as _dt
 from pathlib import Path
 
@@ -67,6 +68,9 @@ def medico(tmp_path_factory):
     app.state.analises.encerrar()
 
 
+_SEQUENCIA_CADASTRO = itertools.count(1)
+
+
 def cadastrar(medico, codigo: str, numero=None, pdf_laudo=None, vcf=None, parente=True) -> dict:
     """Cadastra a ficha com os arquivos de `data/sinteticos`. `numero` troca o nº de repetições digitado de um lado
     (None = campo vazio); `pdf_laudo` e `vcf` dizem quais lados recebem o arquivo (padrão: os da ficha)."""
@@ -80,7 +84,9 @@ def cadastrar(medico, codigo: str, numero=None, pdf_laudo=None, vcf=None, parent
 
     corpo = {
         "tipo": TIPO[f.caso],
-        "prontuario": f.prontuario,
+        # cada cadastro é um registro novo: o número de prontuário não se repete dentro do mesmo médico, e vários
+        # testes cadastram a mesma ficha mais de uma vez para montar cenários diferentes
+        "prontuario": f"{f.prontuario}-{next(_SEQUENCIA_CADASTRO)}",
         "momento": MOMENTO[f.momento],
         "mae": genitor("mae", f.mae),
         "pai": genitor("pai", f.pai),
@@ -250,6 +256,10 @@ def test_numero_de_repeticoes_invalido_e_recusado_no_cadastro(medico):
     )  # faixa intermediária: avaliado, sem ser lócus de risco
     status, res = analisar(medico, intermediario["pid"], intermediario["dids"]["Beatriz"])
     assert status == 201 and genes(res) == ["SOD1"] and res["c9orf72_indeterminado"] is False
+    # e o resultado informa o alelo intermediário, mesmo havendo outro lócus de risco no caso
+    resultado = next(s["texto"] for s in res["secoes"] if s["titulo"] == "Resultado")
+    assert "No laudo do C9orf72: mãe com 26 repetições, faixa intermediária" in resultado
+    assert "não contada como risco" in resultado
 
 
 # ---------------------------------------------------------------------------

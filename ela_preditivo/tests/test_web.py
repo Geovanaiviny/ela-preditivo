@@ -608,6 +608,114 @@ def test_cpf_invalido_ou_duplicado_e_email_duplicado_sao_recusados(plataforma):
 
 
 # ---------------------------------------------------------------------------
+# Prontuário repetido no mesmo médico
+# ---------------------------------------------------------------------------
+def test_prontuario_repetido_no_mesmo_medico_e_recusado(medico):
+    assert medico.post("/api/pacientes", json=registro_pessoa(prontuario="P-77")).status_code == 201
+    r = medico.post("/api/pacientes", json=registro_pessoa(nome="Outra Pessoa", prontuario="P-77"))
+    assert r.status_code == 422
+    assert "este número de prontuário" in (r.json().get("campos") or {})["prontuario"]
+    # a comparação ignora caixa e espaço sobrando, como a confirmação de nome na exclusão
+    for variante in ("p-77", "  P-77  "):
+        r = medico.post("/api/pacientes", json=registro_pessoa(nome="Outra Pessoa", prontuario=variante))
+        assert r.status_code == 422, variante
+    assert medico.post("/api/pacientes", json=registro_pessoa(prontuario="P-78")).status_code == 201
+
+
+def test_editar_nao_acusa_duplicata_do_proprio_registro_mas_acusa_de_outro(medico):
+    um = medico.post("/api/pacientes", json=registro_pessoa(prontuario="P-80")).json()
+    outro = medico.post("/api/pacientes", json=registro_pessoa(nome="Outra Pessoa", prontuario="P-81")).json()
+    corpo = registro_pessoa(prontuario="P-80")
+    assert medico.put(f"/api/pacientes/{um['id']}", json=corpo).status_code == 200  # o próprio número continua valendo
+    r = medico.put(f"/api/pacientes/{outro['id']}", json=corpo)  # tomar o número do outro registro, não
+    assert r.status_code == 422 and "este número de prontuário" in (r.json().get("campos") or {})["prontuario"]
+
+
+def test_o_mesmo_prontuario_em_outro_medico_e_aceito(plataforma, medico, admin):
+    assert medico.post("/api/pacientes", json=registro_pessoa(prontuario="P-90")).status_code == 201
+    outro = novo_medico_verificado(plataforma, admin, "medico.p90@teste.local", CPF(777))
+    r = outro.post("/api/pacientes", json=registro_pessoa(prontuario="P-90"))
+    assert r.status_code == 201, r.text  # a unicidade é por médico: outra instituição pode repetir o número
+
+
+# ---------------------------------------------------------------------------
+# Coerência das datas de nascimento entre genitores e descendentes
+# ---------------------------------------------------------------------------
+def campos_de(r) -> dict:
+    return r.json().get("campos") or {}
+
+
+def test_descendente_nascido_antes_dos_genitores_e_recusado_no_cadastro(medico):
+    r = medico.post("/api/pacientes", json=registro_pessoa(nasc="1950-01-01", prontuario="D-1"))
+    assert r.status_code == 422
+    assert "anterior à da mãe" in campos_de(r)["descendentes.0.data_nascimento"]
+
+
+def test_diferenca_de_idade_minima_entre_genitor_e_descendente(medico):
+    # genitores nascidos poucos anos antes do descendente: erro de digitação, não caso clínico
+    corpo = registro_pessoa(nasc="2020-01-01", prontuario="D-2")
+    corpo["mae"], corpo["pai"] = genitor("Mãe de Teste", "2015-01-01"), genitor("Pai de Teste", "2014-01-01")
+    r = medico.post("/api/pacientes", json=corpo)
+    assert r.status_code == 422
+    campo = campos_de(r)["descendentes.0.data_nascimento"]
+    assert "5 ano(s)" in campo and f"ao menos {mod_pacientes.IDADE_MINIMA_PARA_FILHO} anos" in campo
+    # exatamente o mínimo é aceito; um dia a menos não
+    corpo["mae"], corpo["pai"] = genitor("Mãe de Teste", "2008-01-01"), genitor("Pai de Teste", "2007-01-01")
+    assert medico.post("/api/pacientes", json=corpo).status_code == 201
+    corpo["prontuario"], corpo["mae"] = "D-3", genitor("Mãe de Teste", "2008-01-02")
+    r = medico.post("/api/pacientes", json=corpo)
+    assert r.status_code == 422 and "11 ano(s)" in campos_de(r)["descendentes.0.data_nascimento"]
+
+
+def test_editar_a_data_do_genitor_confere_contra_os_descendentes_guardados(medico):
+    corpo = registro_pessoa(nasc="1995-01-01", prontuario="D-4")
+    pid = medico.post("/api/pacientes", json=corpo).json()["id"]
+    corpo["mae"] = genitor("Mãe de Teste", "1996-01-01")  # passaria a nascer depois da pessoa atendida
+    r = medico.put(f"/api/pacientes/{pid}", json=corpo)
+    assert r.status_code == 422 and "posterior ao nascimento" in campos_de(r)["mae.data_nascimento"]
+    corpo["mae"] = genitor("Mãe de Teste", "1990-01-01")  # coerente, mas sem a diferença mínima
+    r = medico.put(f"/api/pacientes/{pid}", json=corpo)
+    assert r.status_code == 422 and "ao menos" in campos_de(r)["mae.data_nascimento"]
+    corpo["mae"] = genitor("Mãe de Teste", "1965-05-05")
+    assert medico.put(f"/api/pacientes/{pid}", json=corpo).status_code == 200
+
+
+def test_incluir_e_editar_descendente_conferem_contra_os_genitores(medico):
+    familia = registro_pessoa(nasc="1995-01-01", prontuario="D-5", tipo="FAMILIA")
+    familia["nome"] = "Família de Teste"
+    r = medico.post("/api/pacientes", json=familia)
+    assert r.status_code == 201, r.text
+    fam = r.json()
+    r = medico.post(
+        f"/api/pacientes/{fam['id']}/descendentes",
+        json={"nome": "Filho de Teste", "data_nascimento": "1950-01-01", "sexo": "M"},
+    )
+    assert r.status_code == 422 and "anterior à da mãe" in campos_de(r)["descendente.data_nascimento"]
+    did = fam["descendentes"][0]["id"]
+    r = medico.put(
+        f"/api/pacientes/{fam['id']}/descendentes/{did}",
+        json={"nome": "Pessoa de Teste", "data_nascimento": "1955-01-01", "sexo": "F"},
+    )
+    assert r.status_code == 422 and "anterior à da mãe" in campos_de(r)["descendente.data_nascimento"]
+    r = medico.put(  # data coerente continua passando
+        f"/api/pacientes/{fam['id']}/descendentes/{did}",
+        json={"nome": "Pessoa de Teste", "data_nascimento": "1992-07-07", "sexo": "F"},
+    )
+    assert r.status_code == 200
+
+
+def test_caso_2_sem_descendente_nao_e_afetado_pela_regra_de_datas(medico):
+    corpo = {
+        "tipo": "CASAL",
+        "prontuario": "D-6",
+        "mae": genitor("Mãe de Teste", "1990-01-01"),
+        "pai": genitor("Pai de Teste", "1992-01-01"),
+        "descendentes": [],
+    }
+    assert medico.post("/api/pacientes", json=corpo).status_code == 201
+
+
+# ---------------------------------------------------------------------------
 # Segurança: CSRF, limite de tentativas, sessão, dados fora de URL e do navegador
 # ---------------------------------------------------------------------------
 def test_requisicao_sem_token_csrf_e_recusada(plataforma, medico):

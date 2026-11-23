@@ -201,6 +201,64 @@ def _validar_descendente(d: DescendenteEntrada, prefixo: str, campos: dict, hoje
     return {"nome": nome, "nasc": nasc, "sexo": sexo}
 
 
+IDADE_MINIMA_PARA_FILHO = 12  # anos entre o nascimento do genitor e o do descendente
+LADOS_ROTULO = (("mae", "da mãe", "à mãe"), ("pai", "do pai", "ao pai"))
+
+
+def _nasc_guardado(obj, cifra) -> _dt.date | None:
+    """Data de nascimento já gravada (cifrada) de um genitor ou descendente."""
+    if obj is None or obj.data_nascimento_cifrada is None:
+        return None
+    return _data_iso(cifra.decifrar(obj.data_nascimento_cifrada))
+
+
+def _genitores_guardados(p: Paciente, cifra) -> dict[str, dict]:
+    """Datas de nascimento já gravadas dos dois genitores, no formato que `_conferir_datas` espera."""
+    return {papel: {"nasc": _nasc_guardado(p.genitor(papel.upper()), cifra)} for papel, _, _ in LADOS_ROTULO}
+
+
+def _conferir_datas(
+    genitores: dict[str, dict | None],
+    descendentes: list[tuple[str, dict | None]],
+    campos: dict,
+    apontar_genitor: bool = False,
+) -> None:
+    """Cada descendente nasce depois dos dois genitores, com pelo menos `IDADE_MINIMA_PARA_FILHO` anos de diferença.
+
+    A idade do descendente condiciona o risco informado, então uma data trocada mudaria o resultado sem nenhum sinal
+    na tela. `descendentes` são pares (campo, dados). Com `apontar_genitor`, a mensagem vai para o campo da data do
+    genitor, que é o que está sendo editado na rota do registro; sem ele, para o campo do descendente.
+    """
+    for campo_desc, d in descendentes:
+        nasc = (d or {}).get("nasc")
+        if nasc is None:
+            continue
+        for papel, de_quem, a_quem in LADOS_ROTULO:
+            nasc_genitor = (genitores.get(papel) or {}).get("nasc")
+            if nasc_genitor is None:
+                continue
+            campo = f"{papel}.data_nascimento" if apontar_genitor else campo_desc
+            if campo in campos:  # já há um problema apontado neste campo; não empilha mensagem
+                continue
+            anos = idade_em(nasc_genitor, nasc)
+            if anos >= IDADE_MINIMA_PARA_FILHO:
+                continue
+            if apontar_genitor:  # é a data do genitor que está sendo editada
+                campos[campo] = (
+                    "Esta data não fica ao menos "
+                    f"{IDADE_MINIMA_PARA_FILHO} anos antes do nascimento de quem já está no registro: confira as datas."
+                    if anos >= 0
+                    else "Esta data é posterior ao nascimento de quem já está no registro: confira as datas."
+                )
+            elif anos < 0:
+                campos[campo] = f"A data de nascimento é anterior à {de_quem}: confira as datas."
+            else:
+                campos[campo] = (
+                    f"A diferença de idade em relação {a_quem} é de {anos} ano(s): confira as datas "
+                    f"(são esperados ao menos {IDADE_MINIMA_PARA_FILHO} anos)."
+                )
+
+
 def _validar(entrada: PacienteEntrada, tipo: str, hoje: _dt.date, com_descendentes: bool = True) -> tuple[dict, dict]:
     campos: dict[str, str] = {}
     if tipo not in TIPOS_ATENDIMENTO:
@@ -224,6 +282,11 @@ def _validar(entrada: PacienteEntrada, tipo: str, hoje: _dt.date, com_descendent
             campos["descendentes"] = "Informe ao menos um filho."
         for i, d in enumerate(entrada.descendentes):
             descs.append(_validar_descendente(d, f"descendentes.{i}", campos, hoje))
+        _conferir_datas(
+            {"mae": mae, "pai": pai},
+            [(f"descendentes.{i}.data_nascimento", d) for i, d in enumerate(descs)],
+            campos,
+        )
     nome = texto_curto(entrada.nome, 200)
     if not nome:
         if tipo == "PESSOA" and descs:
@@ -278,6 +341,31 @@ def _apagar_arquivos_de_analises(config, analises: list[AnalisePaciente]) -> Non
     for a in analises:
         arquivos.apagar(config.dir_analises, a.resultado_arquivo)
         arquivos.apagar(config.dir_analises, a.pacote_arquivo)
+
+
+def _prontuario_repetido(bd, usuario: Usuario, cifra, prontuario: str, ignorar_id: int | None = None) -> bool:
+    """O número de prontuário já está em outro registro do mesmo médico.
+
+    O campo é cifrado com Fernet, que não é determinístico, então não há índice a consultar: a comparação decifra os
+    registros daquele médico, que são poucos, e acontece só ao gravar. A unicidade é por médico — o mesmo número pode
+    existir legitimamente em outra instituição. A comparação ignora caixa, acento e espaço repetido
+    (`normalizar_texto`), como a confirmação de nome na exclusão.
+    """
+    alvo = normalizar_texto(prontuario)
+    if not alvo:
+        return False
+    consulta = select(Paciente).where(Paciente.medico_id == usuario.id)
+    if ignorar_id is not None:  # na edição o próprio registro não conta como duplicata
+        consulta = consulta.where(Paciente.id != ignorar_id)
+    return any(
+        normalizar_texto(cifra.decifrar(outro.prontuario_cifrado)) == alvo for outro in bd.execute(consulta).scalars()
+    )
+
+
+MSG_PRONTUARIO_REPETIDO = (
+    "Já existe um registro seu com este número de prontuário (a comparação ignora maiúsculas e acentos): confira o "
+    "número ou abra o registro existente."
+)
 
 
 def do_medico(bd, usuario: Usuario, paciente_id: int) -> Paciente:
@@ -657,6 +745,17 @@ def paciente_dict(p: Paciente, cifra, resumo: bool = False, config=None) -> dict
         g["falta_exame"] = (
             textos.GENITOR_SEM_VCF.format(rotulo=textos.ROTULO_GENITOR[p.tipo][papel]) if g["sem_exame"] else None
         )
+    if not resumo:
+        for genitor in p.genitores:
+            lado = genitor.papel.lower()
+            if not genitor.vcf_hash:
+                continue
+            for analise, dados in reversed(list(zip(p.analises, analises))):
+                if getattr(analise, f"vcf_hash_{lado}") == genitor.vcf_hash:
+                    genitores[genitor.papel]["aviso_qualidade"] = (
+                        dados["resumo"].get("avisos_qualidade_vcf") or {}
+                    ).get(lado)
+                    break
     prontuario_doc = next((documento_dict(x, cifra) for x in p.documentos if x.tipo == "PRONTUARIO"), None)
     requisitos = requisitos_pesquisa(p, idades_desc, nomes)
     genes = sorted({g for a in ultimas.values() for g in a["genes_de_risco"]})
@@ -927,14 +1026,19 @@ def painel(request: Request, usuario: Usuario = Depends(exigir(PACIENTES_GERIR))
             "analises": len(analises),
             "com_analise": sum(1 for d in itens if d["n_analises"] > 0),
             "sem_analise": sum(1 for d in itens if d["n_analises"] == 0),
-            "vcfs_incompletos": sum(1 for d in itens if not d["vcfs_completos"]),
+            "pendencias_analise": sum(1 for d in itens if not d["pode_analisar"]),
             "liberados_pesquisa": sum(1 for d in itens if d["liberado_para_pesquisa"]),
             "consentimentos_pendentes": sum(1 for d in itens if d["pesquisa_situacao"] == "PENDENTE"),
             "com_suposicao": sum(1 for d in itens if d["com_suposicao"]),
+            "com_genitor_inferido": sum(1 for d in itens if d["genitores_inferidos"]),
         },
         "recentes": recentes[:6],
         "analises_recentes": analises[:6],
         "pendencias": {
+            "sem_dados_para_analise": [{"id": d["id"], "nome": d["nome"]} for d in recentes if not d["pode_analisar"]][
+                :6
+            ],
+            # a tela inicial não usa mais esta lista; permanece para consumidores da API (registros com VCF incompleto)
             "sem_vcf": [
                 {"id": d["id"], "nome": d["nome"], "vcfs_presentes": d["vcfs_presentes"]}
                 for d in itens
@@ -943,7 +1047,7 @@ def painel(request: Request, usuario: Usuario = Depends(exigir(PACIENTES_GERIR))
             "sem_analise": [
                 {"id": d["id"], "nome": d["nome"], "tipo_curto": d["tipo_curto"]}
                 for d in itens
-                if d["n_analises"] == 0 and d["vcfs_presentes"] > 0
+                if d["n_analises"] == 0 and d["pode_analisar"]
             ][:6],
         },
     }
@@ -974,6 +1078,8 @@ def criar(entrada: PacienteEntrada, request: Request, usuario: Usuario = Depends
     bd, cifra = obter_bd(request), obter_cifra(request)
     tipo = (entrada.tipo or "").upper()
     campos, dados = _validar(entrada, tipo, agora().date())
+    if "prontuario" not in campos and _prontuario_repetido(bd, usuario, cifra, dados["prontuario"]):
+        campos["prontuario"] = MSG_PRONTUARIO_REPETIDO
     exigir_campos(campos)
     p = Paciente(
         medico_id=usuario.id, tipo=tipo, criado_em=agora(), atualizado_em=agora(), base_legal=BASE_LEGAL_ATENDIMENTO
@@ -1051,6 +1157,14 @@ def editar(
     if not texto_curto(entrada.nome, 200) and p.tipo == "PESSOA" and p.descendentes:
         entrada.nome = cifra.decifrar(p.descendentes[0].nome_cifrado)
     campos, dados = _validar(entrada, p.tipo, agora().date(), com_descendentes=False)
+    if "prontuario" not in campos and _prontuario_repetido(bd, usuario, cifra, dados["prontuario"], ignorar_id=p.id):
+        campos["prontuario"] = MSG_PRONTUARIO_REPETIDO
+    _conferir_datas(  # os descendentes não vêm nesta rota, mas as datas dos genitores precisam continuar coerentes
+        {"mae": dados["mae"], "pai": dados["pai"]},
+        [("descendentes.data_nascimento", {"nasc": _nasc_guardado(d, cifra)}) for d in p.descendentes],
+        campos,
+        apontar_genitor=True,
+    )
     exigir_campos(campos)
     _aplicar(p, dados, cifra)
     atualizar_liberacao(bd, p, cifra, usuario)
@@ -1560,6 +1674,7 @@ def incluir_descendente(
         )
     campos: dict[str, str] = {}
     dados = _validar_descendente(entrada, "descendente", campos, agora().date())
+    _conferir_datas(_genitores_guardados(p, cifra), [("descendente.data_nascimento", dados)], campos)
     exigir_campos(campos)
     d = Descendente(ordem=max((x.ordem for x in p.descendentes), default=0) + 1, atualizado_em=agora())
     _aplicar_descendente(d, dados, cifra)
@@ -1592,6 +1707,7 @@ def editar_descendente(
     d = descendente_de(p, descendente_id)
     campos: dict[str, str] = {}
     dados = _validar_descendente(entrada, "descendente", campos, agora().date())
+    _conferir_datas(_genitores_guardados(p, cifra), [("descendente.data_nascimento", dados)], campos)
     exigir_campos(campos)
     _aplicar_descendente(d, dados, cifra)
     if p.tipo == "PESSOA":

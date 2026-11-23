@@ -407,6 +407,7 @@ def resumo_para_guardar(resultado: dict) -> dict:
         # genitor sem exame inferido por parentes: situação, suposições e distribuição da dosagem (sem nomes)
         "parentes": _parentes_para_guardar(resultado.get("parentes")),
         "limite_inferior": bool(resultado.get("limite_inferior")),
+        "avisos_qualidade_vcf": resultado.get("avisos_qualidade_vcf") or {},
         "loci_descartados": (resultado.get("metadados") or {}).get("loci_descartados") or [],
         "c9orf72_indeterminado": _c9orf72_indeterminado(resultado.get("vetor")),
         "horizonte": (resultado.get("metadados") or {}).get("horizonte"),
@@ -481,6 +482,11 @@ def serializar_resultado(ident: str, r: dict, saida: Path, entrada: dict) -> dic
             "criado_em": iso(agora()),
             "entrada": entrada,
             "sem_locus": sem_locus,
+            "avisos_qualidade_vcf": {
+                lado: aviso
+                for lado, ind in meta["indicadores_qualidade"].items()
+                if (aviso := pipeline.aviso_qualidade(ind))
+            },
             "resumo": _registros(r.get("resumo")),
             "combinado": combinado,
             "principais": principais(
@@ -537,6 +543,7 @@ def serializar_resultado(ident: str, r: dict, saida: Path, entrada: dict) -> dic
                     "tornado",
                     "horizonte",
                     "data",
+                    "tempo_motores_s",
                     "versao_parametros",
                     "data_parametros",
                     "base_anotacao",
@@ -875,6 +882,7 @@ def _executar(
     cifra=None,
     config: Configuracao | None = None,
     parentes: dict | None = None,
+    nomes_upload: dict[str, str] | None = None,
 ) -> dict:
     """Roda o pipeline numa pasta temporária, serializa, guarda em memória e, se houver registro, persiste o resumo."""
     saida = pasta / "saida"
@@ -895,6 +903,7 @@ def _executar(
                 comparar_cox=exec_.cox,
                 parentes=parentes or None,
                 tornado=exec_.tornado,
+                genitores_assumidos=tuple(x.lower() for x in (entrada.get("suposicoes") or {}).get("nao_portador", [])),
                 base_clinvar=(
                     exec_.base if exec_.base is not None else (base_padrao(config) if config is not None else None)
                 ),
@@ -958,7 +967,11 @@ def _executar(
             bd, acao=auditoria.ANALISE_FALHA, usuario=usuario, resultado="FALHA", detalhe=type(e).__name__
         )
         bd.commit()
-        raise HTTPException(422, f"Não foi possível analisar os arquivos: {str(e)[:300]}")
+        mensagem = str(e)
+        nome, separador, detalhe = mensagem.partition(":")
+        if separador and nomes_upload and nome in nomes_upload:
+            mensagem = f"{nomes_upload[nome]}:{detalhe}"
+        raise HTTPException(422, f"Não foi possível analisar os arquivos: {mensagem[:300]}")
     except Exception as e:  # noqa: BLE001
         registro.descartar(ident)
         auditoria.registrar(
@@ -1299,6 +1312,14 @@ def executar_analise(
         base=base_,
         avancadas=avancadas,
     )
+    nomes_upload = (
+        {
+            caminho_mae.name: (vcf_mae.filename or "").replace("\\", "/").rsplit("/", 1)[-1],
+            caminho_pai.name: (vcf_pai.filename or "").replace("\\", "/").rsplit("/", 1)[-1],
+        }
+        if modo != "cenario"
+        else None
+    )
     return _executar(
         registro,
         ident,
@@ -1314,6 +1335,7 @@ def executar_analise(
         sexo=sexo_,
         idade=idade,
         config=config,
+        nomes_upload=nomes_upload,
     )
 
 

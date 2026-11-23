@@ -372,7 +372,7 @@ def anotar(
                     }
                 )
         saida.append(a)
-    extra = pd.DataFrame(saida, index=variantes.index)
+    extra = pd.DataFrame(saida, index=variantes.index, columns=cols)
     out = pd.concat([variantes, extra], axis=1)
     out.attrs = dict(variantes.attrs)  # metadados do cabeçalho do VCF (montagem etc.) seguem para o relatório
     return out
@@ -420,6 +420,7 @@ def indicadores_qualidade(anotadas: pd.DataFrame) -> dict:
             for r in outro_alelo.itertuples(index=False)
         ],
         "registros": n,
+        "registros_nas_regioes": int(anotadas["gene"].notna().sum()) if "gene" in anotadas else n,
         "aprovados": int(len(ap)),
         "taxa_aprovacao": (float(len(ap)) / n if n else float("nan")),
         "anotadas": int(len(anot)),

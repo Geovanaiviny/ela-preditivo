@@ -48,7 +48,7 @@ def interpretar_laudo_c9orf72(valor) -> tuple[int | None, int | None]:
 
 
 def _locus_laudo_c9orf72(
-    laudo: dict, parametros: Parametros, tabela: pd.DataFrame, sempre: bool = False
+    laudo: dict, parametros: Parametros, tabela: pd.DataFrame, sempre: bool = False, notas: list[str] | None = None
 ) -> dict | None:
     """Lócus do C9orf72 construído a partir do laudo dos dois genitores (None se nenhum alelo expandido).
 
@@ -99,13 +99,18 @@ def _locus_laudo_c9orf72(
         d[f"repeticoes_{lado}"] = max(alelos) if alelos else None
         if intermed and not expandidos:
             classes.append(
-                f"{lado}: {max(intermed)} repetições no C9orf72, faixa intermediária ({inter}–{pat - 1}), não contada como risco"
+                f"{ROTULO_LADO[lado]} com {max(intermed)} repetições, faixa intermediária "
+                f"({inter}–{pat - 1}), não contada como risco"
             )
     if classes:
         d["observacao"] = "; ".join(classes)
     if d["dosagem_mae"] + d["dosagem_pai"] > 0 or sempre:
         return d
     if classes:
+        # sem alelo expandido não há lócus; a nota iria só para o aviso e se perderia na plataforma web, então ela sobe
+        # em `notas` para o relatório informar que o genitor tem alelo na faixa intermediária
+        if notas is not None:
+            notas.extend(classes)
         warnings.warn("; ".join(classes), stacklevel=3)
     return None
 
@@ -190,6 +195,7 @@ def vetor_dosagem(
                     d["observacao"] + "; " if d["observacao"] else ""
                 ) + "expansão lida do VCF (caminho secundário; o fluxo do TCC 4.2.1 usa o laudo)"
     laudo = {k: v for k, v in (laudo_c9orf72 or {}).items() if k in ("mae", "pai") and v is not None}
+    notas_intermediario: list[str] = []
     sem_laudo = [lado for lado in ("mae", "pai") if lado not in laudo]
     do_vcf = loci.pop(CHAVE_EXPANSAO, None)
     tabela = anotacao.carregar_tabela_curada() if tabela is None else tabela
@@ -213,7 +219,7 @@ def vetor_dosagem(
         warnings.warn(f"{GENE_EXPANSAO}: {msg}", stacklevel=2)
         loci[CHAVE_EXPANSAO] = d
     else:  # laudo dos dois genitores
-        do_laudo = _locus_laudo_c9orf72(laudo, parametros, tabela)
+        do_laudo = _locus_laudo_c9orf72(laudo, parametros, tabela, notas=notas_intermediario)
         if do_laudo is not None:
             if do_vcf is not None:
                 diverge = [lado for lado in laudo if do_vcf[f"dosagem_{lado}"] != do_laudo[f"dosagem_{lado}"]]
@@ -296,7 +302,10 @@ def vetor_dosagem(
     df.loc[dup, "observacao"] = (
         df.loc[dup, "observacao"] + "; " if df.loc[dup, "observacao"].ne("").any() else ""
     ) + "mais de um lócus de risco no gene, tratados como independentes"
-    return df.reset_index(drop=True)
+    saida = df.reset_index(drop=True)
+    if notas_intermediario:  # laudo na faixa intermediária sem lócus para carregar a nota (ver `_locus_laudo_c9orf72`)
+        saida.attrs["c9orf72_intermediario"] = notas_intermediario
+    return saida
 
 
 def perfil_variantes(anotadas_mae: pd.DataFrame, anotadas_pai: pd.DataFrame) -> pd.DataFrame:

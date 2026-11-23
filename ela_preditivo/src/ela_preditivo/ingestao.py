@@ -12,6 +12,7 @@ do motivo com Biopython) é mantida apenas como caminho secundário, para arquiv
 
 from __future__ import annotations
 
+import gzip
 import io
 import re
 import warnings
@@ -295,95 +296,104 @@ def ler_vcf(
     caminho = Path(caminho)
     regioes = carregar_regioes() if regioes is None else regioes
     filtro = {**FILTRO_PADRAO, **(filtro or {})}
-    leitor = vcf.Reader(fsock=io.StringIO(conteudo)) if conteudo is not None else vcf.Reader(filename=str(caminho))
-    if not leitor.samples:
-        raise ValueError(f"{caminho.name}: o VCF não tem coluna de amostra (FORMAT/genótipo)")
-    if amostra and amostra not in leitor.samples:
-        raise ValueError(f"{caminho.name}: amostra {amostra!r} não existe; amostras disponíveis: {leitor.samples}")
-    meta = montagem_do_cabecalho(leitor)
-    if montagem_esperada:
-        if meta["montagem"] == "desconhecida":
-            warnings.warn(
-                f"{caminho.name}: o cabeçalho não permite identificar a montagem de referência; assumindo {montagem_esperada}. "
-                "Confira ##reference antes de confiar nas coordenadas (TCC 4.2.1).",
-                stacklevel=2,
-            )
-        elif meta["montagem"] != montagem_esperada:
-            raise MontagemDivergente(
-                f"{caminho.name}: montagem {meta['montagem']} declarada no cabeçalho ({meta['evidencia']}); o artefato "
-                f"opera em {montagem_esperada} (TCC 4.2.1). Converta as coordenadas (liftover) antes da ingestão."
-            )
-    idx = leitor.samples.index(amostra) if amostra else 0
-    nome_amostra = leitor.samples[idx]
-    tem_db = "DB" in (leitor.infos or {})
-    linhas = []
-    for rec in leitor:
-        call = rec.samples[idx]
-        gt_alelos = [str(a) for a in (call.gt_alleles or []) if a is not None]
-        crom = normalizar_cromossomo(rec.CHROM)
-        filtro_txt = "PASS" if rec.FILTER == [] else ("." if rec.FILTER is None else ";".join(rec.FILTER))
-        dp, gq = _dado(call, "DP"), _dado(call, "GQ")
-        an = rec.INFO.get("AN")
-        for i, alt_obj in enumerate(rec.ALT, start=1):
-            alt_vcf = str(alt_obj) if alt_obj is not None else "."
-            pos, ref, alt, normalizada = (
-                normalizar_alelos(rec.POS, rec.REF, alt_vcf) if normalizar else (int(rec.POS), rec.REF, alt_vcf, False)
-            )
-            gene = gene_da_posicao(crom, pos, regioes)
-            tipo = _tipo(ref, alt, rec.INFO, gene)
-            dosagem = gt_alelos.count(str(i)) if gt_alelos else np.nan
-            motivos = []
-            if gene is None:
-                motivos.append("fora_das_regioes")
-            if not gt_alelos:
-                motivos.append("genotipo_ausente")
-            if filtro["exigir_pass"] and filtro_txt not in ("PASS", "."):
-                motivos.append("filtro_nao_pass")
-            if dp is not None and dp < filtro["dp_minimo"]:
-                motivos.append("dp_baixo")
-            if gq is not None and gq < filtro["gq_minimo"]:
-                motivos.append("gq_baixo")
-            linhas.append(
-                {
-                    "amostra": nome_amostra,
-                    "cromossomo": crom,
-                    "posicao": pos,
-                    "id": rec.ID or None,
-                    "ref": ref,
-                    "alt": alt,
-                    "indice_alt": i,
-                    "n_alt": len(rec.ALT),
-                    "tipo": tipo,
-                    "qual": rec.QUAL,
-                    "filtro": filtro_txt,
-                    "dp": dp,
-                    "gq": gq,
-                    "gt": call.data.GT if hasattr(call.data, "GT") else None,
-                    "dosagem": dosagem,
-                    "repeticoes": _repeticoes(alt_vcf, tipo, rec.INFO, call, gt_alelos, i),
-                    "motivo_repeticao": (
-                        str(rec.INFO.get("RU"))
-                        if rec.INFO.get("RU")
-                        else (MOTIVO_C9ORF72 if tipo == "repeticao" else None)
-                    ),
-                    "gene": gene,
-                    "aprovado": len(motivos) == 0,
-                    "motivo_reprovacao": ";".join(motivos) or None,
-                    "posicao_vcf": int(rec.POS),
-                    "ref_vcf": rec.REF,
-                    "alt_vcf": alt_vcf,
-                    "normalizada": normalizada,
-                    "ac": _info_por_alt(rec.INFO, "AC", i),
-                    "an": an,
-                    "no_dbsnp": bool(rec.INFO.get("DB")) if tem_db else None,
-                    "montagem": meta["montagem"],
-                    "arquivo": caminho.name,
-                }
-            )
-    arquivo = getattr(leitor, "_reader", None)
-    if arquivo is not None and hasattr(arquivo, "close"):
-        arquivo.close()
+    if conteudo is not None:
+        arquivo = io.StringIO(conteudo)
+    elif caminho.name.endswith(".gz"):
+        arquivo = gzip.open(caminho, mode="rt", encoding="ascii")
+    else:
+        arquivo = caminho.open(mode="rt")
+    # o arquivo é aberto aqui e fechado ao fim do bloco para liberar o VCF logo após a leitura (no Windows, um arquivo
+    # ainda aberto impede removê-lo ou movê-lo); o PyVCF só precisa do manipulador durante a iteração
+    with arquivo:
+        leitor = vcf.Reader(fsock=arquivo, compressed=False)
+        if not leitor.samples:
+            raise ValueError(f"{caminho.name}: o VCF não tem coluna de amostra (FORMAT/genótipo)")
+        if amostra and amostra not in leitor.samples:
+            raise ValueError(f"{caminho.name}: amostra {amostra!r} não existe; amostras disponíveis: {leitor.samples}")
+        meta = montagem_do_cabecalho(leitor)
+        if montagem_esperada:
+            if meta["montagem"] == "desconhecida":
+                warnings.warn(
+                    f"{caminho.name}: o cabeçalho não permite identificar a montagem de referência; assumindo {montagem_esperada}. "
+                    "Confira ##reference antes de confiar nas coordenadas (TCC 4.2.1).",
+                    stacklevel=2,
+                )
+            elif meta["montagem"] != montagem_esperada:
+                raise MontagemDivergente(
+                    f"{caminho.name}: montagem {meta['montagem']} declarada no cabeçalho ({meta['evidencia']}); o artefato "
+                    f"opera em {montagem_esperada} (TCC 4.2.1). Converta as coordenadas (liftover) antes da ingestão."
+                )
+        idx = leitor.samples.index(amostra) if amostra else 0
+        nome_amostra = leitor.samples[idx]
+        tem_db = "DB" in (leitor.infos or {})
+        linhas = []
+        for rec in leitor:
+            call = rec.samples[idx]
+            gt_alelos = [str(a) for a in (call.gt_alleles or []) if a is not None]
+            crom = normalizar_cromossomo(rec.CHROM)
+            filtro_txt = "PASS" if rec.FILTER == [] else ("." if rec.FILTER is None else ";".join(rec.FILTER))
+            dp, gq = _dado(call, "DP"), _dado(call, "GQ")
+            an = rec.INFO.get("AN")
+            for i, alt_obj in enumerate(rec.ALT, start=1):
+                alt_vcf = str(alt_obj) if alt_obj is not None else "."
+                pos, ref, alt, normalizada = (
+                    normalizar_alelos(rec.POS, rec.REF, alt_vcf)
+                    if normalizar
+                    else (int(rec.POS), rec.REF, alt_vcf, False)
+                )
+                gene = gene_da_posicao(crom, pos, regioes)
+                tipo = _tipo(ref, alt, rec.INFO, gene)
+                dosagem = gt_alelos.count(str(i)) if gt_alelos else np.nan
+                motivos = []
+                if gene is None:
+                    motivos.append("fora_das_regioes")
+                if not gt_alelos:
+                    motivos.append("genotipo_ausente")
+                if filtro["exigir_pass"] and filtro_txt not in ("PASS", "."):
+                    motivos.append("filtro_nao_pass")
+                if dp is not None and dp < filtro["dp_minimo"]:
+                    motivos.append("dp_baixo")
+                if gq is not None and gq < filtro["gq_minimo"]:
+                    motivos.append("gq_baixo")
+                linhas.append(
+                    {
+                        "amostra": nome_amostra,
+                        "cromossomo": crom,
+                        "posicao": pos,
+                        "id": rec.ID or None,
+                        "ref": ref,
+                        "alt": alt,
+                        "indice_alt": i,
+                        "n_alt": len(rec.ALT),
+                        "tipo": tipo,
+                        "qual": rec.QUAL,
+                        "filtro": filtro_txt,
+                        "dp": dp,
+                        "gq": gq,
+                        "gt": call.data.GT if hasattr(call.data, "GT") else None,
+                        "dosagem": dosagem,
+                        "repeticoes": _repeticoes(alt_vcf, tipo, rec.INFO, call, gt_alelos, i),
+                        "motivo_repeticao": (
+                            str(rec.INFO.get("RU"))
+                            if rec.INFO.get("RU")
+                            else (MOTIVO_C9ORF72 if tipo == "repeticao" else None)
+                        ),
+                        "gene": gene,
+                        "aprovado": len(motivos) == 0,
+                        "motivo_reprovacao": ";".join(motivos) or None,
+                        "posicao_vcf": int(rec.POS),
+                        "ref_vcf": rec.REF,
+                        "alt_vcf": alt_vcf,
+                        "normalizada": normalizada,
+                        "ac": _info_por_alt(rec.INFO, "AC", i),
+                        "an": an,
+                        "no_dbsnp": bool(rec.INFO.get("DB")) if tem_db else None,
+                        "montagem": meta["montagem"],
+                        "arquivo": caminho.name,
+                    }
+                )
     df = pd.DataFrame(linhas, columns=COLUNAS)
+    df["aprovado"] = df["aprovado"].astype(bool)
     df["dosagem"] = df["dosagem"].astype("Int64")
     df.attrs["vcf"] = {**meta, "arquivo": caminho.name, "amostra": nome_amostra, "montagem_esperada": montagem_esperada}
     return df

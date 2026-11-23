@@ -45,6 +45,8 @@ LAUDO_NORMAL_2 = {
     "mae": cenarios.LAUDO_NORMAL,
     "pai": cenarios.LAUDO_NORMAL,
 }  # os dois genitores testados, sem expansão
+LAUDO_INTERMEDIARIO = cenarios.LAUDO_NORMAL + 3  # dentro da faixa intermediária (começa em LAUDO_NORMAL + 1)
+LAUDO_INTERMEDIARIO_2 = {"mae": LAUDO_INTERMEDIARIO, "pai": LAUDO_INTERMEDIARIO}
 A5V_VS = dict(
     allele_id="15",
     gene="SOD1",
@@ -591,6 +593,139 @@ def test_laudo_normal_dos_cenarios_vem_do_yaml():
     assert cenarios.cenario_por_numero(2).laudo_c9orf72 == {"mae": 45, "pai": cenarios.LAUDO_NORMAL}
     assert genotipo.interpretar_laudo_c9orf72(None) == (None, None)
     assert genotipo.interpretar_laudo_c9orf72(45) == (1, 45) and genotipo.interpretar_laudo_c9orf72((12, 45)) == (2, 45)
+
+
+def test_faixa_intermediaria_do_c9orf72_e_informada_e_nao_desliga_a_transmissao_por_repeticoes(
+    anotados, parametros, curada, tmp_path, dir_cenarios
+):
+    """Alelo na faixa intermediária não vira lócus de risco, mas o relatório precisa dizer que ele existe.
+
+    A nota sobe por `vetor.attrs`, e não como linha de lócus descartada: `repeticoes.aplicar_ao_vetor` lê `descartado`
+    na linha do C9orf72 como "genitor sem laudo" e devolveria o vetor intocado, desligando a hipótese de instabilidade
+    justamente no alelo intermediário.
+    """
+    mae, pai = anotados[1]  # cenário 1: SOD1 de risco no pai, nenhum C9orf72 no VCF
+    inter = int(parametros.limiar_repeticoes["intermediario"])
+    pat = anotacao.limiar_patogenico_repeticao(curada, genotipo.GENE_EXPANSAO, parametros.limiar_repeticoes)
+    assert inter <= LAUDO_INTERMEDIARIO < pat  # a constante do teste está mesmo na faixa
+    with pytest.warns(UserWarning, match="faixa intermediária"):
+        v = genotipo.vetor_dosagem(mae, pai, parametros, laudo_c9orf72=LAUDO_INTERMEDIARIO_2, tabela=curada)
+    assert v.gene.tolist() == ["SOD1"]  # nenhuma linha nova no vetor
+    notas = v.attrs["c9orf72_intermediario"]
+    assert len(notas) == 2
+    for lado in ("mãe", "pai"):
+        assert any(n.startswith(f"{lado} com {LAUDO_INTERMEDIARIO} repetições, faixa intermediária") for n in notas)
+    # laudo normal nos dois: nada a informar
+    assert (
+        "c9orf72_intermediario"
+        not in genotipo.vetor_dosagem(mae, pai, parametros, laudo_c9orf72=LAUDO_NORMAL_2, tabela=curada).attrs
+    )
+    # pipeline: o relatório informa, mesmo havendo outro lócus de risco (o SOD1) no caso
+    comum = dict(n=300, seed=1, motor="numpy", figuras=False, base_clinvar=False)
+    r = pipeline.executar(
+        cenarios.vcf_cenario(dir_cenarios, 1, "mae"),
+        cenarios.vcf_cenario(dir_cenarios, 1, "pai"),
+        tmp_path / "inter",
+        laudo_c9orf72=LAUDO_INTERMEDIARIO_2,
+        **comum,
+    )
+    assert [l.gene for l in r["loci"]] == ["SOD1"]  # o cálculo não muda
+    texto = (tmp_path / "inter" / "relatorio.md").read_text(encoding="utf-8")
+    assert f"No laudo do C9orf72: mãe com {LAUDO_INTERMEDIARIO} repetições, faixa intermediária" in texto
+    assert f"pai com {LAUDO_INTERMEDIARIO} repetições, faixa intermediária" in texto
+    assert "não contada como risco" in texto and "é a extensão experimental que trata esse alelo" in texto
+    vetor = pd.read_csv(tmp_path / "inter" / "tabelas" / "tabela_01b_vetor_dosagem.csv")
+    assert vetor.gene.tolist() == ["SOD1"]  # a Tabela 1b não ganhou linha
+    # laudo normal: o relatório não inventa a nota
+    pipeline.executar(
+        cenarios.vcf_cenario(dir_cenarios, 1, "mae"),
+        cenarios.vcf_cenario(dir_cenarios, 1, "pai"),
+        tmp_path / "normal",
+        laudo_c9orf72=LAUDO_NORMAL_2,
+        **comum,
+    )
+    assert "faixa intermediária" not in (tmp_path / "normal" / "relatorio.md").read_text(encoding="utf-8")
+
+
+def test_regressao_hipotese_de_repeticoes_continua_valendo_com_laudo_intermediario(tmp_path, dir_cenarios):
+    """Com o alelo intermediário e um delta que cruza o limiar, a hipótese experimental continua criando o lócus.
+
+    É o teste que prova que a nota do teste acima não desligou a transmissão por repetições (`repeticoes.py`).
+    """
+    r = pipeline.executar(
+        cenarios.vcf_cenario(dir_cenarios, 1, "mae"),
+        cenarios.vcf_cenario(dir_cenarios, 1, "pai"),
+        tmp_path / "hip",
+        n=300,
+        seed=1,
+        motor="numpy",
+        figuras=False,
+        base_clinvar=False,
+        laudo_c9orf72=LAUDO_INTERMEDIARIO_2,
+        hipoteses_c9orf72={"delta_mae": 5, "delta_pai": 0, "antecipacao": 0},
+    )
+    assert sorted(l.gene for l in r["loci"]) == ["C9orf72", "SOD1"]
+    vetor = pd.read_csv(tmp_path / "hip" / "tabelas" / "tabela_01b_vetor_dosagem.csv").set_index("gene")
+    c9 = vetor.loc["C9orf72"]
+    assert not bool(c9.descartado) and (c9.dosagem_mae, c9.dosagem_pai) == (1, 0)
+    assert "alelo intermediário cruza o limiar após a transmissão" in c9.observacao
+    assert (tmp_path / "hip" / "tabelas" / "tabela_01c_transmissao_c9orf72.csv").exists()
+    assert r["transmissao_c9orf72"] is not None and r["transmissao_c9orf72"].p_intermediario > 0
+
+
+def test_variante_de_significado_incerto_no_vcf_e_informada_junto_do_locus_de_risco(tmp_path, dir_cenarios):
+    """A outra metade da nota da zona cinzenta: a que vem do VCF de um genitor, e não do laudo do C9orf72.
+
+    A tabela curada só traz as classes `risco` e `benigna`, então a VUS (registro real do ClinVar) é acrescentada
+    aqui numa cópia da tabela; assim o teste vale nos dois modos da suíte, sem depender de `dados_reais/`.
+    """
+    curada = pd.read_csv(anotacao.CAMINHO_TABELA, dtype={"cromossomo": str, "rs": str, "variation_id_clinvar": str})
+    vus = {
+        "gene": "TARDBP",
+        "cromossomo": "1",
+        "posicao_grch38": 11012630,  # dentro da região-alvo do TARDBP (11007344 a 11042991)
+        "ref": "G",
+        "alt": "T",
+        "rs": "rs886045030",
+        "variation_id_clinvar": "291727",
+        "hgvs_c": "NM_007375.3(TARDBP):c.-126G>T",
+        "hgvs_p": None,
+        "nome_curto": "c.-126G>T",
+        "clnsig": "Uncertain significance",
+        "estrelas": 1,
+        "heranca": None,
+        "tipo": "snv",
+        "repeticoes_min": None,
+        "citacao": "ClinVar VCV000291727 (significado incerto), acrescentada só para este teste",
+        "conferido_em": None,
+    }
+    tabela = tmp_path / "curada_com_vus.csv"
+    pd.concat([curada, pd.DataFrame([vus])], ignore_index=True).to_csv(tabela, index=False)
+    # o VCF da mãe do cenário 1 com o registro da VUS em heterozigose, aproveitando o cabeçalho do próprio cenário
+    linhas = cenarios.vcf_cenario(dir_cenarios, 1, "mae").read_text(encoding="utf-8").splitlines()
+    registro = "chr1\t11012630\trs886045030\tG\tT\t347.2\tPASS\tAC=1;AN=2;SINTETICO\tGT:DP:GQ\t0/1:40:70"
+    mae = tmp_path / "mae_com_vus.vcf"
+    mae.write_text("\n".join([*linhas, registro]) + "\n", encoding="utf-8")
+    r = pipeline.executar(
+        mae,
+        cenarios.vcf_cenario(dir_cenarios, 1, "pai"),
+        tmp_path / "saida",
+        n=300,
+        seed=1,
+        motor="numpy",
+        figuras=False,
+        base_clinvar=False,
+        tabela_variantes=tabela,
+        laudo_c9orf72=LAUDO_NORMAL_2,
+    )
+    texto = (tmp_path / "saida" / "relatorio.md").read_text(encoding="utf-8")
+    assert "Foram encontradas variantes que não sustentam atribuição de risco" in texto
+    assert "TARDBP c.-126G>T" in texto and "Uncertain significance" in texto
+    assert [l.gene for l in r["loci"]] == ["SOD1"]  # a nota sai junto do lócus de risco, não no lugar dele
+    vetor = pd.read_csv(tmp_path / "saida" / "tabelas" / "tabela_01b_vetor_dosagem.csv")
+    assert vetor.gene.tolist() == ["SOD1"]  # a VUS não vira lócus
+    anotadas = pd.read_csv(tmp_path / "saida" / "variantes_ingeridas_anotadas.csv")
+    assert "vus" in set(anotadas.classe)  # ela foi anotada e fica à vista na Tabela 1
 
 
 def test_genitor_sem_laudo_descarta_o_c9orf72(anotados, parametros, curada, tmp_path, dir_cenarios):

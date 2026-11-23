@@ -773,6 +773,8 @@ def vetor_familia(
             dup & ~df.observacao.str.contains(nota, regex=False), "observacao"
         ].map(lambda o: (o + "; " if o else "") + nota)
     df = df.reset_index(drop=True)
+    if base.attrs.get("c9orf72_intermediario"):  # a nota vem de `genotipo.vetor_dosagem` e segue para o relatório
+        df.attrs["c9orf72_intermediario"] = base.attrs["c9orf72_intermediario"]
     df.attrs["parentes"] = {
         "evidencias": evidencias,
         "suposicoes": list(dict.fromkeys(suposicoes)),
